@@ -58,6 +58,8 @@ func init() {
 			{":buckets", "show buckets"},
 			{":lbs", "show load balancers"},
 			{":clusters", "show kubernetes clusters"},
+			{":routes", "show routes"},
+			{":firewalls", "show firewall rules"},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -69,12 +71,21 @@ func init() {
 		{key: '6', desc: "show VPCs and subnets", run: (*app).showNetworks},
 		{key: '7', desc: "show load balancers", run: showLBs},
 		{key: '8', desc: "show kubernetes clusters", run: showClusters},
+		{key: '9', desc: "show routes", run: showRoutes},
+		{key: '0', desc: "show firewall rules", run: showFirewalls},
 		{
 			key:     'w',
 			desc:    "show workloads for cluster",
 			visible: inClustersView,
 			enabled: func(a *app) bool { return inClustersView() },
 			run:     (*app).showClusterWorkloads,
+		},
+		{
+			key:     'c',
+			desc:    "fetch cluster credentials",
+			visible: inClustersView,
+			enabled: func(a *app) bool { return inClustersView() },
+			run:     (*app).getClusterCredentials,
 		},
 		{
 			key:     'r',
@@ -122,7 +133,7 @@ func init() {
 func visibleShortcuts() []shortcut {
 	visible := make([]shortcut, 0, len(shortcuts))
 	for _, s := range shortcuts {
-		if s.key >= '1' && s.key <= '9' {
+		if s.key >= '0' && s.key <= '9' {
 			continue
 		}
 		if s.visible == nil || s.visible() {
@@ -254,6 +265,18 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(networksViewKind())
+		}
+	case viewRoutes, viewRoutesAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(routesViewKind())
+		}
+	case viewFirewalls, viewFirewallsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(firewallsViewKind())
 		}
 	case viewAccounts, viewAccountsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
@@ -444,6 +467,10 @@ func (a *app) commandEnter() {
 		a.showIPs()
 	case text == "networks" || text == "vpcs":
 		a.showNetworks()
+	case text == "routes":
+		showRoutes(a)
+	case text == "firewalls":
+		showFirewalls(a)
 	case text == "accounts" || text == "sa":
 		showAccounts(a)
 	case text == "vms":

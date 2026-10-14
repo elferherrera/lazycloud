@@ -30,7 +30,7 @@ var ipsAllView = viewDef{
 		}
 		return ipAddressRowsAll(ips), nil
 	},
-status: func(a *app, count int) string {
+	status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d IP addresses for all projects[-]", count)
 	},
 	selectRow: func(a *app, row, _ int) {

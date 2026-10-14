@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
 	"lazycloud/cmd/providers"
 )
@@ -149,6 +152,42 @@ var clustersAllView = viewDef{
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
+}
+
+func (a *app) getClusterCredentials() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewClustersAll {
+		projectID = a.info.GetCell(row, 7).Text
+	}
+	name := a.info.GetCell(row, 0).Text
+	location := a.info.GetCell(row, 1).Text
+	if name == "" || location == "" {
+		a.statusText("[red]Cannot fetch credentials: cluster not found in cache (press u to refresh)[-]")
+		return
+	}
+	scopeFlag := "--region"
+	if strings.Count(location, "-") > 1 {
+		scopeFlag = "--zone"
+	}
+	cmd := exec.Command("gcloud", "container", "clusters", "get-credentials", name,
+		scopeFlag, location, "--project", projectID)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	var err error
+	a.tapp.Suspend(func() {
+		err = cmd.Run()
+	})
+	if err != nil {
+		a.logger.Error("clusters", projectID, "get-credentials failed for "+name+" ("+location+"): "+err.Error())
+		a.statusText("[red]get-credentials failed: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Fetched credentials for %s[-]", name))
 }
 
 func showClusters(a *app) {

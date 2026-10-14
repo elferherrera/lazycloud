@@ -1257,6 +1257,162 @@ func TestGetNetworkAndSubnetwork(t *testing.T) {
 	}
 }
 
+func TestSaveAndListRoutes(t *testing.T) {
+	cache := newTestCache(t)
+	routes := []Route{
+		{Name: "route-b", Network: "vpc-a", DestRange: "10.0.0.0/24", Priority: 900, NextHopKind: "gateway", NextHop: "default-internet-gateway", Description: "second"},
+		{Name: "route-a", Network: "vpc-a", DestRange: "0.0.0.0/0", Priority: 1000, NextHopKind: "peering", NextHop: "peer-a"},
+	}
+	if err := cache.SaveRoutes("p1", routes); err != nil {
+		t.Fatalf("SaveRoutes() error = %v", err)
+	}
+	if err := cache.SaveRoutes("p2", routes[:1]); err != nil {
+		t.Fatalf("SaveRoutes() other project error = %v", err)
+	}
+
+	got, err := cache.ListRoutes("p1")
+	if err != nil {
+		t.Fatalf("ListRoutes() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListRoutes() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "route-a" || got[1].Name != "route-b" {
+		t.Fatalf("ListRoutes() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].Priority != 1000 || got[0].NextHopKind != "peering" || got[0].NextHop != "peer-a" {
+		t.Fatalf("ListRoutes()[0] = %+v", got[0])
+	}
+	if got[1].Description != "second" {
+		t.Fatalf("ListRoutes()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListRoutes()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllRoutes()
+	if err != nil {
+		t.Fatalf("ListAllRoutes() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllRoutes() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllRoutes() not ordered by project: %+v", all)
+	}
+
+	r, err := cache.GetRoute("p1", "route-a")
+	if err != nil {
+		t.Fatalf("GetRoute() error = %v", err)
+	}
+	if r == nil || r.DestRange != "0.0.0.0/0" {
+		t.Fatalf("GetRoute() = %+v", r)
+	}
+	r, err = cache.GetRoute("p1", "missing")
+	if err != nil {
+		t.Fatalf("GetRoute() error = %v", err)
+	}
+	if r != nil {
+		t.Fatalf("GetRoute() = %+v, want nil", r)
+	}
+
+	if err := cache.SaveRoutes("p1", routes[:1]); err != nil {
+		t.Fatalf("SaveRoutes() replace error = %v", err)
+	}
+	got, err = cache.ListRoutes("p1")
+	if err != nil {
+		t.Fatalf("ListRoutes() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListRoutes() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListRoutes("p2")
+	if err != nil {
+		t.Fatalf("ListRoutes(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListRoutes(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+}
+
+func TestSaveAndListFirewallRules(t *testing.T) {
+	cache := newTestCache(t)
+	rules := []FirewallRule{
+		{Name: "fw-b", Network: "vpc-a", Direction: "EGRESS", Priority: 1000, Action: "allow tcp:443", Source: "10.0.0.0/8", Targets: "web", Disabled: true, Description: "second"},
+		{Name: "fw-a", Network: "vpc-a", Direction: "INGRESS", Priority: 900, Action: "deny esp", Source: "0.0.0.0/0"},
+	}
+	if err := cache.SaveFirewallRules("p1", rules); err != nil {
+		t.Fatalf("SaveFirewallRules() error = %v", err)
+	}
+	if err := cache.SaveFirewallRules("p2", rules[:1]); err != nil {
+		t.Fatalf("SaveFirewallRules() other project error = %v", err)
+	}
+
+	got, err := cache.ListFirewallRules("p1")
+	if err != nil {
+		t.Fatalf("ListFirewallRules() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListFirewallRules() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "fw-a" || got[1].Name != "fw-b" {
+		t.Fatalf("ListFirewallRules() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].Priority != 900 || got[0].Action != "deny esp" || got[0].Source != "0.0.0.0/0" {
+		t.Fatalf("ListFirewallRules()[0] = %+v", got[0])
+	}
+	if !got[1].Disabled || got[1].Targets != "web" || got[1].Description != "second" {
+		t.Fatalf("ListFirewallRules()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListFirewallRules()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllFirewallRules()
+	if err != nil {
+		t.Fatalf("ListAllFirewallRules() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllFirewallRules() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllFirewallRules() not ordered by project: %+v", all)
+	}
+
+	r, err := cache.GetFirewallRule("p1", "fw-a")
+	if err != nil {
+		t.Fatalf("GetFirewallRule() error = %v", err)
+	}
+	if r == nil || r.Direction != "INGRESS" {
+		t.Fatalf("GetFirewallRule() = %+v", r)
+	}
+	r, err = cache.GetFirewallRule("p1", "missing")
+	if err != nil {
+		t.Fatalf("GetFirewallRule() error = %v", err)
+	}
+	if r != nil {
+		t.Fatalf("GetFirewallRule() = %+v, want nil", r)
+	}
+
+	if err := cache.SaveFirewallRules("p1", rules[:1]); err != nil {
+		t.Fatalf("SaveFirewallRules() replace error = %v", err)
+	}
+	got, err = cache.ListFirewallRules("p1")
+	if err != nil {
+		t.Fatalf("ListFirewallRules() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListFirewallRules() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListFirewallRules("p2")
+	if err != nil {
+		t.Fatalf("ListFirewallRules(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListFirewallRules(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+}
+
 func TestListAllIPAddresses(t *testing.T) {
 	cache := newTestCache(t)
 	if err := cache.SaveIPAddresses("p2", []IPAddress{

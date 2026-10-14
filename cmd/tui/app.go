@@ -39,17 +39,14 @@ func newSummaryPanel() *tview.TextView {
 func newShortcutsSummaryPanel() *tview.Table {
 	var numeric []shortcut
 	for _, s := range shortcuts {
-		if s.key >= '1' && s.key <= '9' {
+		if s.key >= '0' && s.key <= '9' {
 			numeric = append(numeric, s)
 		}
 	}
-	half := (len(numeric) + 1) / 2
+	rows := (len(numeric) + 2) / 3
 	table := tview.NewTable().SetBorders(false).SetSelectable(false, false)
 	for i, s := range numeric {
-		row, col := i, 0
-		if i >= half {
-			row, col = i-half, 2
-		}
+		row, col := i%rows, (i/rows)*2
 		table.SetCell(row, col, tview.NewTableCell(string(s.key)).
 			SetTextColor(tview.Styles.SecondaryTextColor).
 			SetAttributes(tcell.AttrBold))

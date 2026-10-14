@@ -18,7 +18,7 @@ func TestGCPVMLogsURL(t *testing.T) {
 
 func TestGCPWorkloadLogsURL(t *testing.T) {
 	got := GCPWorkloadLogsURL("revolut-dev-apps", "europe-west2", "apps-dev-europe-west2", "alert-courier", "alert-courier")
-	want := "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.project_id%3D%22revolut-dev-apps%22%0Aresource.labels.location%3D%22europe-west2%22%0Aresource.labels.cluster_name%3D%22apps-dev-europe-west2%22%0Aresource.labels.namespace_name%3D%22alert-courier%22%0Alabels.k8s-pod%2Fapp%3D%22alert-courier%22%20severity%3E%3DDEFAULT;storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-dev-apps"
+	want := "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.project_id%3D%22revolut-dev-apps%22%0Aresource.labels.location%3D%22europe-west2%22%0Aresource.labels.cluster_name%3D%22apps-dev-europe-west2%22%0Aresource.labels.namespace_name%3D%22alert-courier%22%0Aseverity%3E%3DDEFAULT;storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-dev-apps"
 	if got != want {
 		t.Fatalf("GCPWorkloadLogsURL() =\n%s\nwant\n%s", got, want)
 	}
@@ -42,7 +42,7 @@ func TestGCPClusterURL(t *testing.T) {
 
 func TestGCPLoadBalancerURL(t *testing.T) {
 	got := GCPLoadBalancerURL("revolut-dev-apps", "alert-courier")
-	want := "https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=revolut-dev-apps&pageState=(%22loadBalancers%22:(%22f%22:%22%255B%257B_22k_22_3A_22_22_2C_22t_22_3A10_2C_22v_22_3A_22_5C_22alert-courier_5C_22_22%257D%255D%22))"
+	want := "https://console.cloud.google.com/net-services/loadbalancing/details/http/alert-courier?project=revolut-dev-apps"
 	if got != want {
 		t.Fatalf("GCPLoadBalancerURL() =\n%s\nwant\n%s", got, want)
 	}
@@ -61,5 +61,21 @@ func TestGCPAddressesURL(t *testing.T) {
 	want := "https://console.cloud.google.com/networking/addresses/list?referrer=search&project=revolut-dev-apps&pageState=(%22allAddressesTable%22:(%22f%22:%22%255B%257B_22k_22_3A_22name_22_2C_22t_22_3A10_2C_22v_22_3A_22_5C_22dns-forwarding-2bab1b111322b008_5C_22_22_2C_22i_22_3A_22name_22%257D%255D%22))"
 	if got != want {
 		t.Fatalf("GCPAddressesURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPRoutesURL(t *testing.T) {
+	got := GCPRoutesURL("revolut-dev-apps", "default-route")
+	want := "https://console.cloud.google.com/networking/routes/details/default-route?project=revolut-dev-apps"
+	if got != want {
+		t.Fatalf("GCPRoutesURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPFirewallsURL(t *testing.T) {
+	got := GCPFirewallsURL("revolut-dev-apps", "allow-https")
+	want := "https://console.cloud.google.com/net-security/firewall-manager/firewall-policies/details/allow-https?project=revolut-dev-apps"
+	if got != want {
+		t.Fatalf("GCPFirewallsURL() =\n%s\nwant\n%s", got, want)
 	}
 }

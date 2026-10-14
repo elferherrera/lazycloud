@@ -5,22 +5,26 @@ import "github.com/rivo/tview"
 type viewKind string
 
 const (
-	viewProjects    viewKind = "projects"
-	viewIPs         viewKind = "ips"
-	viewIPsAll      viewKind = "ips-all"
-	viewNetworks    viewKind = "networks"
-	viewNetworksAll viewKind = "networks-all"
-	viewAccounts    viewKind = "accounts"
-	viewAccountsAll viewKind = "accounts-all"
-	viewVMs         viewKind = "vms"
-	viewVMsAll      viewKind = "vms-all"
-viewBuckets       viewKind = "buckets"
-	viewBucketsAll    viewKind = "buckets-all"
-	viewLBs           viewKind = "lbs"
-	viewLBsAll        viewKind = "lbs-all"
-	viewClusters      viewKind = "clusters"
-	viewClustersAll   viewKind = "clusters-all"
-	viewWorkloads     viewKind = "workloads"
+	viewProjects     viewKind = "projects"
+	viewIPs          viewKind = "ips"
+	viewIPsAll       viewKind = "ips-all"
+	viewNetworks     viewKind = "networks"
+	viewNetworksAll  viewKind = "networks-all"
+	viewRoutes       viewKind = "routes"
+	viewRoutesAll    viewKind = "routes-all"
+	viewFirewalls    viewKind = "firewalls"
+	viewFirewallsAll viewKind = "firewalls-all"
+	viewAccounts     viewKind = "accounts"
+	viewAccountsAll  viewKind = "accounts-all"
+	viewVMs          viewKind = "vms"
+	viewVMsAll       viewKind = "vms-all"
+	viewBuckets      viewKind = "buckets"
+	viewBucketsAll   viewKind = "buckets-all"
+	viewLBs          viewKind = "lbs"
+	viewLBsAll       viewKind = "lbs-all"
+	viewClusters     viewKind = "clusters"
+	viewClustersAll  viewKind = "clusters-all"
+	viewWorkloads    viewKind = "workloads"
 )
 
 type cmdMode string
@@ -66,6 +70,20 @@ func networksViewKind() viewKind {
 		return viewNetworksAll
 	}
 	return viewNetworks
+}
+
+func routesViewKind() viewKind {
+	if appState.AllProjects {
+		return viewRoutesAll
+	}
+	return viewRoutes
+}
+
+func firewallsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewFirewallsAll
+	}
+	return viewFirewalls
 }
 
 func accountsViewKind() viewKind {

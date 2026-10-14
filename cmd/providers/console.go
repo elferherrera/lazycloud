@@ -71,7 +71,7 @@ func GCPWorkloadLogsURL(projectID, location, clusterName, namespace, name string
 	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
 	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
 	sb.WriteString(fmt.Sprintf("resource.labels.namespace_name=\"%s\"\n", namespace))
-	sb.WriteString(fmt.Sprintf("labels.k8s-pod/app=\"%s\" severity>=DEFAULT", name))
+	sb.WriteString("severity>=DEFAULT")
 	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
 	return "https://console.cloud.google.com/logs/query;query=" + encoded +
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
@@ -89,7 +89,8 @@ func GCPClusterURL(projectID, location, name string) string {
 }
 
 func GCPLoadBalancerURL(projectID, urlMapName string) string {
-	return gcpLBListURL(projectID, "loadBalancers", urlMapName)
+	return "https://console.cloud.google.com/net-services/loadbalancing/details/http/" +
+		url.PathEscape(urlMapName) + "?project=" + url.QueryEscape(projectID)
 }
 
 func GCPLoadBalancerFrontendURL(projectID, forwardingRuleName string) string {
@@ -114,4 +115,14 @@ func GCPAddressesURL(projectID, name string) string {
 	pageState := `(%22allAddressesTable%22:(%22f%22:%22` + encoded + `%22))`
 	return "https://console.cloud.google.com/networking/addresses/list?referrer=search&project=" +
 		url.QueryEscape(projectID) + "&pageState=" + pageState
+}
+
+func GCPRoutesURL(projectID, name string) string {
+	return "https://console.cloud.google.com/networking/routes/details/" +
+		url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}
+
+func GCPFirewallsURL(projectID, name string) string {
+	return "https://console.cloud.google.com/net-security/firewall-manager/firewall-policies/details/" +
+		url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
 }

@@ -539,11 +539,14 @@ func TestShortcutsSummaryPanel(t *testing.T) {
 			}
 		}
 	}
-	if found != 8 {
-		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 8", found)
+	if found != 10 {
+		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 10", found)
 	}
 	if table.GetRowCount() != 4 {
 		t.Fatalf("shortcuts summary has %d rows, want 4 to fit the 4-row section", table.GetRowCount())
+	}
+	if table.GetColumnCount() != 6 {
+		t.Fatalf("shortcuts summary has %d columns, want 6 (three key/desc pairs)", table.GetColumnCount())
 	}
 }
 

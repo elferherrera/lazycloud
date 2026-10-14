@@ -53,6 +53,8 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewVMs` / `viewVMsAll` | view_vms.go | Name, Zone, Machine Type, Status, Internal IPs, Updated (+ Project in All) |
 | `viewIPs` / `viewIPsAll` | view_ips.go, view_ips_all.go | Name, Address, Region, Status, Updated (+ Project in All) |
 | `viewNetworks` | view_networks.go | — also defines `formatUpdatedAt` helper |
+| `viewRoutes` / `viewRoutesAll` | view_routes.go | Routes: Name, Network, Destination, Priority, Next Hop Type, Next Hop, Updated (+ Project in All) |
+| `viewFirewalls` / `viewFirewallsAll` | view_firewalls.go | Firewall rules: Name, Network, Direction, Priority, Action (allow/deny proto:ports), Source, Targets, Updated (+ Project in All) |
 | `viewBuckets` | view_buckets.go | Storage buckets |
 | `viewAccounts` | view_accounts.go | Service accounts |
 | `viewLBs` / `viewLBsAll` | view_loadbalancers.go | Load balancers: Name, IP:Port, Region, Protocol, Scheme, Backends (+ Project in All) |
@@ -72,10 +74,9 @@ Per-project views (`viewX`) use `appState.ProjectID`; the `viewXAll` variants co
 ## UI architecture
 
 - Single `tview.Table` (`a.info`) shared by all views. `populateInfoPanel()` (app.go) writes a bold fixed header row (`SetFixed(1, 0)`) + data rows; `applyFilter()` repaints with the active filter.
-- Main layout (main.go): summary area (4 rows: project summary + numeric shortcuts panel) / `tview.InputField` (`a.cmd`) / info table / status bar, wrapped in `tview.Pages` (`a.pages`).
+- Main layout (main.go): summary area (4 rows: project summary + numeric shortcuts panel, three key/desc pairs per row) / `tview.InputField` (`a.cmd`) / info table / status bar, wrapped in `tview.Pages` (`a.pages`).
 - **Key handling** is two-layered:
-  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.). The `shortcuts` table is the single source of truth: the help overlay and the 4-row numeric summary panel both render from it. Numeric keys `1`–`8` switch views (projects, VMs, buckets, service accounts, IPs, networks, load balancers, clusters).
-  - View-scoped shortcuts use `visible`/`enabled` predicates: `w` (workloads of the focused cluster, clusters views only), `l` (logs, VM + workloads views, dispatches via `openLogs`), `s` (IAP SSH, VM views), `r`/`x` (restore/delete project, projects view).
+  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.). The `shortcuts` table is the single source of truth: the help overlay and the numeric summary panel (three key/desc pairs per row) both render from it. Numeric keys `1`–`9`, `0` switch views (projects, VMs, buckets, service accounts, IPs, networks, load balancers, clusters, routes, firewalls). View-scoped: `w` (workloads of the focused cluster), `c` (fetch cluster credentials via `gcloud container clusters get-credentials`, clusters views only), `l` (logs, VM + workloads views, dispatches via `openLogs`), `s` (IAP SSH, VM views), `r`/`x` (restore/delete project, projects view).
   - Enter on a table row fires `a.info.SetSelectedFunc` → `app.selected()` → the current view's `selectRow`.
 - **Command vs filter mode**: the bottom InputField is either a filter (`/` prefix or after pressing the filter shortcut, Enter → `filterEnter()`) or a command (`:`, Enter → `commandEnter()`). `commandEnter()` special-cases typed IP literals (`net.ParseIP`) by jumping to the IPs view.
 
@@ -97,7 +98,7 @@ Resource structs live in gcloud.go (e.g. `IPAddress` has `ProjectID, Name, Addre
 
 The cache (cache.go) mirrors each struct to a SQLite table (e.g. `ip_addresses`) with upsert-on-conflict. Reads: `ListX` (one project), `ListAllX` (all), `GetX` (exact lookup, may return multiple rows — e.g. `GetIPAddresses` one per subnetwork); workloads are the cluster-scoped exception (`ListClusterWorkloads(projectID, cluster)`). Views always read from cache; `refresh` repopulates from the API in a goroutine and calls `QueueUpdateDraw` to repaint.
 
-`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, `GCPLoadBalancerURL`/`GCPLoadBalancerFrontendURL`, `GCPClusterURL`, `GCPWorkloadOverviewURL`, `GCPWorkloadLogsURL`, ...) — used by the `o`/`g`/`l` shortcuts. Most list-page deep links encode a `pageState` filter (see `GCPAddressesURL`, `gcpLBListURL`).
+`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, `GCPLoadBalancerURL`/`GCPLoadBalancerFrontendURL`, `GCPClusterURL`, `GCPWorkloadOverviewURL`, `GCPWorkloadLogsURL`, `GCPRoutesURL`, `GCPFirewallsURL`, ...) — used by the `o`/`g`/`l` shortcuts. Most list-page deep links encode a `pageState` filter (see `GCPAddressesURL`, `gcpLBListURL`).
 
 ## Conventions
 

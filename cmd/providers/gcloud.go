@@ -216,6 +216,149 @@ func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {
 	return subnetworks, nil
 }
 
+type Route struct {
+	ProjectID   string
+	Name        string
+	Network     string
+	DestRange   string
+	Priority    int64
+	NextHopKind string
+	NextHop     string
+	Description string
+	UpdatedAt   string
+}
+
+func routeNextHop(r *computepb.Route) (kind, hop string) {
+	switch {
+	case r.GetNextHopGateway() != "":
+		return "gateway", resourceShortName(r.GetNextHopGateway(), "")
+	case r.GetNextHopInstance() != "":
+		return "instance", resourceShortName(r.GetNextHopInstance(), "")
+	case r.GetNextHopIp() != "":
+		return "ip", r.GetNextHopIp()
+	case r.GetNextHopVpnTunnel() != "":
+		return "vpn-tunnel", resourceShortName(r.GetNextHopVpnTunnel(), "")
+	case r.GetNextHopIlb() != "":
+		return "ilb", resourceShortName(r.GetNextHopIlb(), "")
+	case r.GetNextHopPeering() != "":
+		return "peering", r.GetNextHopPeering()
+	}
+	return "", ""
+}
+
+func ListProjectRoutes(projectID string) ([]Route, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewRoutesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var routes []Route
+	it := client.List(ctx, &computepb.ListRoutesRequest{Project: projectID})
+	for {
+		r, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		kind, hop := routeNextHop(r)
+		routes = append(routes, Route{
+			ProjectID:   projectID,
+			Name:        r.GetName(),
+			Network:     resourceShortName(r.GetNetwork(), ""),
+			DestRange:   r.GetDestRange(),
+			Priority:    int64(r.GetPriority()),
+			NextHopKind: kind,
+			NextHop:     hop,
+			Description: r.GetDescription(),
+		})
+	}
+	return routes, nil
+}
+
+type FirewallRule struct {
+	ProjectID   string
+	Name        string
+	Network     string
+	Direction   string
+	Priority    int64
+	Action      string
+	Source      string
+	Targets     string
+	Disabled    bool
+	Description string
+	UpdatedAt   string
+}
+
+func firewallAction(f *computepb.Firewall) string {
+	var entries []string
+	appendAllowed := func(prefix string, rules []*computepb.Allowed) {
+		for _, e := range rules {
+			entry := prefix + " " + e.GetIPProtocol()
+			if ports := e.GetPorts(); len(ports) > 0 {
+				entry += ":" + strings.Join(ports, ",")
+			}
+			entries = append(entries, entry)
+		}
+	}
+	appendAllowed("allow", f.GetAllowed())
+	for _, e := range f.GetDenied() {
+		entry := "deny " + e.GetIPProtocol()
+		if ports := e.GetPorts(); len(ports) > 0 {
+			entry += ":" + strings.Join(ports, ",")
+		}
+		entries = append(entries, entry)
+	}
+	return strings.Join(entries, ",")
+}
+
+func firewallSource(f *computepb.Firewall) string {
+	var sources []string
+	sources = append(sources, f.GetSourceRanges()...)
+	sources = append(sources, f.GetSourceTags()...)
+	sources = append(sources, f.GetSourceServiceAccounts()...)
+	return strings.Join(sources, ",")
+}
+
+func ListProjectFirewallRules(projectID string) ([]FirewallRule, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewFirewallsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var rules []FirewallRule
+	it := client.List(ctx, &computepb.ListFirewallsRequest{Project: projectID})
+	for {
+		f, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, FirewallRule{
+			ProjectID:   projectID,
+			Name:        f.GetName(),
+			Network:     resourceShortName(f.GetNetwork(), ""),
+			Direction:   f.GetDirection(),
+			Priority:    int64(f.GetPriority()),
+			Action:      firewallAction(f),
+			Source:      firewallSource(f),
+			Targets:     strings.Join(f.GetTargetTags(), ","),
+			Disabled:    f.GetDisabled(),
+			Description: f.GetDescription(),
+		})
+	}
+	return rules, nil
+}
+
 type ServiceAccount struct {
 	ProjectID   string
 	Email       string
@@ -802,9 +945,9 @@ type k8sWorkload struct {
 		} `json:"template"`
 	} `json:"spec"`
 	Status struct {
-		ReadyReplicas           int32 `json:"readyReplicas"`
-		DesiredNumberScheduled  int32 `json:"desiredNumberScheduled"`
-		NumberReady             int32 `json:"numberReady"`
+		ReadyReplicas          int32 `json:"readyReplicas"`
+		DesiredNumberScheduled int32 `json:"desiredNumberScheduled"`
+		NumberReady            int32 `json:"numberReady"`
 	} `json:"status"`
 }
 

@@ -100,6 +100,38 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS routes (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		network TEXT NOT NULL DEFAULT '',
+		dest_range TEXT NOT NULL DEFAULT '',
+		priority INTEGER NOT NULL DEFAULT 0,
+		next_hop_kind TEXT NOT NULL DEFAULT '',
+		next_hop TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS firewall_rules (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		network TEXT NOT NULL DEFAULT '',
+		direction TEXT NOT NULL DEFAULT '',
+		priority INTEGER NOT NULL DEFAULT 0,
+		action TEXT NOT NULL DEFAULT '',
+		source TEXT NOT NULL DEFAULT '',
+		targets TEXT NOT NULL DEFAULT '',
+		disabled INTEGER NOT NULL DEFAULT 0,
+		description TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS service_accounts (
 		project_id TEXT NOT NULL,
 		email TEXT NOT NULL,
@@ -600,6 +632,145 @@ func (c *Cache) GetSubnetwork(projectID, region, name string) (*Subnetwork, erro
 	return &s, nil
 }
 
+func (c *Cache) SaveRoutes(projectID string, routes []Route) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM routes WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range routes {
+		if _, err := tx.Exec(`INSERT INTO routes
+			(project_id, name, network, dest_range, priority, next_hop_kind, next_hop, description, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Name, r.Network, r.DestRange, r.Priority, r.NextHopKind, r.NextHop, r.Description, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanRoutes(rows *sql.Rows) ([]Route, error) {
+	defer rows.Close()
+	var routes []Route
+	for rows.Next() {
+		var r Route
+		if err := rows.Scan(&r.ProjectID, &r.Name, &r.Network, &r.DestRange, &r.Priority,
+			&r.NextHopKind, &r.NextHop, &r.Description, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		routes = append(routes, r)
+	}
+	return routes, rows.Err()
+}
+
+func (c *Cache) ListRoutes(projectID string) ([]Route, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, network, dest_range, priority, next_hop_kind, next_hop, description, updated_at
+		FROM routes WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanRoutes(rows)
+}
+
+func (c *Cache) ListAllRoutes() ([]Route, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, network, dest_range, priority, next_hop_kind, next_hop, description, updated_at
+		FROM routes ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanRoutes(rows)
+}
+
+func (c *Cache) GetRoute(projectID, name string) (*Route, error) {
+	row := c.db.QueryRow(`SELECT project_id, name, network, dest_range, priority, next_hop_kind, next_hop, description, updated_at
+		FROM routes WHERE project_id = ? AND name = ?`, projectID, name)
+	var r Route
+	if err := row.Scan(&r.ProjectID, &r.Name, &r.Network, &r.DestRange, &r.Priority,
+		&r.NextHopKind, &r.NextHop, &r.Description, &r.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (c *Cache) SaveFirewallRules(projectID string, rules []FirewallRule) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM firewall_rules WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range rules {
+		if _, err := tx.Exec(`INSERT INTO firewall_rules
+			(project_id, name, network, direction, priority, action, source, targets, disabled, description, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Name, r.Network, r.Direction, r.Priority, r.Action, r.Source, r.Targets,
+			r.Disabled, r.Description, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanFirewallRules(rows *sql.Rows) ([]FirewallRule, error) {
+	defer rows.Close()
+	var rules []FirewallRule
+	for rows.Next() {
+		var r FirewallRule
+		var disabled int
+		if err := rows.Scan(&r.ProjectID, &r.Name, &r.Network, &r.Direction, &r.Priority,
+			&r.Action, &r.Source, &r.Targets, &disabled, &r.Description, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		r.Disabled = disabled != 0
+		rules = append(rules, r)
+	}
+	return rules, rows.Err()
+}
+
+func (c *Cache) ListFirewallRules(projectID string) ([]FirewallRule, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, network, direction, priority, action, source, targets, disabled, description, updated_at
+		FROM firewall_rules WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanFirewallRules(rows)
+}
+
+func (c *Cache) ListAllFirewallRules() ([]FirewallRule, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, network, direction, priority, action, source, targets, disabled, description, updated_at
+		FROM firewall_rules ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanFirewallRules(rows)
+}
+
+func (c *Cache) GetFirewallRule(projectID, name string) (*FirewallRule, error) {
+	row := c.db.QueryRow(`SELECT project_id, name, network, direction, priority, action, source, targets, disabled, description, updated_at
+		FROM firewall_rules WHERE project_id = ? AND name = ?`, projectID, name)
+	var r FirewallRule
+	var disabled int
+	if err := row.Scan(&r.ProjectID, &r.Name, &r.Network, &r.Direction, &r.Priority,
+		&r.Action, &r.Source, &r.Targets, &disabled, &r.Description, &r.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	r.Disabled = disabled != 0
+	return &r, nil
+}
+
 func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
@@ -614,7 +785,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
