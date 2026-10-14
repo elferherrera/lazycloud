@@ -35,5 +35,8 @@ func init() {
 		viewBucketsAll:   bucketsAllView,
 		viewLBs:          lbsView,
 		viewLBsAll:       lbsAllView,
+		viewClusters:     clustersView,
+		viewClustersAll:   clustersAllView,
+		viewWorkloads:    workloadsView,
 	}
 }

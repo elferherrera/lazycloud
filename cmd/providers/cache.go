@@ -215,6 +215,36 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS clusters (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		location TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT '',
+		version TEXT NOT NULL DEFAULT '',
+		endpoint TEXT NOT NULL DEFAULT '',
+		node_pools TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS workloads (
+		project_id TEXT NOT NULL,
+		cluster TEXT NOT NULL,
+		kind TEXT NOT NULL,
+		namespace TEXT NOT NULL,
+		name TEXT NOT NULL,
+		replicas TEXT NOT NULL DEFAULT '',
+		images TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, cluster, kind, namespace, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -584,7 +614,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -1340,6 +1370,149 @@ func (c *Cache) getBackendServiceAnyRegion(projectID string, regions []string, n
 		}
 	}
 	return nil, nil
+}
+
+func (c *Cache) SaveClusters(projectID string, clusters []Cluster) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM clusters WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, cl := range clusters {
+		nodePools, err := json.Marshal(cl.NodePools)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO clusters
+			(project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, cl.Name, cl.Location, cl.Description, cl.Status, cl.Version, cl.Endpoint, string(nodePools), cl.CreatedAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanClusters(rows *sql.Rows) ([]Cluster, error) {
+	var clusters []Cluster
+	for rows.Next() {
+		var cl Cluster
+		var nodePools string
+		if err := rows.Scan(&cl.ProjectID, &cl.Name, &cl.Location, &cl.Description, &cl.Status, &cl.Version, &cl.Endpoint, &nodePools, &cl.CreatedAt, &cl.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(nodePools), &cl.NodePools); err != nil {
+			return nil, err
+		}
+		clusters = append(clusters, cl)
+	}
+	return clusters, rows.Err()
+}
+
+func (c *Cache) ListClusters(projectID string) ([]Cluster, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+		FROM clusters WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanClusters(rows)
+}
+
+func (c *Cache) ListAllClusters() ([]Cluster, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+		FROM clusters ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanClusters(rows)
+}
+
+func (c *Cache) GetCluster(projectID, name string) (*Cluster, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+		FROM clusters WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	clusters, err := scanClusters(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(clusters) == 0 {
+		return nil, nil
+	}
+	return &clusters[0], nil
+}
+
+func (c *Cache) SaveWorkloads(projectID, cluster string, workloads []Workload) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM workloads WHERE project_id = ? AND cluster = ?", projectID, cluster); err != nil {
+		return err
+	}
+	for _, w := range workloads {
+		if _, err := tx.Exec(`INSERT INTO workloads
+			(project_id, cluster, kind, namespace, name, replicas, images, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, cluster, w.Kind, w.Namespace, w.Name, w.Replicas, strings.Join(w.Images, ","), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanWorkloads(rows *sql.Rows) ([]Workload, error) {
+	var workloads []Workload
+	for rows.Next() {
+		var w Workload
+		var images string
+		if err := rows.Scan(&w.ProjectID, &w.Cluster, &w.Kind, &w.Namespace, &w.Name, &w.Replicas, &images, &w.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if images != "" {
+			w.Images = strings.Split(images, ",")
+		}
+		workloads = append(workloads, w)
+	}
+	return workloads, rows.Err()
+}
+
+func (c *Cache) ListClusterWorkloads(projectID, cluster string) ([]Workload, error) {
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+		FROM workloads WHERE project_id = ? AND cluster = ? ORDER BY namespace, kind, name`, projectID, cluster)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanWorkloads(rows)
+}
+
+func (c *Cache) GetWorkload(projectID, cluster, kind, namespace, name string) (*Workload, error) {
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+		FROM workloads WHERE project_id = ? AND cluster = ? AND kind = ? AND namespace = ? AND name = ?`,
+		projectID, cluster, kind, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	workloads, err := scanWorkloads(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(workloads) == 0 {
+		return nil, nil
+	}
+	return &workloads[0], nil
 }
 
 func (c *Cache) Close() error {

@@ -2,7 +2,12 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -10,6 +15,7 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
+	"google.golang.org/api/container/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/storage/v1"
@@ -714,6 +720,160 @@ func ListProjectBackendServices(projectID string) ([]BackendService, error) {
 		}
 	}
 	return services, nil
+}
+
+type ClusterNodePool struct {
+	Name      string
+	Version   string
+	NodeCount int64
+}
+
+type Cluster struct {
+	ProjectID   string
+	Name        string
+	Description string
+	Location    string
+	Status      string
+	Version     string
+	Endpoint    string
+	NodePools   []ClusterNodePool
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+func ListProjectClusters(projectID string) ([]Cluster, error) {
+	ctx := context.Background()
+
+	svc, err := container.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := svc.Projects.Locations.Clusters.List("projects/" + projectID + "/locations/-").Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+
+	var clusters []Cluster
+	for _, c := range resp.Clusters {
+		cluster := Cluster{
+			ProjectID:   projectID,
+			Name:        c.Name,
+			Description: c.Description,
+			Location:    c.Location,
+			Status:      c.Status,
+			Version:     c.CurrentMasterVersion,
+			Endpoint:    c.Endpoint,
+			CreatedAt:   c.CreateTime,
+		}
+		for _, np := range c.NodePools {
+			cluster.NodePools = append(cluster.NodePools, ClusterNodePool{Name: np.Name, Version: np.Version, NodeCount: np.InitialNodeCount})
+		}
+		clusters = append(clusters, cluster)
+	}
+	return clusters, nil
+}
+
+type Workload struct {
+	ProjectID string
+	Cluster   string
+	Kind      string
+	Namespace string
+	Name      string
+	Replicas  string
+	Images    []string
+	UpdatedAt string
+}
+
+type k8sWorkload struct {
+	Kind     string `json:"kind"`
+	Metadata struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	} `json:"metadata"`
+	Spec struct {
+		Replicas *int32 `json:"replicas"`
+		Template struct {
+			Spec struct {
+				Containers []struct {
+					Image string `json:"image"`
+				} `json:"containers"`
+			} `json:"spec"`
+		} `json:"template"`
+	} `json:"spec"`
+	Status struct {
+		ReadyReplicas           int32 `json:"readyReplicas"`
+		DesiredNumberScheduled  int32 `json:"desiredNumberScheduled"`
+		NumberReady             int32 `json:"numberReady"`
+	} `json:"status"`
+}
+
+type k8sWorkloadList struct {
+	Items []k8sWorkload `json:"items"`
+}
+
+func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) {
+	scopeFlag := "--region"
+	if strings.Count(location, "-") > 1 {
+		scopeFlag = "--zone"
+	}
+	dir, err := os.MkdirTemp("", "lazycloud-kube-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	kubeconfig := filepath.Join(dir, "config")
+
+	creds := exec.Command("gcloud", "container", "clusters", "get-credentials", name,
+		scopeFlag, location, "--project", projectID)
+	creds.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	if out, err := creds.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("gcloud get-credentials: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	get := exec.Command("kubectl", "get", "deployments,statefulsets,daemonsets", "--all-namespaces", "--output", "json")
+	get.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	out, err := get.Output()
+	if err != nil {
+		message := err.Error()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			message = string(exitErr.Stderr)
+		}
+		return nil, fmt.Errorf("kubectl get: %s", strings.TrimSpace(message))
+	}
+
+	var list k8sWorkloadList
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, err
+	}
+
+	var workloads []Workload
+	for _, item := range list.Items {
+		w := Workload{
+			ProjectID: projectID,
+			Cluster:   name,
+			Kind:      item.Kind,
+			Namespace: item.Metadata.Namespace,
+			Name:      item.Metadata.Name,
+		}
+		for _, c := range item.Spec.Template.Spec.Containers {
+			if c.Image != "" {
+				w.Images = append(w.Images, c.Image)
+			}
+		}
+		if item.Kind == "DaemonSet" {
+			w.Replicas = fmt.Sprintf("%d/%d", item.Status.NumberReady, item.Status.DesiredNumberScheduled)
+		} else {
+			total := int32(0)
+			if item.Spec.Replicas != nil {
+				total = *item.Spec.Replicas
+			}
+			w.Replicas = fmt.Sprintf("%d/%d", item.Status.ReadyReplicas, total)
+		}
+		workloads = append(workloads, w)
+	}
+	return workloads, nil
 }
 
 func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {

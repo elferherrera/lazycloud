@@ -31,6 +31,14 @@ func inVMView() bool {
 	return appState.ViewKind == viewVMs || appState.ViewKind == viewVMsAll
 }
 
+func inClustersView() bool {
+	return appState.ViewKind == viewClusters || appState.ViewKind == viewClustersAll
+}
+
+func inLogsView() bool {
+	return inVMView() || appState.ViewKind == viewWorkloads
+}
+
 // The shortcuts table is the single source of truth for key bindings: the
 // global input capture dispatches on it and the help overlay renders it.
 // Shortcuts with a visible predicate are rendered only when it holds.
@@ -49,6 +57,7 @@ func init() {
 			{":vms", "show VMs"},
 			{":buckets", "show buckets"},
 			{":lbs", "show load balancers"},
+			{":clusters", "show kubernetes clusters"},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -59,6 +68,14 @@ func init() {
 		{key: '5', desc: "show IP addresses", run: (*app).showIPs},
 		{key: '6', desc: "show VPCs and subnets", run: (*app).showNetworks},
 		{key: '7', desc: "show load balancers", run: showLBs},
+		{key: '8', desc: "show kubernetes clusters", run: showClusters},
+		{
+			key:     'w',
+			desc:    "show workloads for cluster",
+			visible: inClustersView,
+			enabled: func(a *app) bool { return inClustersView() },
+			run:     (*app).showClusterWorkloads,
+		},
 		{
 			key:     'r',
 			desc:    "restore last deleted project",
@@ -78,10 +95,10 @@ func init() {
 		{key: 'g', desc: "open in GCP console", run: (*app).openConsole},
 		{
 			key:     'l',
-			desc:    "open VM logs in GCP console",
-			visible: inVMView,
-			enabled: func(a *app) bool { return inVMView() },
-			run:     (*app).openVMLogging,
+			desc:    "open logs in GCP console",
+			visible: inLogsView,
+			enabled: func(a *app) bool { return inLogsView() },
+			run:     (*app).openLogs,
 		},
 		{
 			key:     's',
@@ -225,7 +242,7 @@ func (a *app) toggleAllProjects() {
 	appState.AllProjects = !appState.AllProjects
 	renderSummary(a.summary)
 	switch appState.ViewKind {
-	case viewProjects:
+	case viewProjects, viewWorkloads:
 	case viewIPs, viewIPsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -262,6 +279,12 @@ func (a *app) toggleAllProjects() {
 		} else {
 			a.setView(lbsViewKind())
 		}
+	case viewClusters, viewClustersAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(clustersViewKind())
+		}
 	}
 }
 
@@ -277,6 +300,14 @@ func (a *app) restoreProject() {
 	}
 	a.setView(viewProjects)
 	a.statusText(fmt.Sprintf("[green]Restored %s[-]", p.ProjectID))
+}
+
+func (a *app) openLogs() {
+	if appState.ViewKind == viewWorkloads {
+		a.openWorkloadLogs()
+		return
+	}
+	a.openVMLogging()
 }
 
 func (a *app) showIPs() {
@@ -421,6 +452,8 @@ func (a *app) commandEnter() {
 		showBuckets(a)
 	case text == "lbs" || text == "loadbalancers":
 		showLBs(a)
+	case text == "clusters" || text == "gke":
+		showClusters(a)
 	case text == "projects":
 		a.setView(viewProjects)
 	default:

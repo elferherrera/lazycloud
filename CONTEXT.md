@@ -56,19 +56,26 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewBuckets` | view_buckets.go | Storage buckets |
 | `viewAccounts` | view_accounts.go | Service accounts |
 | `viewLBs` / `viewLBsAll` | view_loadbalancers.go | Load balancers: Name, IP:Port, Region, Protocol, Scheme, Backends (+ Project in All) |
+| `viewClusters` / `viewClustersAll` | view_clusters.go | Kubernetes clusters: Name, Location, Status, Version, Node Pools, Created, Updated (+ Project in All) |
+| `viewWorkloads` | view_workloads.go | Workloads of the cluster focused via `w` in the clusters views: Namespace, Kind, Name, Replicas, Images, Updated |
+
+### Workload fetching
+
+GKE workloads are Kubernetes resources, so `ListClusterWorkloads` shells out: it writes credentials to a temp `KUBECONFIG` via `gcloud container clusters get-credentials` (zone vs region flag inferred from the location's dash count) and runs `kubectl get deployments,statefulsets,daemonsets --all-namespaces -o json`, parsing items into `Workload` (Replicas as `ready/total`). The workloads view is cluster-scoped: pressing `w` on a clusters-view row sets `appState.Cluster`/`appState.ClusterProject` and switches to it; there is no numeric shortcut or `:command`. Workloads are cached per `(project, cluster)` in the `workloads` table (rows carry their cluster reference) and `refresh` re-fetches only the focused cluster. Requires `gcloud` and `kubectl` on PATH. In the workloads view `g` opens the GKE workload overview filtered by namespace and `l` opens Logs Explorer with a `k8s_container` query (project/location/cluster/namespace/pod-app from the focused row).
 
 ### Load balancer composition
 
-GCP LBs have no single resource: a row = one forwarding rule (`ForwardingRule`, with `TargetKind`/`Target` parsed from the rule's target URL via `targetRef`). `Cache.ResolveLoadBalancer(projectID, region, name)` composes the tree from cache: rule → target proxy (`TargetProxy`) → URL map (`URLMap` with `PathRules`) → backend services (`BackendService` with `Backends` + `HealthChecks`); internal/classic rules target a backend service directly. The fetchers (`ListProjectForwardingRules`, `ListProjectTargetProxies`, `ListProjectURLMaps`, `ListProjectBackendServices`) each save to their own table (`forwarding_rules`, `target_proxies`, `url_maps`, `backend_services`); refresh (`refreshProjectLBs` in view_loadbalancers.go) fetches all four. `selectRow` shows the `lb` details overlay with the full chain; the Backends column shows the default backend service plus `(+N)` extra path-rule services.
+GCP LBs have no single resource: a row = one forwarding rule (`ForwardingRule`, with `TargetKind`/`Target` parsed from the rule's target URL via `targetRef`). `Cache.ResolveLoadBalancer(projectID, region, name)` composes the tree from cache: rule → target proxy (`TargetProxy`) → URL map (`URLMap` with `PathRules`) → backend services (`BackendService` with `Backends` + `HealthChecks`); internal/classic rules target a backend service directly. The fetchers (`ListProjectForwardingRules`, `ListProjectTargetProxies`, `ListProjectURLMaps`, `ListProjectBackendServices`) each save to their own table (`forwarding_rules`, `target_proxies`, `url_maps`, `backend_services`); refresh (`refreshProjectLBs` in view_loadbalancers.go) fetches all four. `selectRow` shows the `lb` details overlay with the full chain; the Backends column shows the default backend service plus `(+N)` extra path-rule services. `lbConsoleURL` picks the console deep link: `loadBalancers` list filtered by URL map name when the chain has a URL map, otherwise the `frontends` list filtered by the forwarding rule name.
 
 Per-project views (`viewX`) use `appState.ProjectID`; the `viewXAll` variants cover all cached projects.
 
 ## UI architecture
 
 - Single `tview.Table` (`a.info`) shared by all views. `populateInfoPanel()` (app.go) writes a bold fixed header row (`SetFixed(1, 0)`) + data rows; `applyFilter()` repaints with the active filter.
-- Main layout (main.go): summary area / `tview.InputField` (`a.cmd`) / info table / status bar, wrapped in `tview.Pages` (`a.pages`).
+- Main layout (main.go): summary area (4 rows: project summary + numeric shortcuts panel) / `tview.InputField` (`a.cmd`) / info table / status bar, wrapped in `tview.Pages` (`a.pages`).
 - **Key handling** is two-layered:
-  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.).
+  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.). The `shortcuts` table is the single source of truth: the help overlay and the 4-row numeric summary panel both render from it. Numeric keys `1`–`8` switch views (projects, VMs, buckets, service accounts, IPs, networks, load balancers, clusters).
+  - View-scoped shortcuts use `visible`/`enabled` predicates: `w` (workloads of the focused cluster, clusters views only), `l` (logs, VM + workloads views, dispatches via `openLogs`), `s` (IAP SSH, VM views), `r`/`x` (restore/delete project, projects view).
   - Enter on a table row fires `a.info.SetSelectedFunc` → `app.selected()` → the current view's `selectRow`.
 - **Command vs filter mode**: the bottom InputField is either a filter (`/` prefix or after pressing the filter shortcut, Enter → `filterEnter()`) or a command (`:`, Enter → `commandEnter()`). `commandEnter()` special-cases typed IP literals (`net.ParseIP`) by jumping to the IPs view.
 
@@ -86,11 +93,11 @@ Built on `tview.Pages` (stacked, hidden/shown pages), centered with spacer-Flexe
 
 ## Data model & cache
 
-Resource structs live in gcloud.go (e.g. `IPAddress` has `ProjectID, Name, Address, AddressType, Status, Region, Subnetwork, Network, UpdatedAt`). Fetchers follow `ListProject<Res>(projectID)` naming (e.g. `ListProjectIPAddresses` returns global + regional addresses). Short names for GCP resource URLs come from `resourceShortName`.
+Resource structs live in gcloud.go (e.g. `IPAddress` has `ProjectID, Name, Address, AddressType, Status, Region, Subnetwork, Network, UpdatedAt`). Fetchers follow `ListProject<Res>(projectID)` naming (e.g. `ListProjectIPAddresses` returns global + regional addresses; `ListClusterWorkloads` is the shell-out exception). Short names for GCP resource URLs come from `resourceShortName`; load balancer target URLs are split into kind + name by `targetRef`.
 
-The cache (cache.go) mirrors each struct to a SQLite table (e.g. `ip_addresses`) with upsert-on-conflict. Reads: `ListX` (one project), `ListAllX` (all), `GetX` (exact lookup, may return multiple rows — e.g. `GetIPAddresses` one per subnetwork). Views always read from cache; `refresh` repopulates from the API in a goroutine and calls `QueueUpdateDraw` to repaint.
+The cache (cache.go) mirrors each struct to a SQLite table (e.g. `ip_addresses`) with upsert-on-conflict. Reads: `ListX` (one project), `ListAllX` (all), `GetX` (exact lookup, may return multiple rows — e.g. `GetIPAddresses` one per subnetwork); workloads are the cluster-scoped exception (`ListClusterWorkloads(projectID, cluster)`). Views always read from cache; `refresh` repopulates from the API in a goroutine and calls `QueueUpdateDraw` to repaint.
 
-`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, ...) — used by the `o` shortcut.
+`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, `GCPLoadBalancerURL`/`GCPLoadBalancerFrontendURL`, `GCPClusterURL`, `GCPWorkloadOverviewURL`, `GCPWorkloadLogsURL`, ...) — used by the `o`/`g`/`l` shortcuts. Most list-page deep links encode a `pageState` filter (see `GCPAddressesURL`, `gcpLBListURL`).
 
 ## Conventions
 

@@ -853,6 +853,195 @@ func TestResolveLoadBalancer(t *testing.T) {
 	}
 }
 
+func TestSaveAndListClusters(t *testing.T) {
+	cache := newTestCache(t)
+	clusters := []Cluster{
+		{
+			ProjectID:   "p1",
+			Name:        "cluster-b",
+			Location:    "europe-west1",
+			Status:      "RUNNING",
+			Version:     "1.31.1-gke.1",
+			Endpoint:    "34.1.1.1",
+			NodePools:   []ClusterNodePool{{Name: "pool-a", Version: "1.31.1-gke.1", NodeCount: 3}, {Name: "pool-b", Version: "1.31.1-gke.1", NodeCount: 2}},
+			CreatedAt:   "2026-01-01T00:00:00Z",
+			Description: "second",
+		},
+		{ProjectID: "p1", Name: "cluster-a", Location: "europe-west1-b", Status: "PROVISIONING", Version: "1.31.1-gke.1"},
+	}
+	if err := cache.SaveClusters("p1", clusters); err != nil {
+		t.Fatalf("SaveClusters() error = %v", err)
+	}
+	if err := cache.SaveClusters("p2", clusters[:1]); err != nil {
+		t.Fatalf("SaveClusters() other project error = %v", err)
+	}
+
+	got, err := cache.ListClusters("p1")
+	if err != nil {
+		t.Fatalf("ListClusters() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListClusters() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "cluster-a" || got[1].Name != "cluster-b" {
+		t.Fatalf("ListClusters() not ordered by name: %+v", got)
+	}
+	if len(got[1].NodePools) != 2 || got[1].NodePools[0].Name != "pool-a" || got[1].NodePools[0].NodeCount != 3 {
+		t.Fatalf("ListClusters()[1].NodePools = %+v", got[1].NodePools)
+	}
+	if got[1].Endpoint != "34.1.1.1" || got[1].CreatedAt != "2026-01-01T00:00:00Z" || got[1].UpdatedAt == "" {
+		t.Fatalf("ListClusters()[1] = %+v", got[1])
+	}
+	if len(got[0].NodePools) != 0 {
+		t.Fatalf("ListClusters()[0].NodePools = %+v, want nils", got[0].NodePools)
+	}
+
+	all, err := cache.ListAllClusters()
+	if err != nil {
+		t.Fatalf("ListAllClusters() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllClusters() len = %d, want 3", len(all))
+	}
+
+	cl, err := cache.GetCluster("p1", "cluster-b")
+	if err != nil {
+		t.Fatalf("GetCluster() error = %v", err)
+	}
+	if cl == nil || cl.Status != "RUNNING" {
+		t.Fatalf("GetCluster() = %+v", cl)
+	}
+	cl, err = cache.GetCluster("p1", "missing")
+	if err != nil {
+		t.Fatalf("GetCluster() error = %v", err)
+	}
+	if cl != nil {
+		t.Fatalf("GetCluster() = %+v, want nil", cl)
+	}
+
+	if err := cache.SaveClusters("p1", clusters[:1]); err != nil {
+		t.Fatalf("SaveClusters() replace error = %v", err)
+	}
+	got, err = cache.ListClusters("p1")
+	if err != nil {
+		t.Fatalf("ListClusters() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListClusters() len = %d, want 1 after replace", len(got))
+	}
+	other, err := cache.ListClusters("p2")
+	if err != nil {
+		t.Fatalf("ListClusters() error = %v", err)
+	}
+	if len(other) != 1 {
+		t.Fatalf("ListClusters(p2) len = %d, want 1 (other project untouched)", len(other))
+	}
+
+	if err := cache.SaveProjects([]Project{{ProjectID: "p2", Name: "P Two", ProjectNumber: "222"}}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
+	if _, err := cache.DeleteProject("p2"); err != nil {
+		t.Fatalf("DeleteProject() error = %v", err)
+	}
+	other, err = cache.ListClusters("p2")
+	if err != nil {
+		t.Fatalf("ListClusters() error = %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("ListClusters(p2) len = %d, want 0 after project delete", len(other))
+	}
+}
+
+func TestSaveAndListWorkloads(t *testing.T) {
+	cache := newTestCache(t)
+	web := []Workload{
+		{ProjectID: "p1", Cluster: "cluster-a", Kind: "Deployment", Namespace: "default", Name: "web", Replicas: "3/3", Images: []string{"nginx:1.27"}},
+		{ProjectID: "p1", Cluster: "cluster-a", Kind: "DaemonSet", Namespace: "kube-system", Name: "fluentbit", Replicas: "2/2"},
+		{ProjectID: "p1", Cluster: "cluster-b", Kind: "StatefulSet", Namespace: "db", Name: "postgres", Replicas: "1/2", Images: []string{"postgres:16"}},
+	}
+	if err := cache.SaveWorkloads("p1", "cluster-a", web[:2]); err != nil {
+		t.Fatalf("SaveWorkloads() error = %v", err)
+	}
+	if err := cache.SaveWorkloads("p1", "cluster-b", web[2:]); err != nil {
+		t.Fatalf("SaveWorkloads() other cluster error = %v", err)
+	}
+	if err := cache.SaveWorkloads("p2", "cluster-a", web[:1]); err != nil {
+		t.Fatalf("SaveWorkloads() other project error = %v", err)
+	}
+
+	got, err := cache.ListClusterWorkloads("p1", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterWorkloads() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListClusterWorkloads() len = %d, want 2", len(got))
+	}
+	if got[0].Cluster != "cluster-a" || got[0].Namespace != "default" {
+		t.Fatalf("ListClusterWorkloads() not ordered by namespace, kind: %+v", got)
+	}
+	if got[0].Kind != "Deployment" || got[0].Replicas != "3/3" || len(got[0].Images) != 1 || got[0].Images[0] != "nginx:1.27" || got[0].UpdatedAt == "" {
+		t.Fatalf("ListClusterWorkloads()[0] = %+v", got[0])
+	}
+	if len(got[1].Images) != 0 {
+		t.Fatalf("ListClusterWorkloads()[1].Images = %+v, want empty", got[1].Images)
+	}
+
+	other, err := cache.ListClusterWorkloads("p2", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterWorkloads() error = %v", err)
+	}
+	if len(other) != 1 || other[0].ProjectID != "p2" {
+		t.Fatalf("ListClusterWorkloads(p2) = %+v, want 1 for other project", other)
+	}
+
+	w, err := cache.GetWorkload("p1", "cluster-b", "StatefulSet", "db", "postgres")
+	if err != nil {
+		t.Fatalf("GetWorkload() error = %v", err)
+	}
+	if w == nil || w.Replicas != "1/2" {
+		t.Fatalf("GetWorkload() = %+v", w)
+	}
+	w, err = cache.GetWorkload("p1", "cluster-b", "Deployment", "default", "missing")
+	if err != nil {
+		t.Fatalf("GetWorkload() error = %v", err)
+	}
+	if w != nil {
+		t.Fatalf("GetWorkload() = %+v, want nil", w)
+	}
+
+	if err := cache.SaveWorkloads("p1", "cluster-a", web[:1]); err != nil {
+		t.Fatalf("SaveWorkloads() replace error = %v", err)
+	}
+	got, err = cache.ListClusterWorkloads("p1", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterWorkloads() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListClusterWorkloads() len = %d, want 1 after replace", len(got))
+	}
+	other, err = cache.ListClusterWorkloads("p1", "cluster-b")
+	if err != nil {
+		t.Fatalf("ListClusterWorkloads() error = %v", err)
+	}
+	if len(other) != 1 {
+		t.Fatalf("ListClusterWorkloads(p1, cluster-b) len = %d, want 1 (other cluster untouched)", len(other))
+	}
+
+	if err := cache.SaveProjects([]Project{{ProjectID: "p2", Name: "P Two", ProjectNumber: "222"}}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
+	if _, err := cache.DeleteProject("p2"); err != nil {
+		t.Fatalf("DeleteProject() error = %v", err)
+	}
+	other, err = cache.ListClusterWorkloads("p2", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterWorkloads() error = %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("ListClusterWorkloads(p2) len = %d, want 0 after project delete", len(other))
+	}
+}
+
 func TestGetProject(t *testing.T) {
 	cache := newTestCache(t)
 	if err := cache.SaveProjects([]Project{{ProjectID: "p1", Name: "P One", ProjectNumber: "111"}}); err != nil {

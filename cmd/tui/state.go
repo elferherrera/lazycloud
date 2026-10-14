@@ -18,6 +18,9 @@ viewBuckets       viewKind = "buckets"
 	viewBucketsAll    viewKind = "buckets-all"
 	viewLBs           viewKind = "lbs"
 	viewLBsAll        viewKind = "lbs-all"
+	viewClusters      viewKind = "clusters"
+	viewClustersAll   viewKind = "clusters-all"
+	viewWorkloads     viewKind = "workloads"
 )
 
 type cmdMode string
@@ -28,12 +31,14 @@ const (
 )
 
 type State struct {
-	Name          string
-	ProjectID     string
-	ProjectNumber string
-	CmdMode       cmdMode
-	ViewKind      viewKind
-	AllProjects   bool
+	Name           string
+	ProjectID      string
+	ProjectNumber  string
+	CmdMode        cmdMode
+	ViewKind       viewKind
+	AllProjects    bool
+	Cluster        string
+	ClusterProject string
 }
 
 var appState State
@@ -89,4 +94,11 @@ func lbsViewKind() viewKind {
 		return viewLBsAll
 	}
 	return viewLBs
+}
+
+func clustersViewKind() viewKind {
+	if appState.AllProjects {
+		return viewClustersAll
+	}
+	return viewClusters
 }

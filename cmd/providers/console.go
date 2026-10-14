@@ -64,6 +64,30 @@ func gcpLBListURL(projectID, table, name string) string {
 		"?project=" + url.QueryEscape(projectID) + "&pageState=" + pageState
 }
 
+func GCPWorkloadLogsURL(projectID, location, clusterName, namespace, name string) string {
+	var sb strings.Builder
+	sb.WriteString("resource.type=\"k8s_container\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.namespace_name=\"%s\"\n", namespace))
+	sb.WriteString(fmt.Sprintf("labels.k8s-pod/app=\"%s\" severity>=DEFAULT", name))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
+func GCPWorkloadOverviewURL(projectID, namespace string) string {
+	return "https://console.cloud.google.com/kubernetes/workload/overview?project=" +
+		url.QueryEscape(projectID) +
+		"&pageState=(%22savedViews%22:(%22n%22:%5B%22" + namespace + "%22%5D))"
+}
+
+func GCPClusterURL(projectID, location, name string) string {
+	return "https://console.cloud.google.com/kubernetes/clusters/details/" +
+		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}
+
 func GCPLoadBalancerURL(projectID, urlMapName string) string {
 	return gcpLBListURL(projectID, "loadBalancers", urlMapName)
 }

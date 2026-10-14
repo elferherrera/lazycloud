@@ -453,6 +453,75 @@ func TestLBConsoleURL(t *testing.T) {
 	}
 }
 
+func TestClusterRows(t *testing.T) {
+	clusters := []providers.Cluster{
+		{
+			ProjectID: "p1",
+			Name:      "cluster-a",
+			Location:  "europe-west1",
+			Status:    "RUNNING",
+			Version:   "1.31.1-gke.1",
+			NodePools: []providers.ClusterNodePool{{Name: "pool-a", NodeCount: 3}, {Name: "pool-b", NodeCount: 2}},
+			CreatedAt: "2026-10-12T18:23:12Z",
+			UpdatedAt: "not-a-date",
+		},
+		{ProjectID: "p1", Name: "cluster-b", Location: "us-central1-a", Status: "PROVISIONING", Version: "1.30.5-gke.1", UpdatedAt: "not-a-date"},
+	}
+	rows := clusterRows(clusters)
+	if len(rows) != 2 {
+		t.Fatalf("clusterRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"cluster-a", "europe-west1", "RUNNING", "1.31.1-gke.1", "pool-a (+1)"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("clusterRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][6] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[0][6])
+	}
+	if rows[1][4] != "" {
+		t.Fatalf("clusterRows()[1][4] = %q, want empty for cluster without node pools", rows[1][4])
+	}
+
+	rowsAll := clusterRowsAll(clusters)
+	if len(rowsAll) != 2 {
+		t.Fatalf("clusterRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 8 {
+		t.Fatalf("clusterRowsAll()[0] len = %d, want 8", len(rowsAll[0]))
+	}
+	if rowsAll[0][7] != "p1" {
+		t.Fatalf("clusterRowsAll()[0][7] = %q, want project id", rowsAll[0][7])
+	}
+}
+
+func TestWorkloadRows(t *testing.T) {
+	workloads := []providers.Workload{
+		{ProjectID: "p1", Cluster: "cluster-a", Kind: "Deployment", Namespace: "default", Name: "web", Replicas: "3/3", Images: []string{"nginx:1.27", "sidecar:1.0"}, UpdatedAt: "not-a-date"},
+		{ProjectID: "p1", Cluster: "cluster-a", Kind: "DaemonSet", Namespace: "kube-system", Name: "fluentbit", Replicas: "2/2"},
+	}
+	rows := workloadRows(workloads)
+	if len(rows) != 2 {
+		t.Fatalf("workloadRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"default", "Deployment", "web", "3/3", "nginx:1.27,sidecar:1.0"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("workloadRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][5] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[0][5])
+	}
+	if rows[1][4] != "" {
+		t.Fatalf("workloadRows()[1][4] = %q, want empty images", rows[1][4])
+	}
+	if len(rows[0]) != 6 {
+		t.Fatalf("workloadRows()[0] len = %d, want 6", len(rows[0]))
+	}
+}
+
 func TestShortcutsSummaryPanel(t *testing.T) {
 	table := newShortcutsSummaryPanel()
 	var found int
@@ -470,8 +539,8 @@ func TestShortcutsSummaryPanel(t *testing.T) {
 			}
 		}
 	}
-	if found != 7 {
-		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 7", found)
+	if found != 8 {
+		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 8", found)
 	}
 	if table.GetRowCount() != 4 {
 		t.Fatalf("shortcuts summary has %d rows, want 4 to fit the 4-row section", table.GetRowCount())
