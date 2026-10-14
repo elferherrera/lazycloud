@@ -1,0 +1,30 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run the tests
+    cmds:
+      - go test ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  run:
+    desc: Run the TUI locally
+    cmds:
+      - go run ./cmd/tui
+
+  build:
+    desc: Build the TUI binary
+    cmds:
+      - go build -o bin/lazycloud ./cmd/tui
+
+  install:
+    desc: Install the app to GOPATH/bin
+    cmds:
+      - go build -o {{.GOPATH}}/bin/lazycloud ./cmd/tui
+    vars:
+      GOPATH:
+        sh: go env GOPATH
