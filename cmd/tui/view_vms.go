@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/rivo/tview"
@@ -316,6 +318,38 @@ func (a *app) openVMLogging() {
 		return
 	}
 	a.statusText("[green]Opened VM logs in browser[-]")
+}
+
+func (a *app) sshVM() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewVMsAll {
+		projectID = a.info.GetCell(row, 6).Text
+	}
+	zone := a.info.GetCell(row, 1).Text
+	name := a.info.GetCell(row, 0).Text
+	if zone == "" || name == "" {
+		a.statusText("[red]Cannot SSH: VM not found in cache (press u to refresh)[-]")
+		return
+	}
+	cmd := exec.Command("gcloud", "compute", "ssh", name,
+		"--zone", zone, "--project", projectID, "--tunnel-through-iap")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	var err error
+	a.tapp.Suspend(func() {
+		err = cmd.Run()
+	})
+	if err != nil {
+		a.logger.Error("vms", projectID, "SSH session failed for "+name+" ("+zone+"): "+err.Error())
+		a.statusText("[red]SSH session failed: [-]" + err.Error())
+		return
+	}
+	a.statusText("[green]SSH session ended[-]")
 }
 
 func showVMs(a *app) {
