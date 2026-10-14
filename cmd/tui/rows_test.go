@@ -239,6 +239,220 @@ func TestVMDetails(t *testing.T) {
 	}
 }
 
+func TestBucketRows(t *testing.T) {
+	buckets := []providers.Bucket{
+		{ProjectID: "p1", Name: "bucket-a", Location: "EUROPE-WEST1", StorageClass: "STANDARD", Versioning: true, CreatedAt: "2026-10-12T18:23:12Z", UpdatedAt: "2026-10-13T18:23:12Z"},
+		{ProjectID: "p1", Name: "bucket-b", Location: "US", StorageClass: "NEARLINE", CreatedAt: "not-a-date", UpdatedAt: "not-a-date"},
+	}
+	rows := bucketRows(buckets)
+	if len(rows) != 2 {
+		t.Fatalf("bucketRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"bucket-a", "EUROPE-WEST1", "STANDARD", "yes"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("bucketRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[1][3] != "no" {
+		t.Fatalf("bucketRows()[1][3] = %q, want no", rows[1][3])
+	}
+
+	rowsAll := bucketRowsAll(buckets)
+	if len(rowsAll) != 2 {
+		t.Fatalf("bucketRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 7 {
+		t.Fatalf("bucketRowsAll()[0] len = %d, want 7", len(rowsAll[0]))
+	}
+	if rowsAll[0][6] != "p1" {
+		t.Fatalf("bucketRowsAll()[0][6] = %q, want project id", rowsAll[0][6])
+	}
+}
+
+func TestLBRows(t *testing.T) {
+	cache, err := providers.NewCacheAt(filepath.Join(t.TempDir(), "cache.db"))
+	if err != nil {
+		t.Fatalf("NewCacheAt() error = %v", err)
+	}
+	defer cache.Close()
+
+	rules := []providers.ForwardingRule{
+		{ProjectID: "p1", Name: "fr-web", Region: "global", IPAddress: "34.1.1.1", PortRange: "443", Protocol: "TCP", Scheme: "EXTERNAL", TargetKind: "targetHttpsProxies", Target: "proxy-a", UpdatedAt: "2026-10-12T18:23:12Z"},
+		{ProjectID: "p2", Name: "fr-internal", Region: "europe-west1", IPAddress: "10.0.0.5", Protocol: "TCP", Scheme: "INTERNAL", TargetKind: "backendServices", Target: "svc-int", UpdatedAt: "not-a-date"},
+	}
+	proxies := []providers.TargetProxy{{ProjectID: "p1", Kind: "targetHttpsProxies", Name: "proxy-a", URLMap: "map-a"}}
+	urlMaps := []providers.URLMap{{ProjectID: "p1", Name: "map-a", DefaultService: "svc-web", PathRules: []providers.PathRule{{Paths: []string{"/api"}, Service: "svc-api"}}}}
+	services := []providers.BackendService{
+		{ProjectID: "p1", Name: "svc-web", Region: "global", Protocol: "HTTPS"},
+		{ProjectID: "p1", Name: "svc-api", Region: "global", Protocol: "HTTPS"},
+	}
+	if err := cache.SaveForwardingRules("p1", rules[:1]); err != nil {
+		t.Fatalf("SaveForwardingRules() error = %v", err)
+	}
+	if err := cache.SaveForwardingRules("p2", rules[1:]); err != nil {
+		t.Fatalf("SaveForwardingRules() error = %v", err)
+	}
+	if err := cache.SaveTargetProxies("p1", proxies); err != nil {
+		t.Fatalf("SaveTargetProxies() error = %v", err)
+	}
+	if err := cache.SaveURLMaps("p1", urlMaps); err != nil {
+		t.Fatalf("SaveURLMaps() error = %v", err)
+	}
+	if err := cache.SaveBackendServices("p1", services); err != nil {
+		t.Fatalf("SaveBackendServices() error = %v", err)
+	}
+	if err := cache.SaveBackendServices("p2", []providers.BackendService{{ProjectID: "p2", Name: "svc-int", Region: "europe-west1", Protocol: "TCP"}}); err != nil {
+		t.Fatalf("SaveBackendServices() error = %v", err)
+	}
+
+	p1Rules, err := cache.ListForwardingRules("p1")
+	if err != nil {
+		t.Fatalf("ListForwardingRules() error = %v", err)
+	}
+	rows := lbRows(cache, "p1", p1Rules)
+	if len(rows) != 1 {
+		t.Fatalf("lbRows() len = %d, want 1", len(rows))
+	}
+	if len(rows[0]) != 7 {
+		t.Fatalf("lbRows()[0] len = %d, want 7", len(rows[0]))
+	}
+	want := []string{"fr-web", "34.1.1.1:443", "global", "TCP", "EXTERNAL", "svc-web (+1)"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("lbRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+
+	allRules, err := cache.ListAllForwardingRules()
+	if err != nil {
+		t.Fatalf("ListAllForwardingRules() error = %v", err)
+	}
+	rowsAll := lbRowsAll(cache, allRules)
+	if len(rowsAll) != 2 {
+		t.Fatalf("lbRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 8 {
+		t.Fatalf("lbRowsAll()[0] len = %d, want 8", len(rowsAll[0]))
+	}
+	if rowsAll[0][7] != "p1" || rowsAll[1][7] != "p2" {
+		t.Fatalf("lbRowsAll() project column = %q, %q, want p1, p2", rowsAll[0][7], rowsAll[1][7])
+	}
+	if rowsAll[1][1] != "10.0.0.5" {
+		t.Fatalf("lbRowsAll()[1][1] = %q, want IP without port range", rowsAll[1][1])
+	}
+	if rowsAll[1][5] != "svc-int" {
+		t.Fatalf("lbRowsAll()[1][5] = %q, want direct backend service", rowsAll[1][5])
+	}
+	if rowsAll[1][6] == "" {
+		t.Fatal("lbRowsAll()[1][6] updated column empty, want timestamp")
+	}
+}
+
+func TestLBDetails(t *testing.T) {
+	cache, err := providers.NewCacheAt(filepath.Join(t.TempDir(), "cache.db"))
+	if err != nil {
+		t.Fatalf("NewCacheAt() error = %v", err)
+	}
+	defer cache.Close()
+
+	rules := []providers.ForwardingRule{{ProjectID: "p1", Name: "fr-web", Region: "global", IPAddress: "34.1.1.1", PortRange: "443", Protocol: "TCP", Scheme: "EXTERNAL", TargetKind: "targetHttpsProxies", Target: "proxy-a"}}
+	proxies := []providers.TargetProxy{{ProjectID: "p1", Kind: "targetHttpsProxies", Name: "proxy-a", URLMap: "map-a"}}
+	urlMaps := []providers.URLMap{{ProjectID: "p1", Name: "map-a", DefaultService: "svc-web", PathRules: []providers.PathRule{{Paths: []string{"/api", "/api/*"}, Service: "svc-api"}}}}
+	services := []providers.BackendService{
+		{ProjectID: "p1", Name: "svc-web", Region: "global", Protocol: "HTTPS", PortName: "https", Backends: []providers.Backend{{Group: "ig-a", BalancingMode: "UTILIZATION"}}, HealthChecks: []string{"hc-a"}},
+		{ProjectID: "p1", Name: "svc-api", Region: "global", Protocol: "HTTPS", PortName: "https", Backends: []providers.Backend{{Group: "neg-api"}}},
+	}
+	if err := cache.SaveForwardingRules("p1", rules); err != nil {
+		t.Fatalf("SaveForwardingRules() error = %v", err)
+	}
+	if err := cache.SaveTargetProxies("p1", proxies); err != nil {
+		t.Fatalf("SaveTargetProxies() error = %v", err)
+	}
+	if err := cache.SaveURLMaps("p1", urlMaps); err != nil {
+		t.Fatalf("SaveURLMaps() error = %v", err)
+	}
+	if err := cache.SaveBackendServices("p1", services); err != nil {
+		t.Fatalf("SaveBackendServices() error = %v", err)
+	}
+
+	lb, err := cache.ResolveLoadBalancer("p1", "global", "fr-web")
+	if err != nil {
+		t.Fatalf("ResolveLoadBalancer() error = %v", err)
+	}
+	if lb == nil {
+		t.Fatal("ResolveLoadBalancer() = nil, want composed load balancer")
+	}
+	if lb.Proxy == nil || lb.Proxy.Name != "proxy-a" {
+		t.Fatalf("ResolveLoadBalancer() proxy = %+v", lb.Proxy)
+	}
+	if lb.URLMap == nil || lb.URLMap.Name != "map-a" {
+		t.Fatalf("ResolveLoadBalancer() url map = %+v", lb.URLMap)
+	}
+	if len(lb.BackendServices) != 2 || lb.BackendServices[0].Name != "svc-web" || lb.BackendServices[1].Name != "svc-api" {
+		t.Fatalf("ResolveLoadBalancer() backend services = %+v", lb.BackendServices)
+	}
+
+	details := lbDetails(lb)
+	for _, want := range []string{
+		"Name: [-]fr-web",
+		"IP:Port: [-]34.1.1.1:443",
+		"Target: [-]proxy-a (targetHttpsProxies)",
+		"Target proxy: [-]proxy-a",
+		"URL map: [-]map-a (default: svc-web)",
+		"/api,/api/* -> [-]svc-api",
+		"Backend service: [-]svc-web (HTTPS, port https)",
+		"ig-a (UTILIZATION)",
+		"neg-api",
+		"Health checks: [-]hc-a",
+	} {
+		if !strings.Contains(details, want) {
+			t.Errorf("lbDetails() missing %q:\n%s", want, details)
+		}
+	}
+}
+
+func TestLBConsoleURL(t *testing.T) {
+	cache, err := providers.NewCacheAt(filepath.Join(t.TempDir(), "cache.db"))
+	if err != nil {
+		t.Fatalf("NewCacheAt() error = %v", err)
+	}
+	defer cache.Close()
+
+	rules := []providers.ForwardingRule{
+		{ProjectID: "p1", Name: "fr-web", Region: "global", TargetKind: "targetHttpsProxies", Target: "proxy-a"},
+		{ProjectID: "p1", Name: "fr-int", Region: "europe-west1", TargetKind: "backendServices", Target: "svc-int"},
+	}
+	proxies := []providers.TargetProxy{{ProjectID: "p1", Kind: "targetHttpsProxies", Name: "proxy-a", URLMap: "map-a"}}
+	urlMaps := []providers.URLMap{{ProjectID: "p1", Name: "map-a", DefaultService: "svc-web"}}
+	services := []providers.BackendService{
+		{ProjectID: "p1", Name: "svc-web", Region: "global"},
+		{ProjectID: "p1", Name: "svc-int", Region: "europe-west1"},
+	}
+	if err := cache.SaveForwardingRules("p1", rules); err != nil {
+		t.Fatalf("SaveForwardingRules() error = %v", err)
+	}
+	if err := cache.SaveTargetProxies("p1", proxies); err != nil {
+		t.Fatalf("SaveTargetProxies() error = %v", err)
+	}
+	if err := cache.SaveURLMaps("p1", urlMaps); err != nil {
+		t.Fatalf("SaveURLMaps() error = %v", err)
+	}
+	if err := cache.SaveBackendServices("p1", services); err != nil {
+		t.Fatalf("SaveBackendServices() error = %v", err)
+	}
+
+	if got, want := lbConsoleURL(cache, "p1", "global", "fr-web"), providers.GCPLoadBalancerURL("p1", "map-a"); got != want {
+		t.Fatalf("lbConsoleURL() =\n%s\nwant\n%s", got, want)
+	}
+	if got, want := lbConsoleURL(cache, "p1", "europe-west1", "fr-int"), providers.GCPLoadBalancerFrontendURL("p1", "fr-int"); got != want {
+		t.Fatalf("lbConsoleURL() =\n%s\nwant\n%s", got, want)
+	}
+	if got, want := lbConsoleURL(cache, "p1", "global", "missing"), providers.GCPLoadBalancerFrontendURL("p1", "missing"); got != want {
+		t.Fatalf("lbConsoleURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestShortcutsSummaryPanel(t *testing.T) {
 	table := newShortcutsSummaryPanel()
 	var found int
@@ -256,11 +470,11 @@ func TestShortcutsSummaryPanel(t *testing.T) {
 			}
 		}
 	}
-	if found != 5 {
-		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 5", found)
+	if found != 7 {
+		t.Fatalf("shortcuts summary rendered %d numeric shortcuts, want 7", found)
 	}
-	if table.GetRowCount() != 3 {
-		t.Fatalf("shortcuts summary has %d rows, want 3 to fit the 3-row section", table.GetRowCount())
+	if table.GetRowCount() != 4 {
+		t.Fatalf("shortcuts summary has %d rows, want 4 to fit the 4-row section", table.GetRowCount())
 	}
 }
 

@@ -39,6 +39,39 @@ func GCPVMLogsURL(projectID, instanceID, name string) string {
 	return "https://console.cloud.google.com/logs/query;query=" + encoded + "?project=" + url.QueryEscape(projectID)
 }
 
+func GCPBucketURL(projectID, name string) string {
+	return "https://console.cloud.google.com/storage/browser/" +
+		url.PathEscape(name) + ";tab=objects?project=" + url.QueryEscape(projectID)
+}
+
+func gcpLBListURL(projectID, table, name string) string {
+	filter := fmt.Sprintf(`[{"k":"","t":10,"v":"\"%s\""}]`, name)
+	encoded := strings.NewReplacer(
+		`\`, `_5C`,
+		`"`, `_22`,
+		`:`, `_3A`,
+		`,`, `_2C`,
+	).Replace(filter)
+	encoded = strings.NewReplacer(
+		`[`, `%5B`,
+		`{`, `%7B`,
+		`}`, `%7D`,
+		`]`, `%5D`,
+	).Replace(encoded)
+	encoded = strings.ReplaceAll(encoded, "%", "%25")
+	pageState := `(%22` + table + `%22:(%22f%22:%22` + encoded + `%22))`
+	return "https://console.cloud.google.com/net-services/loadbalancing/list/" + table +
+		"?project=" + url.QueryEscape(projectID) + "&pageState=" + pageState
+}
+
+func GCPLoadBalancerURL(projectID, urlMapName string) string {
+	return gcpLBListURL(projectID, "loadBalancers", urlMapName)
+}
+
+func GCPLoadBalancerFrontendURL(projectID, forwardingRuleName string) string {
+	return gcpLBListURL(projectID, "frontends", forwardingRuleName)
+}
+
 func GCPAddressesURL(projectID, name string) string {
 	filter := fmt.Sprintf(`[{"k":"name","t":10,"v":"\"%s\"","i":"name"}]`, name)
 	encoded := strings.NewReplacer(

@@ -14,6 +14,10 @@ const (
 	viewAccountsAll viewKind = "accounts-all"
 	viewVMs         viewKind = "vms"
 	viewVMsAll      viewKind = "vms-all"
+viewBuckets       viewKind = "buckets"
+	viewBucketsAll    viewKind = "buckets-all"
+	viewLBs           viewKind = "lbs"
+	viewLBsAll        viewKind = "lbs-all"
 )
 
 type cmdMode string
@@ -71,4 +75,18 @@ func vmsViewKind() viewKind {
 		return viewVMsAll
 	}
 	return viewVMs
+}
+
+func bucketsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewBucketsAll
+	}
+	return viewBuckets
+}
+
+func lbsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewLBsAll
+	}
+	return viewLBs
 }

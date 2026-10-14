@@ -30,8 +30,24 @@ var ipsAllView = viewDef{
 		}
 		return ipAddressRowsAll(ips), nil
 	},
-	status: func(a *app, count int) string {
+status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d IP addresses for all projects[-]", count)
+	},
+	selectRow: func(a *app, row, _ int) {
+		if row <= 0 || row >= a.info.GetRowCount() {
+			return
+		}
+		projectID := a.info.GetCell(row, 5).Text
+		ips, err := a.cache.GetIPAddresses(projectID, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
+		if err != nil {
+			a.statusText("[red]Failed to load IP address: [-]" + err.Error())
+			return
+		}
+		if len(ips) == 0 {
+			a.statusText("[red]IP address not found in cache (press u to refresh)[-]")
+			return
+		}
+		a.showIPDetails(&ips[0])
 	},
 	refresh: func(a *app) {
 		a.statusText("[yellow]Fetching IP addresses for all projects...[-]")

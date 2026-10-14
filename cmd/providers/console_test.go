@@ -16,6 +16,22 @@ func TestGCPVMLogsURL(t *testing.T) {
 	}
 }
 
+func TestGCPLoadBalancerURL(t *testing.T) {
+	got := GCPLoadBalancerURL("revolut-dev-apps", "alert-courier")
+	want := "https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=revolut-dev-apps&pageState=(%22loadBalancers%22:(%22f%22:%22%255B%257B_22k_22_3A_22_22_2C_22t_22_3A10_2C_22v_22_3A_22_5C_22alert-courier_5C_22_22%257D%255D%22))"
+	if got != want {
+		t.Fatalf("GCPLoadBalancerURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPLoadBalancerFrontendURL(t *testing.T) {
+	got := GCPLoadBalancerFrontendURL("revolut-dev-apps", "-forward-")
+	want := "https://console.cloud.google.com/net-services/loadbalancing/list/frontends?project=revolut-dev-apps&pageState=(%22frontends%22:(%22f%22:%22%255B%257B_22k_22_3A_22_22_2C_22t_22_3A10_2C_22v_22_3A_22_5C_22-forward-_5C_22_22%257D%255D%22))"
+	if got != want {
+		t.Fatalf("GCPLoadBalancerFrontendURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestGCPAddressesURL(t *testing.T) {
 	got := GCPAddressesURL("revolut-dev-apps", "dns-forwarding-2bab1b111322b008")
 	want := "https://console.cloud.google.com/networking/addresses/list?referrer=search&project=revolut-dev-apps&pageState=(%22allAddressesTable%22:(%22f%22:%22%255B%257B_22k_22_3A_22name_22_2C_22t_22_3A10_2C_22v_22_3A_22_5C_22dns-forwarding-2bab1b111322b008_5C_22_22_2C_22i_22_3A_22name_22%257D%255D%22))"

@@ -59,6 +59,13 @@ var projectsView = viewDef{
 		appState.ProjectNumber = a.info.GetCell(row, 2).Text
 		appState.AllProjects = false
 		renderSummary(a.summary)
+		if err := providers.SaveLastProject(providers.LastProject{
+			ProjectID:     appState.ProjectID,
+			Name:          appState.Name,
+			ProjectNumber: appState.ProjectNumber,
+		}); err != nil {
+			a.logger.Error("projects", appState.ProjectID, "Failed to save last project: "+err.Error())
+		}
 	},
 	copyRow: func(a *app, row int) ([]byte, error) {
 		p, err := a.cache.GetProject(a.info.GetCell(row, 0).Text)

@@ -47,14 +47,18 @@ func init() {
 			{":networks", "show VPCs and subnets"},
 			{":accounts", "show service accounts"},
 			{":vms", "show VMs"},
+			{":buckets", "show buckets"},
+			{":lbs", "show load balancers"},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
-		{key: '3', desc: "show service accounts", run: func(a *app) { showAccounts(a) }},
-		{key: '4', desc: "show IP addresses", run: (*app).showIPs},
-		{key: '5', desc: "show VPCs and subnets", run: (*app).showNetworks},
+		{key: '3', desc: "show buckets", run: func(a *app) { showBuckets(a) }},
+		{key: '4', desc: "show service accounts", run: func(a *app) { showAccounts(a) }},
+		{key: '5', desc: "show IP addresses", run: (*app).showIPs},
+		{key: '6', desc: "show VPCs and subnets", run: (*app).showNetworks},
+		{key: '7', desc: "show load balancers", run: showLBs},
 		{
 			key:     'r',
 			desc:    "restore last deleted project",
@@ -78,6 +82,13 @@ func init() {
 			visible: inVMView,
 			enabled: func(a *app) bool { return inVMView() },
 			run:     (*app).openVMLogging,
+		},
+		{
+			key:     's',
+			desc:    "SSH to VM via IAP",
+			visible: inVMView,
+			enabled: func(a *app) bool { return inVMView() },
+			run:     (*app).sshVM,
 		},
 		{key: '?', desc: "toggle shortcuts", run: (*app).toggleHelp},
 		{
@@ -195,6 +206,7 @@ func (a *app) focusCmd() {
 func (a *app) startFilter() {
 	if appState.CmdMode == modeFilter && a.tapp.GetFocus() == a.info {
 		a.filterBase = a.visibleRows
+		a.cmd.SetText("")
 	} else {
 		if appState.CmdMode == modeFilter {
 			a.exitFilterMode()
@@ -237,6 +249,18 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(vmsViewKind())
+		}
+	case viewBuckets, viewBucketsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(bucketsViewKind())
+		}
+	case viewLBs, viewLBsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(lbsViewKind())
 		}
 	}
 }
@@ -342,8 +366,8 @@ func (a *app) quit() {
 }
 
 func (a *app) escapePressed() {
-	if name, _ := a.pages.GetFrontPage(); name == "vm" {
-		a.pages.RemovePage("vm")
+	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" {
+		a.pages.RemovePage(name)
 		return
 	}
 	a.cmd.SetBorder(false)
@@ -393,6 +417,10 @@ func (a *app) commandEnter() {
 		showAccounts(a)
 	case text == "vms":
 		showVMs(a)
+	case text == "buckets":
+		showBuckets(a)
+	case text == "lbs" || text == "loadbalancers":
+		showLBs(a)
 	case text == "projects":
 		a.setView(viewProjects)
 	default:

@@ -148,6 +148,73 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS buckets (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		location TEXT NOT NULL DEFAULT '',
+		storage_class TEXT NOT NULL DEFAULT '',
+		versioning INTEGER NOT NULL DEFAULT 0,
+		uniform_access INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS forwarding_rules (
+		project_id TEXT NOT NULL,
+		region TEXT NOT NULL,
+		name TEXT NOT NULL,
+		ip_address TEXT NOT NULL DEFAULT '',
+		port_range TEXT NOT NULL DEFAULT '',
+		protocol TEXT NOT NULL DEFAULT '',
+		scheme TEXT NOT NULL DEFAULT '',
+		target_kind TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, region, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS target_proxies (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		kind TEXT NOT NULL DEFAULT '',
+		url_map TEXT NOT NULL DEFAULT '',
+		backend_service TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS url_maps (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		default_service TEXT NOT NULL DEFAULT '',
+		path_rules TEXT NOT NULL DEFAULT '[]',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS backend_services (
+		project_id TEXT NOT NULL,
+		region TEXT NOT NULL,
+		name TEXT NOT NULL,
+		protocol TEXT NOT NULL DEFAULT '',
+		port_name TEXT NOT NULL DEFAULT '',
+		backends TEXT NOT NULL DEFAULT '[]',
+		health_checks TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, region, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -517,7 +584,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "service_accounts", "vms", "disks"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -822,6 +889,457 @@ func (c *Cache) GetDisk(projectID, zone, name string) (*Disk, error) {
 		return nil, nil
 	}
 	return &disks[0], nil
+}
+
+func (c *Cache) SaveBuckets(projectID string, buckets []Bucket) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM buckets WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, b := range buckets {
+		if _, err := tx.Exec(`INSERT INTO buckets
+			(project_id, name, location, storage_class, versioning, uniform_access, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, b.Name, b.Location, b.StorageClass, b.Versioning, b.UniformAccess, b.CreatedAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanBuckets(rows *sql.Rows) ([]Bucket, error) {
+	var buckets []Bucket
+	for rows.Next() {
+		var b Bucket
+		var versioning, uniform int
+		if err := rows.Scan(&b.ProjectID, &b.Name, &b.Location, &b.StorageClass, &versioning, &uniform, &b.CreatedAt, &b.UpdatedAt); err != nil {
+			return nil, err
+		}
+		b.Versioning = versioning != 0
+		b.UniformAccess = uniform != 0
+		buckets = append(buckets, b)
+	}
+	return buckets, rows.Err()
+}
+
+func (c *Cache) ListBuckets(projectID string) ([]Bucket, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, storage_class, versioning, uniform_access, created_at, updated_at
+		FROM buckets WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBuckets(rows)
+}
+
+func (c *Cache) ListAllBuckets() ([]Bucket, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, storage_class, versioning, uniform_access, created_at, updated_at
+		FROM buckets ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBuckets(rows)
+}
+
+func (c *Cache) GetBucket(projectID, name string) (*Bucket, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, location, storage_class, versioning, uniform_access, created_at, updated_at
+		FROM buckets WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	buckets, err := scanBuckets(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(buckets) == 0 {
+		return nil, nil
+	}
+	return &buckets[0], nil
+}
+
+func (c *Cache) SaveForwardingRules(projectID string, rules []ForwardingRule) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM forwarding_rules WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range rules {
+		if _, err := tx.Exec(`INSERT INTO forwarding_rules
+			(project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Region, r.Name, r.IPAddress, r.PortRange, r.Protocol, r.Scheme, r.TargetKind, r.Target, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanForwardingRules(rows *sql.Rows) ([]ForwardingRule, error) {
+	var rules []ForwardingRule
+	for rows.Next() {
+		var r ForwardingRule
+		if err := rows.Scan(&r.ProjectID, &r.Region, &r.Name, &r.IPAddress, &r.PortRange, &r.Protocol, &r.Scheme, &r.TargetKind, &r.Target, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	return rules, rows.Err()
+}
+
+func (c *Cache) ListForwardingRules(projectID string) ([]ForwardingRule, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+		FROM forwarding_rules WHERE project_id = ? ORDER BY region, name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanForwardingRules(rows)
+}
+
+func (c *Cache) ListAllForwardingRules() ([]ForwardingRule, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+		FROM forwarding_rules ORDER BY project_id, region, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanForwardingRules(rows)
+}
+
+func (c *Cache) GetForwardingRule(projectID, region, name string) (*ForwardingRule, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+		FROM forwarding_rules WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	rules, err := scanForwardingRules(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	return &rules[0], nil
+}
+
+func (c *Cache) SaveTargetProxies(projectID string, proxies []TargetProxy) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM target_proxies WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, p := range proxies {
+		if _, err := tx.Exec(`INSERT INTO target_proxies
+			(project_id, name, kind, url_map, backend_service, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			projectID, p.Name, p.Kind, p.URLMap, p.BackendService, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanTargetProxies(rows *sql.Rows) ([]TargetProxy, error) {
+	var proxies []TargetProxy
+	for rows.Next() {
+		var p TargetProxy
+		if err := rows.Scan(&p.ProjectID, &p.Name, &p.Kind, &p.URLMap, &p.BackendService, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		proxies = append(proxies, p)
+	}
+	return proxies, rows.Err()
+}
+
+func (c *Cache) ListTargetProxies(projectID string) ([]TargetProxy, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, kind, url_map, backend_service, updated_at
+		FROM target_proxies WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTargetProxies(rows)
+}
+
+func (c *Cache) ListAllTargetProxies() ([]TargetProxy, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, kind, url_map, backend_service, updated_at
+		FROM target_proxies ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTargetProxies(rows)
+}
+
+func (c *Cache) GetTargetProxy(projectID, name string) (*TargetProxy, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, kind, url_map, backend_service, updated_at
+		FROM target_proxies WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	proxies, err := scanTargetProxies(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(proxies) == 0 {
+		return nil, nil
+	}
+	return &proxies[0], nil
+}
+
+func (c *Cache) SaveURLMaps(projectID string, maps []URLMap) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM url_maps WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, m := range maps {
+		pathRules, err := json.Marshal(m.PathRules)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO url_maps
+			(project_id, name, default_service, path_rules, updated_at)
+			VALUES (?, ?, ?, ?, ?)`,
+			projectID, m.Name, m.DefaultService, string(pathRules), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanURLMaps(rows *sql.Rows) ([]URLMap, error) {
+	var maps []URLMap
+	for rows.Next() {
+		var m URLMap
+		var pathRules string
+		if err := rows.Scan(&m.ProjectID, &m.Name, &m.DefaultService, &pathRules, &m.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(pathRules), &m.PathRules); err != nil {
+			return nil, err
+		}
+		maps = append(maps, m)
+	}
+	return maps, rows.Err()
+}
+
+func (c *Cache) ListURLMaps(projectID string) ([]URLMap, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, default_service, path_rules, updated_at
+		FROM url_maps WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanURLMaps(rows)
+}
+
+func (c *Cache) ListAllURLMaps() ([]URLMap, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, default_service, path_rules, updated_at
+		FROM url_maps ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanURLMaps(rows)
+}
+
+func (c *Cache) GetURLMap(projectID, name string) (*URLMap, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, default_service, path_rules, updated_at
+		FROM url_maps WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	maps, err := scanURLMaps(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(maps) == 0 {
+		return nil, nil
+	}
+	return &maps[0], nil
+}
+
+func (c *Cache) SaveBackendServices(projectID string, services []BackendService) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM backend_services WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, s := range services {
+		backends, err := json.Marshal(s.Backends)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO backend_services
+			(project_id, region, name, protocol, port_name, backends, health_checks, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, s.Region, s.Name, s.Protocol, s.PortName, string(backends), strings.Join(s.HealthChecks, ","), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanBackendServices(rows *sql.Rows) ([]BackendService, error) {
+	var services []BackendService
+	for rows.Next() {
+		var s BackendService
+		var backends, healthChecks string
+		if err := rows.Scan(&s.ProjectID, &s.Region, &s.Name, &s.Protocol, &s.PortName, &backends, &healthChecks, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(backends), &s.Backends); err != nil {
+			return nil, err
+		}
+		if healthChecks != "" {
+			s.HealthChecks = strings.Split(healthChecks, ",")
+		}
+		services = append(services, s)
+	}
+	return services, rows.Err()
+}
+
+func (c *Cache) ListBackendServices(projectID string) ([]BackendService, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, protocol, port_name, backends, health_checks, updated_at
+		FROM backend_services WHERE project_id = ? ORDER BY region, name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBackendServices(rows)
+}
+
+func (c *Cache) ListAllBackendServices() ([]BackendService, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, protocol, port_name, backends, health_checks, updated_at
+		FROM backend_services ORDER BY project_id, region, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBackendServices(rows)
+}
+
+func (c *Cache) GetBackendService(projectID, region, name string) (*BackendService, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, protocol, port_name, backends, health_checks, updated_at
+		FROM backend_services WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	services, err := scanBackendServices(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(services) == 0 {
+		return nil, nil
+	}
+	return &services[0], nil
+}
+
+type LoadBalancer struct {
+	Rule            ForwardingRule
+	Proxy           *TargetProxy
+	URLMap          *URLMap
+	BackendServices []BackendService
+}
+
+func (c *Cache) ResolveLoadBalancer(projectID, region, name string) (*LoadBalancer, error) {
+	rule, err := c.GetForwardingRule(projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	if rule == nil {
+		return nil, nil
+	}
+	lb := &LoadBalancer{Rule: *rule}
+	var serviceNames []string
+	switch rule.TargetKind {
+	case "backendServices":
+		serviceNames = append(serviceNames, rule.Target)
+	case "targetHttpProxies", "targetHttpsProxies", "targetTcpProxies", "targetSslProxies", "targetGrpcProxies":
+		proxy, err := c.GetTargetProxy(projectID, rule.Target)
+		if err != nil {
+			return nil, err
+		}
+		if proxy != nil {
+			lb.Proxy = proxy
+			switch {
+			case proxy.BackendService != "":
+				serviceNames = append(serviceNames, proxy.BackendService)
+			case proxy.URLMap != "":
+				urlMap, err := c.GetURLMap(projectID, proxy.URLMap)
+				if err != nil {
+					return nil, err
+				}
+				if urlMap != nil {
+					lb.URLMap = urlMap
+					serviceNames = append(serviceNames, urlMap.DefaultService)
+					for _, pr := range urlMap.PathRules {
+						if pr.Service != "" && !slices.Contains(serviceNames, pr.Service) {
+							serviceNames = append(serviceNames, pr.Service)
+						}
+					}
+				}
+			}
+		}
+	}
+	regions := []string{region}
+	if region != "global" {
+		regions = append(regions, "global")
+	}
+	for _, serviceName := range serviceNames {
+		if serviceName == "" {
+			continue
+		}
+		svc, err := c.getBackendServiceAnyRegion(projectID, regions, serviceName)
+		if err != nil {
+			return nil, err
+		}
+		if svc != nil {
+			lb.BackendServices = append(lb.BackendServices, *svc)
+		}
+	}
+	return lb, nil
+}
+
+func (c *Cache) getBackendServiceAnyRegion(projectID string, regions []string, name string) (*BackendService, error) {
+	for _, region := range regions {
+		svc, err := c.GetBackendService(projectID, region, name)
+		if err != nil {
+			return nil, err
+		}
+		if svc != nil {
+			return svc, nil
+		}
+	}
+	return nil, nil
 }
 
 func (c *Cache) Close() error {

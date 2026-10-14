@@ -35,6 +35,17 @@ func main() {
 	}
 	defer logger.Close()
 
+	lastProject, err := providers.LoadLastProject()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error loading last project:", err)
+		os.Exit(1)
+	}
+	if lastProject.ProjectID != "" {
+		appState.ProjectID = lastProject.ProjectID
+		appState.Name = lastProject.Name
+		appState.ProjectNumber = lastProject.ProjectNumber
+	}
+
 	tapp := tview.NewApplication()
 
 	a := &app{
@@ -61,7 +72,7 @@ func main() {
 		AddItem(shortcutsSummary, 0, 1, false)
 
 	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(summary, 3, 1, false).
+		AddItem(summary, 4, 1, false).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
 		AddItem(a.status, 1, 1, false)
@@ -81,7 +92,9 @@ func main() {
 
 	a.info.SetSelectedFunc(a.selected)
 
+	renderSummary(a.summary)
 	a.setView(viewProjects)
+	a.statusText("help ?")
 
 	tapp.SetRoot(a.pages, true)
 	tapp.SetInputCapture(a.inputCapture)

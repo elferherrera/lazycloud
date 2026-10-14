@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/rivo/tview"
 
 	"lazycloud/cmd/providers"
 )
@@ -32,6 +35,21 @@ var ipsView = viewDef{
 	},
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d IP addresses for %s[-]", count, appState.ProjectID)
+	},
+	selectRow: func(a *app, row, _ int) {
+		if row <= 0 || row >= a.info.GetRowCount() {
+			return
+		}
+		ips, err := a.cache.GetIPAddresses(appState.ProjectID, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
+		if err != nil {
+			a.statusText("[red]Failed to load IP address: [-]" + err.Error())
+			return
+		}
+		if len(ips) == 0 {
+			a.statusText("[red]IP address not found in cache (press u to refresh)[-]")
+			return
+		}
+		a.showIPDetails(&ips[0])
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
@@ -74,4 +92,40 @@ var ipsView = viewDef{
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPAddressesURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
+}
+
+func ipDetails(ip *providers.IPAddress) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", ip.ProjectID)
+	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", ip.Name)
+	fmt.Fprintf(&sb, "[yellow]Address: [-]%s\n", ip.Address)
+	fmt.Fprintf(&sb, "[yellow]Type: [-]%s\n", ip.AddressType)
+	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", ip.Status)
+	fmt.Fprintf(&sb, "[yellow]Region: [-]%s\n", ip.Region)
+	fmt.Fprintf(&sb, "[yellow]Network: [-]%s\n", ip.Network)
+	fmt.Fprintf(&sb, "[yellow]Subnetwork: [-]%s\n", ip.Subnetwork)
+	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n", formatUpdatedAt(ip.UpdatedAt))
+	return sb.String()
+}
+
+func (a *app) showIPDetails(ip *providers.IPAddress) {
+	if ip.Network == "" && ip.Subnetwork != "" && ip.Region != "" && ip.Region != "global" {
+		if sub, err := a.cache.GetSubnetwork(ip.ProjectID, ip.Region, ip.Subnetwork); err == nil && sub != nil && sub.Network != "" {
+			resolved := *ip
+			resolved.Network = sub.Network
+			ip = &resolved
+		}
+	}
+	text := tview.NewTextView().SetDynamicColors(true).SetText(ipDetails(ip))
+	text.SetBorder(true).SetTitle(fmt.Sprintf(" IP %s ", ip.Name))
+	height := strings.Count(text.GetText(true), "\n") + 2
+	overlay := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(text, height, 1, true).
+			AddItem(nil, 0, 1, false), 80, 1, true).
+		AddItem(nil, 0, 1, false)
+	a.pages.RemovePage("ip")
+	a.pages.AddPage("ip", overlay, true, true)
 }

@@ -31,5 +31,9 @@ func init() {
 		viewAccountsAll: accountsAllView,
 		viewVMs:         vmsView,
 		viewVMsAll:      vmsAllView,
+		viewBuckets:     bucketsView,
+		viewBucketsAll:   bucketsAllView,
+		viewLBs:          lbsView,
+		viewLBsAll:       lbsAllView,
 	}
 }
