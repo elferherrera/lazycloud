@@ -35,6 +35,13 @@ func main() {
 	}
 	defer logger.Close()
 
+	shortcutConfig, err := providers.LoadShortcuts(defaultShortcutConfig())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error loading shortcuts config:", err)
+		os.Exit(1)
+	}
+	applyShortcutConfig(shortcutConfig)
+
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error loading last project:", err)

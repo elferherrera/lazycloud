@@ -21,6 +21,7 @@ type shortcut struct {
 type viewCommand struct {
 	cmd  string
 	desc string
+	view viewKind
 }
 
 func inProjectsView() bool {
@@ -67,17 +68,17 @@ var shortcuts []shortcut
 func init() {
 	shortcuts = []shortcut{
 		{key: ':', desc: "focus command", run: (*app).focusCmd, commands: []viewCommand{
-			{":projects", "show projects"},
-			{":ips", "show IP addresses"},
-			{":networks", "show VPCs and subnets"},
-			{":accounts", "show service accounts"},
-			{":vms", "show VMs"},
-			{":buckets", "show buckets"},
-			{":lbs", "show load balancers"},
-			{":clusters", "show kubernetes clusters"},
-			{":routes", "show routes"},
-			{":firewalls", "show firewall rules"},
-			{":dns", "show DNS zones"},
+			{":projects", "show projects", viewProjects},
+			{":ips", "show IP addresses", viewIPs},
+			{":networks", "show VPCs and subnets", viewNetworks},
+			{":accounts", "show service accounts", viewAccounts},
+			{":vms", "show VMs", viewVMs},
+			{":buckets", "show buckets", viewBuckets},
+			{":lbs", "show load balancers", viewLBs},
+			{":clusters", "show kubernetes clusters", viewClusters},
+			{":routes", "show routes", viewRoutes},
+			{":firewalls", "show firewall rules", viewFirewalls},
+			{":dns", "show DNS zones", viewDNSZones},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -150,7 +151,7 @@ func init() {
 			enabled: func(a *app) bool { return inVMView() },
 			run:     (*app).sshVM,
 		},
-		{key: '?', desc: "toggle shortcuts", run: (*app).toggleHelp},
+		{key: '?', desc: "toggle help", run: (*app).toggleHelp},
 		{
 			key:  'q',
 			desc: "quit",
@@ -199,9 +200,13 @@ func populateShortcutsPanel(table *tview.Table) int {
 		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1))
 		row++
 		for _, c := range s.commands {
+			desc := c.desc
+			if c.view != "" {
+				desc += " (" + string(c.view) + ")"
+			}
 			table.SetCell(row, 0, tview.NewTableCell(c.cmd).
 				SetTextColor(tview.Styles.SecondaryTextColor))
-			table.SetCell(row, 1, tview.NewTableCell(c.desc).SetExpansion(1))
+			table.SetCell(row, 1, tview.NewTableCell(desc).SetExpansion(1))
 			row++
 		}
 	}
@@ -211,7 +216,7 @@ func populateShortcutsPanel(table *tview.Table) int {
 // newHelpOverlay returns a centered floating window showing the shortcuts
 // table, meant to be stacked on top of the main view via Pages.
 func newHelpOverlay(help *tview.Table) (overlay, row *tview.Flex) {
-	help.SetBorder(true).SetTitle(" Shortcuts ")
+	help.SetBorder(true).SetTitle(" Help ")
 	row = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
 		AddItem(help, shortcutsRowCount()+2, 1, true).

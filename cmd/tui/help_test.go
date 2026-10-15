@@ -86,7 +86,7 @@ func TestHelpOverlayRenders(t *testing.T) {
 	overlay.SetRect(0, 0, 120, 40)
 	rendered := drawScreen(t, 120, 40, overlay.Draw)
 	assertNoNumericShortcutCells(t, table)
-	if !strings.Contains(rendered, "Shortcuts") {
+	if !strings.Contains(rendered, "Help") {
 		t.Error("help overlay is missing its title")
 	}
 	for _, s := range shortcuts {
