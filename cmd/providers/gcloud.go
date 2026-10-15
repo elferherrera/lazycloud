@@ -16,6 +16,7 @@ import (
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	"google.golang.org/api/container/v1"
+	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/storage/v1"
@@ -1017,6 +1018,80 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 		workloads = append(workloads, w)
 	}
 	return workloads, nil
+}
+
+type DNSZone struct {
+	ProjectID   string
+	Name        string
+	DNSName     string
+	Visibility  string
+	Description string
+	UpdatedAt   string
+}
+
+type DNSRecord struct {
+	ProjectID string
+	Zone      string
+	Name      string
+	Type      string
+	TTL       int64
+	Data      []string
+	UpdatedAt string
+}
+
+func ListProjectDNSZones(projectID string) ([]DNSZone, error) {
+	ctx := context.Background()
+
+	svc, err := dns.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var zones []DNSZone
+	err = svc.ManagedZones.List(projectID).Pages(ctx, func(page *dns.ManagedZonesListResponse) error {
+		for _, z := range page.ManagedZones {
+			zones = append(zones, DNSZone{
+				ProjectID:   projectID,
+				Name:        z.Name,
+				DNSName:     z.DnsName,
+				Visibility:  z.Visibility,
+				Description: z.Description,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return zones, nil
+}
+
+func ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
+	ctx := context.Background()
+
+	svc, err := dns.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var records []DNSRecord
+	err = svc.ResourceRecordSets.List(projectID, zone).Pages(ctx, func(page *dns.ResourceRecordSetsListResponse) error {
+		for _, r := range page.Rrsets {
+			records = append(records, DNSRecord{
+				ProjectID: projectID,
+				Zone:      zone,
+				Name:      r.Name,
+				Type:      r.Type,
+				TTL:       r.Ttl,
+				Data:      r.Rrdatas,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
 }
 
 func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {

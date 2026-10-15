@@ -35,6 +35,23 @@ func inClustersView() bool {
 	return appState.ViewKind == viewClusters || appState.ViewKind == viewClustersAll
 }
 
+func inDNSZonesView() bool {
+	return appState.ViewKind == viewDNSZones || appState.ViewKind == viewDNSZonesAll
+}
+
+func inNestedView() bool {
+	return appState.ViewKind == viewWorkloads || appState.ViewKind == viewDNSRecords
+}
+
+func (a *app) backToParentView() {
+	switch appState.ViewKind {
+	case viewWorkloads:
+		a.setView(clustersViewKind())
+	case viewDNSRecords:
+		a.setView(dnsZonesViewKind())
+	}
+}
+
 func inLogsView() bool {
 	return inVMView() || appState.ViewKind == viewWorkloads
 }
@@ -60,6 +77,7 @@ func init() {
 			{":clusters", "show kubernetes clusters"},
 			{":routes", "show routes"},
 			{":firewalls", "show firewall rules"},
+			{":dns", "show DNS zones"},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -79,6 +97,20 @@ func init() {
 			visible: inClustersView,
 			enabled: func(a *app) bool { return inClustersView() },
 			run:     (*app).showClusterWorkloads,
+		},
+		{
+			key:     'd',
+			desc:    "show dns records for zone",
+			visible: inDNSZonesView,
+			enabled: func(a *app) bool { return inDNSZonesView() },
+			run:     (*app).showZoneDNSRecords,
+		},
+		{
+			key:     'b',
+			desc:    "back to previous view",
+			visible: inNestedView,
+			enabled: func(a *app) bool { return inNestedView() },
+			run:     (*app).backToParentView,
 		},
 		{
 			key:     'c',
@@ -253,7 +285,7 @@ func (a *app) toggleAllProjects() {
 	appState.AllProjects = !appState.AllProjects
 	renderSummary(a.summary)
 	switch appState.ViewKind {
-	case viewProjects, viewWorkloads:
+	case viewProjects, viewWorkloads, viewDNSRecords:
 	case viewIPs, viewIPsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -307,6 +339,12 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(clustersViewKind())
+		}
+	case viewDNSZones, viewDNSZonesAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(dnsZonesViewKind())
 		}
 	}
 }
@@ -420,7 +458,7 @@ func (a *app) quit() {
 }
 
 func (a *app) escapePressed() {
-	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" {
+	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" {
 		a.pages.RemovePage(name)
 		return
 	}
@@ -449,14 +487,6 @@ func (a *app) done(key tcell.Key) {
 }
 
 func (a *app) filterEnter() {
-	def := views[appState.ViewKind]
-	if def.selectRow != nil && a.info.GetRowCount() == 2 {
-		row, _ := a.info.GetSelection()
-		def.selectRow(a, row, 0)
-		a.exitFilterMode()
-		a.cmd.SetText("")
-		a.applyFilter()
-	}
 	a.tapp.SetFocus(a.info)
 }
 
@@ -481,6 +511,8 @@ func (a *app) commandEnter() {
 		showLBs(a)
 	case text == "clusters" || text == "gke":
 		showClusters(a)
+	case text == "dns" || text == "zones":
+		showDNSZones(a)
 	case text == "projects":
 		a.setView(viewProjects)
 	default:

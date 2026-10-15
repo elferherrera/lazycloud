@@ -25,6 +25,9 @@ const (
 	viewClusters     viewKind = "clusters"
 	viewClustersAll  viewKind = "clusters-all"
 	viewWorkloads    viewKind = "workloads"
+	viewDNSZones     viewKind = "dns-zones"
+	viewDNSZonesAll  viewKind = "dns-zones-all"
+	viewDNSRecords   viewKind = "dns-records"
 )
 
 type cmdMode string
@@ -43,6 +46,8 @@ type State struct {
 	AllProjects    bool
 	Cluster        string
 	ClusterProject string
+	Zone           string
+	ZoneProject    string
 }
 
 var appState State
@@ -119,4 +124,11 @@ func clustersViewKind() viewKind {
 		return viewClustersAll
 	}
 	return viewClusters
+}
+
+func dnsZonesViewKind() viewKind {
+	if appState.AllProjects {
+		return viewDNSZonesAll
+	}
+	return viewDNSZones
 }

@@ -126,3 +126,8 @@ func GCPFirewallsURL(projectID, name string) string {
 	return "https://console.cloud.google.com/net-security/firewall-manager/firewall-policies/details/" +
 		url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
 }
+
+func GCPDNSZoneURL(projectID, zone string) string {
+	return "https://console.cloud.google.com/net-services/dns/zones/" +
+		url.PathEscape(zone) + "/records?project=" + url.QueryEscape(projectID)
+}

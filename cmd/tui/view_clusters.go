@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/rivo/tview"
+
 	"lazycloud/cmd/providers"
 )
 
@@ -90,6 +92,21 @@ var clustersView = viewDef{
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyCluster(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
+	selectRow: func(a *app, row, _ int) {
+		if row <= 0 || row >= a.info.GetRowCount() {
+			return
+		}
+		cl, err := a.cache.GetCluster(appState.ProjectID, a.info.GetCell(row, 0).Text)
+		if err != nil {
+			a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+			return
+		}
+		if cl == nil {
+			a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+			return
+		}
+		a.showClusterDetails(cl)
+	},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -149,6 +166,21 @@ var clustersAllView = viewDef{
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyCluster(a, a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
 	},
+	selectRow: func(a *app, row, _ int) {
+		if row <= 0 || row >= a.info.GetRowCount() {
+			return
+		}
+		cl, err := a.cache.GetCluster(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
+		if err != nil {
+			a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+			return
+		}
+		if cl == nil {
+			a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+			return
+		}
+		a.showClusterDetails(cl)
+	},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -196,4 +228,37 @@ func showClusters(a *app) {
 		return
 	}
 	a.setView(clustersViewKind())
+}
+
+func clusterDetails(cl *providers.Cluster) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", cl.ProjectID)
+	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", cl.Name)
+	fmt.Fprintf(&sb, "[yellow]Location: [-]%s\n", cl.Location)
+	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", cl.Status)
+	fmt.Fprintf(&sb, "[yellow]Version: [-]%s\n", cl.Version)
+	fmt.Fprintf(&sb, "[yellow]Endpoint: [-]%s\n", cl.Endpoint)
+	fmt.Fprintf(&sb, "[yellow]Description: [-]%s\n", cl.Description)
+	fmt.Fprintf(&sb, "[yellow]Node pools: [-]\n")
+	for _, np := range cl.NodePools {
+		fmt.Fprintf(&sb, "  %s (v%s, %d nodes)\n", np.Name, np.Version, np.NodeCount)
+	}
+	fmt.Fprintf(&sb, "[yellow]Created: [-]%s\n", formatUpdatedAt(cl.CreatedAt))
+	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n", formatUpdatedAt(cl.UpdatedAt))
+	return sb.String()
+}
+
+func (a *app) showClusterDetails(cl *providers.Cluster) {
+	text := tview.NewTextView().SetDynamicColors(true).SetText(clusterDetails(cl))
+	text.SetBorder(true).SetTitle(fmt.Sprintf(" Cluster %s ", cl.Name))
+	height := strings.Count(text.GetText(true), "\n") + 2
+	overlay := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(text, height, 1, true).
+			AddItem(nil, 0, 1, false), 80, 1, true).
+		AddItem(nil, 0, 1, false)
+	a.pages.RemovePage("cluster")
+	a.pages.AddPage("cluster", overlay, true, true)
 }

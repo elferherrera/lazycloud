@@ -277,6 +277,31 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS dns_zones (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		dns_name TEXT NOT NULL DEFAULT '',
+		visibility TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS dns_records (
+		project_id TEXT NOT NULL,
+		zone TEXT NOT NULL,
+		name TEXT NOT NULL,
+		type TEXT NOT NULL,
+		ttl INTEGER NOT NULL DEFAULT 0,
+		data TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, zone, name, type)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -785,7 +810,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "dns_zones", "dns_records"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -1688,4 +1713,136 @@ func (c *Cache) GetWorkload(projectID, cluster, kind, namespace, name string) (*
 
 func (c *Cache) Close() error {
 	return c.db.Close()
+}
+
+func (c *Cache) SaveDNSZones(projectID string, zones []DNSZone) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM dns_zones WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, z := range zones {
+		if _, err := tx.Exec(`INSERT INTO dns_zones
+			(project_id, name, dns_name, visibility, description, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			projectID, z.Name, z.DNSName, z.Visibility, z.Description, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanDNSZones(rows *sql.Rows) ([]DNSZone, error) {
+	defer rows.Close()
+	var zones []DNSZone
+	for rows.Next() {
+		var z DNSZone
+		if err := rows.Scan(&z.ProjectID, &z.Name, &z.DNSName, &z.Visibility, &z.Description, &z.UpdatedAt); err != nil {
+			return nil, err
+		}
+		zones = append(zones, z)
+	}
+	return zones, rows.Err()
+}
+
+func (c *Cache) ListDNSZones(projectID string) ([]DNSZone, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, dns_name, visibility, description, updated_at
+		FROM dns_zones WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanDNSZones(rows)
+}
+
+func (c *Cache) ListAllDNSZones() ([]DNSZone, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, dns_name, visibility, description, updated_at
+		FROM dns_zones ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanDNSZones(rows)
+}
+
+func (c *Cache) GetDNSZone(projectID, name string) (*DNSZone, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, dns_name, visibility, description, updated_at
+		FROM dns_zones WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	zones, err := scanDNSZones(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(zones) == 0 {
+		return nil, nil
+	}
+	return &zones[0], nil
+}
+
+func (c *Cache) SaveDNSRecords(projectID, zone string, records []DNSRecord) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM dns_records WHERE project_id = ? AND zone = ?", projectID, zone); err != nil {
+		return err
+	}
+	for _, r := range records {
+		if _, err := tx.Exec(`INSERT INTO dns_records
+			(project_id, zone, name, type, ttl, data, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			projectID, zone, r.Name, r.Type, r.TTL, strings.Join(r.Data, ","), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanDNSRecords(rows *sql.Rows) ([]DNSRecord, error) {
+	defer rows.Close()
+	var records []DNSRecord
+	for rows.Next() {
+		var r DNSRecord
+		var data string
+		if err := rows.Scan(&r.ProjectID, &r.Zone, &r.Name, &r.Type, &r.TTL, &data, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if data != "" {
+			r.Data = strings.Split(data, ",")
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
+}
+
+func (c *Cache) ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, ttl, data, updated_at
+		FROM dns_records WHERE project_id = ? AND zone = ? ORDER BY name, type`, projectID, zone)
+	if err != nil {
+		return nil, err
+	}
+	return scanDNSRecords(rows)
+}
+
+func (c *Cache) GetDNSRecord(projectID, zone, name, recordType string) (*DNSRecord, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, ttl, data, updated_at
+		FROM dns_records WHERE project_id = ? AND zone = ? AND name = ? AND type = ?`,
+		projectID, zone, name, recordType)
+	if err != nil {
+		return nil, err
+	}
+	records, err := scanDNSRecords(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+	return &records[0], nil
 }

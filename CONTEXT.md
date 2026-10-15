@@ -60,10 +60,16 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewLBs` / `viewLBsAll` | view_loadbalancers.go | Load balancers: Name, IP:Port, Region, Protocol, Scheme, Backends (+ Project in All) |
 | `viewClusters` / `viewClustersAll` | view_clusters.go | Kubernetes clusters: Name, Location, Status, Version, Node Pools, Created, Updated (+ Project in All) |
 | `viewWorkloads` | view_workloads.go | Workloads of the cluster focused via `w` in the clusters views: Namespace, Kind, Name, Replicas, Images, Updated |
+| `viewDNSZones` / `viewDNSZonesAll` | view_dnszones.go | DNS zones: Name, DNS Name, Visibility, Description, Updated (+ Project in All) |
+| `viewDNSRecords` | view_dnsrecords.go | DNS records of the zone focused via `d` in the DNS zones views: Name, Type, TTL, Data, Updated |
 
 ### Workload fetching
 
 GKE workloads are Kubernetes resources, so `ListClusterWorkloads` shells out: it writes credentials to a temp `KUBECONFIG` via `gcloud container clusters get-credentials` (zone vs region flag inferred from the location's dash count) and runs `kubectl get deployments,statefulsets,daemonsets --all-namespaces -o json`, parsing items into `Workload` (Replicas as `ready/total`). The workloads view is cluster-scoped: pressing `w` on a clusters-view row sets `appState.Cluster`/`appState.ClusterProject` and switches to it; there is no numeric shortcut or `:command`. Workloads are cached per `(project, cluster)` in the `workloads` table (rows carry their cluster reference) and `refresh` re-fetches only the focused cluster. Requires `gcloud` and `kubectl` on PATH. In the workloads view `g` opens the GKE workload overview filtered by namespace and `l` opens Logs Explorer with a `k8s_container` query (project/location/cluster/namespace/pod-app from the focused row).
+
+### DNS zones and records
+
+Cloud DNS zones are fetched via `ListProjectDNSZones` (ManagedZones list) and cached in `dns_zones`; records via `ListZoneDNSRecords(projectID, zone)` (ResourceRecordSets list), cached per `(project, zone)` in `dns_records`. The DNS zones view is reached via `:dns` (no numeric shortcut; all ten are taken). Pressing `d` on a zone row sets `appState.Zone`/`appState.ZoneProject` and switches to the zone-scoped records view, the same flow as clusters → workloads; `refresh` re-fetches only the focused zone, and `g` opens the Cloud DNS zone records page in the console.
 
 ### Load balancer composition
 
@@ -76,7 +82,7 @@ Per-project views (`viewX`) use `appState.ProjectID`; the `viewXAll` variants co
 - Single `tview.Table` (`a.info`) shared by all views. `populateInfoPanel()` (app.go) writes a bold fixed header row (`SetFixed(1, 0)`) + data rows; `applyFilter()` repaints with the active filter.
 - Main layout (main.go): summary area (4 rows: project summary + numeric shortcuts panel, three key/desc pairs per row) / `tview.InputField` (`a.cmd`) / info table / status bar, wrapped in `tview.Pages` (`a.pages`).
 - **Key handling** is two-layered:
-  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.). The `shortcuts` table is the single source of truth: the help overlay and the numeric summary panel (three key/desc pairs per row) both render from it. Numeric keys `1`–`9`, `0` switch views (projects, VMs, buckets, service accounts, IPs, networks, load balancers, clusters, routes, firewalls). View-scoped: `w` (workloads of the focused cluster), `c` (fetch cluster credentials via `gcloud container clusters get-credentials`, clusters views only), `l` (logs, VM + workloads views, dispatches via `openLogs`), `s` (IAP SSH, VM views), `r`/`x` (restore/delete project, projects view).
+  - Global: `a.inputCapture` (handlers.go) — `Ctrl-C` quits, `Esc` → `escapePressed()`, single-letter shortcuts (`shortcuts` table in handlers.go: `u` refresh, `y` copy row, `o` open console, `?` help, etc.). The `shortcuts` table is the single source of truth: the help overlay and the numeric summary panel (three key/desc pairs per row) both render from it. Numeric keys `1`–`9`, `0` switch views (projects, VMs, buckets, service accounts, IPs, networks, load balancers, clusters, routes, firewalls). View-scoped: `w` (workloads of the focused cluster), `d` (DNS records of the focused zone, DNS zones views only), `b` (back to the parent view, workloads/DNS records views only — clusters or DNS zones, honoring `AllProjects`), `c` (fetch cluster credentials via `gcloud container clusters get-credentials`, clusters views only), `l` (logs, VM + workloads views, dispatches via `openLogs`), `s` (IAP SSH, VM views), `r`/`x` (restore/delete project, projects view).
   - Enter on a table row fires `a.info.SetSelectedFunc` → `app.selected()` → the current view's `selectRow`.
 - **Command vs filter mode**: the bottom InputField is either a filter (`/` prefix or after pressing the filter shortcut, Enter → `filterEnter()`) or a command (`:`, Enter → `commandEnter()`). `commandEnter()` special-cases typed IP literals (`net.ParseIP`) by jumping to the IPs view.
 
@@ -88,7 +94,9 @@ Built on `tview.Pages` (stacked, hidden/shown pages), centered with spacer-Flexe
 - `vm` page — VM details window, opened via VM views' `selectRow` → `showVMDetails()` (view_vms.go). `vmDetails()` builds the `[yellow]label: [-]value` color-tagged text.
 - `ip` page — IP address details window, opened via IP views' `selectRow` → `showIPDetails()` (view_ips.go). `ipDetails()` formats all cached `IPAddress` fields.
 - `lb` page — Load balancer details window, opened via LB views' `selectRow` → `showLBDetails()` (view_loadbalancers.go). `lbDetails()` renders the composed rule → proxy → URL map → backend services chain.
-- All are dismissed by `Esc` — `escapePressed()` (handlers.go) removes the front page if it is `"vm"`, `"ip"`, or `"lb"`.
+- `dns` page — DNS record details window, opened via the DNS records view's `selectRow` → `showDNSRecordDetails()` (view_dnsrecords.go). `dnsRecordDetails()` renders all cached `DNSRecord` fields with one data value per line.
+- `cluster` page — Cluster details window, opened via the clusters views' `selectRow` → `showClusterDetails()` (view_clusters.go). `clusterDetails()` renders all cached `Cluster` fields with one node pool per line (name, version, node count).
+- All are dismissed by `Esc` — `escapePressed()` (handlers.go) removes the front page if it is `"vm"`, `"ip"`, `"lb"`, `"dns"`, or `"cluster"`.
 
 **Pattern to add a new floating window**: border+title on a `tview.TextView` with dynamic colors; height = line count + 2; wrap in `Flex(spacers) → FlexRow(spacers)`, width 80; `a.pages.RemovePage(name)` then `AddPage(name, overlay, true, true)`; add the page name to the Esc dismissal check.
 
@@ -98,7 +106,7 @@ Resource structs live in gcloud.go (e.g. `IPAddress` has `ProjectID, Name, Addre
 
 The cache (cache.go) mirrors each struct to a SQLite table (e.g. `ip_addresses`) with upsert-on-conflict. Reads: `ListX` (one project), `ListAllX` (all), `GetX` (exact lookup, may return multiple rows — e.g. `GetIPAddresses` one per subnetwork); workloads are the cluster-scoped exception (`ListClusterWorkloads(projectID, cluster)`). Views always read from cache; `refresh` repopulates from the API in a goroutine and calls `QueueUpdateDraw` to repaint.
 
-`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, `GCPLoadBalancerURL`/`GCPLoadBalancerFrontendURL`, `GCPClusterURL`, `GCPWorkloadOverviewURL`, `GCPWorkloadLogsURL`, `GCPRoutesURL`, `GCPFirewallsURL`, ...) — used by the `o`/`g`/`l` shortcuts. Most list-page deep links encode a `pageState` filter (see `GCPAddressesURL`, `gcpLBListURL`).
+`console.go` builds GCP Console URLs per resource (`GCPVMURL`, `GCPAddressesURL`, `GCPVMLogsURL`, `GCPLoadBalancerURL`/`GCPLoadBalancerFrontendURL`, `GCPClusterURL`, `GCPWorkloadOverviewURL`, `GCPWorkloadLogsURL`, `GCPRoutesURL`, `GCPFirewallsURL`, `GCPDNSZoneURL`, ...) — used by the `o`/`g`/`l` shortcuts. Most list-page deep links encode a `pageState` filter (see `GCPAddressesURL`, `gcpLBListURL`).
 
 ## Conventions
 
