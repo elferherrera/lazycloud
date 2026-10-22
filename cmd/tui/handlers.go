@@ -46,19 +46,6 @@ func inDNSZonesView() bool {
 	return appState.ViewKind == viewDNSZones || appState.ViewKind == viewDNSZonesAll
 }
 
-func inNestedView() bool {
-	return appState.ViewKind == viewWorkloads || appState.ViewKind == viewNodePools || appState.ViewKind == viewDNSRecords
-}
-
-func (a *app) backToParentView() {
-	switch appState.ViewKind {
-	case viewWorkloads, viewNodePools:
-		a.setView(clustersViewKind())
-	case viewDNSRecords:
-		a.setView(dnsZonesViewKind())
-	}
-}
-
 func inLogsView() bool {
 	return inVMView() || inClustersView() || inNodePoolsView() || appState.ViewKind == viewWorkloads
 }
@@ -129,9 +116,8 @@ func init() {
 		{
 			key:     'b',
 			desc:    "back to previous view",
-			visible: inNestedView,
-			enabled: func(a *app) bool { return inNestedView() },
-			run:     (*app).backToParentView,
+			enabled: func(a *app) bool { return appState.PrevViewKind != "" },
+			run:     func(a *app) { a.setView(appState.PrevViewKind) },
 		},
 		{
 			key:     'e',

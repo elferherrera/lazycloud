@@ -44,6 +44,7 @@ type State struct {
 	ProjectNumber  string
 	CmdMode        cmdMode
 	ViewKind       viewKind
+	PrevViewKind   viewKind
 	AllProjects    bool
 	Cluster        string
 	ClusterProject string

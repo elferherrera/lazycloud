@@ -125,6 +125,9 @@ func (a *app) setView(kind viewKind) {
 		a.cmd.SetText("")
 		return
 	}
+	if kind != appState.ViewKind {
+		appState.PrevViewKind = appState.ViewKind
+	}
 	appState.ViewKind = kind
 	a.refreshShortcuts()
 	a.viewHeaders = def.headers
