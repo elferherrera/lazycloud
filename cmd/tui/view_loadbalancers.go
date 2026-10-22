@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rivo/tview"
-
 	"lazycloud/cmd/providers"
 )
 
@@ -117,17 +115,6 @@ var lbsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d load balancers for %s[-]", count, appState.ProjectID)
 	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		lb, err := resolveLB(a, appState.ProjectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load load balancer: [-]" + err.Error())
-			return
-		}
-		a.showLBDetails(lb)
-	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -171,18 +158,6 @@ var lbsAllView = viewDef{
 	},
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d load balancers for all projects[-]", count)
-	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		projectID := a.info.GetCell(row, 7).Text
-		lb, err := resolveLB(a, projectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load load balancer: [-]" + err.Error())
-			return
-		}
-		a.showLBDetails(lb)
 	},
 	refresh: func(a *app) {
 		a.statusText("[yellow]Fetching load balancers for all projects...[-]")
@@ -272,18 +247,10 @@ func lbDetails(lb *providers.LoadBalancer) string {
 }
 
 func (a *app) showLBDetails(lb *providers.LoadBalancer) {
-	text := tview.NewTextView().SetDynamicColors(true).SetText(lbDetails(lb))
-	text.SetBorder(true).SetTitle(fmt.Sprintf(" Load Balancer %s ", lb.Rule.Name))
-	height := strings.Count(text.GetText(true), "\n") + 2
-	overlay := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), 80, 1, true).
-		AddItem(nil, 0, 1, false)
+	overlay, text := a.newOverlay(fmt.Sprintf(" Load Balancer %s ", lb.Rule.Name), lbDetails(lb))
 	a.pages.RemovePage("lb")
 	a.pages.AddPage("lb", overlay, true, true)
+	a.tapp.SetFocus(text)
 }
 
 func showLBs(a *app) {

@@ -42,6 +42,7 @@ func init() {
 		viewClusters:     clustersView,
 		viewClustersAll:  clustersAllView,
 		viewWorkloads:    workloadsView,
+		viewNodePools:    nodePoolsView,
 		viewDNSZones:     dnsZonesView,
 		viewDNSZonesAll:  dnsZonesAllView,
 		viewDNSRecords:   dnsRecordsView,

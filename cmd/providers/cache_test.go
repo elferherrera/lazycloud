@@ -328,6 +328,12 @@ func TestSaveAndListVMs(t *testing.T) {
 			Zone:        "europe-west1-b",
 			MachineType: "n1-standard-1",
 			Status:      "RUNNING",
+			Labels:      map[string]string{"env": "prod", "team": "payments"},
+			NetworkTags: []string{"https-server", "ssh"},
+			ServiceAccounts: []VMServiceAccount{
+				{Email: "123-compute@developer.gserviceaccount.com", Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"}},
+			},
+			InstanceTemplate: "mig-template",
 			Interfaces: []VMInterface{
 				{Network: "vpc-a", Subnetwork: "sn-a", InternalIP: "10.0.0.3", ExternalIP: "34.1.1.1"},
 			},
@@ -359,6 +365,19 @@ func TestSaveAndListVMs(t *testing.T) {
 	if len(got[0].Interfaces) != 1 || got[0].Interfaces[0].Subnetwork != "sn-a" || got[0].Interfaces[0].ExternalIP != "34.1.1.1" {
 		t.Fatalf("ListVMs()[0].Interfaces = %+v", got[0].Interfaces)
 	}
+	if len(got[0].Labels) != 2 || got[0].Labels["env"] != "prod" || got[0].Labels["team"] != "payments" {
+		t.Fatalf("ListVMs()[0].Labels = %+v", got[0].Labels)
+	}
+	if len(got[0].NetworkTags) != 2 || got[0].NetworkTags[0] != "https-server" || got[0].NetworkTags[1] != "ssh" {
+		t.Fatalf("ListVMs()[0].NetworkTags = %+v", got[0].NetworkTags)
+	}
+	if len(got[0].ServiceAccounts) != 1 || got[0].ServiceAccounts[0].Email != "123-compute@developer.gserviceaccount.com" ||
+		len(got[0].ServiceAccounts[0].Scopes) != 1 {
+		t.Fatalf("ListVMs()[0].ServiceAccounts = %+v", got[0].ServiceAccounts)
+	}
+	if got[0].InstanceTemplate != "mig-template" {
+		t.Fatalf("ListVMs()[0].InstanceTemplate = %q, want mig-template", got[0].InstanceTemplate)
+	}
 	if got[0].BootDisk == nil || got[0].BootDisk.Name != "vm-a" || !got[0].BootDisk.AutoDelete {
 		t.Fatalf("ListVMs()[0].BootDisk = %+v", got[0].BootDisk)
 	}
@@ -368,7 +387,8 @@ func TestSaveAndListVMs(t *testing.T) {
 	if got[0].UpdatedAt == "" {
 		t.Fatal("ListVMs()[0].UpdatedAt empty, want timestamp")
 	}
-	if got[1].BootDisk != nil || got[1].DataDisks != nil || got[1].Interfaces != nil {
+	if got[1].BootDisk != nil || got[1].DataDisks != nil || got[1].Interfaces != nil || got[1].Labels != nil ||
+		got[1].NetworkTags != nil || got[1].ServiceAccounts != nil || got[1].InstanceTemplate != "" {
 		t.Fatalf("ListVMs()[1] nested fields = %+v, want nils", got[1])
 	}
 
@@ -1039,6 +1059,81 @@ func TestSaveAndListWorkloads(t *testing.T) {
 	}
 	if len(other) != 0 {
 		t.Fatalf("ListClusterWorkloads(p2) len = %d, want 0 after project delete", len(other))
+	}
+}
+
+func TestSaveAndListClusterNodes(t *testing.T) {
+	cache := newTestCache(t)
+	nodes := []ClusterNode{
+		{ProjectID: "p1", Cluster: "cluster-a", Name: "gke-cluster-a-pool-a-aaa", NodePool: "pool-a", Status: "Ready", InternalIP: "10.0.0.1"},
+		{ProjectID: "p1", Cluster: "cluster-a", Name: "gke-cluster-a-pool-b-bbb", NodePool: "pool-b", Status: "NotReady"},
+		{ProjectID: "p1", Cluster: "cluster-b", Name: "gke-cluster-b-pool-a-ccc", NodePool: "pool-a", Status: "Ready"},
+	}
+	if err := cache.SaveClusterNodes("p1", "cluster-a", nodes[:2]); err != nil {
+		t.Fatalf("SaveClusterNodes() error = %v", err)
+	}
+	if err := cache.SaveClusterNodes("p1", "cluster-b", nodes[2:]); err != nil {
+		t.Fatalf("SaveClusterNodes() other cluster error = %v", err)
+	}
+	if err := cache.SaveClusterNodes("p2", "cluster-a", nodes[:1]); err != nil {
+		t.Fatalf("SaveClusterNodes() other project error = %v", err)
+	}
+
+	got, err := cache.ListClusterNodes("p1", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterNodes() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListClusterNodes() len = %d, want 2", len(got))
+	}
+	if got[0].NodePool != "pool-a" || got[0].Name != "gke-cluster-a-pool-a-aaa" {
+		t.Fatalf("ListClusterNodes() not ordered by pool, name: %+v", got)
+	}
+	if got[0].Status != "Ready" || got[0].InternalIP != "10.0.0.1" || got[0].UpdatedAt == "" {
+		t.Fatalf("ListClusterNodes()[0] = %+v", got[0])
+	}
+	if got[1].InternalIP != "" {
+		t.Fatalf("ListClusterNodes()[1].InternalIP = %q, want empty", got[1].InternalIP)
+	}
+
+	other, err := cache.ListClusterNodes("p2", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterNodes() error = %v", err)
+	}
+	if len(other) != 1 || other[0].ProjectID != "p2" {
+		t.Fatalf("ListClusterNodes(p2) = %+v, want 1 for other project", other)
+	}
+
+	if err := cache.SaveClusterNodes("p1", "cluster-a", nodes[:1]); err != nil {
+		t.Fatalf("SaveClusterNodes() replace error = %v", err)
+	}
+	got, err = cache.ListClusterNodes("p1", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterNodes() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListClusterNodes() len = %d, want 1 after replace", len(got))
+	}
+	other, err = cache.ListClusterNodes("p1", "cluster-b")
+	if err != nil {
+		t.Fatalf("ListClusterNodes() error = %v", err)
+	}
+	if len(other) != 1 {
+		t.Fatalf("ListClusterNodes(p1, cluster-b) len = %d, want 1 (other cluster untouched)", len(other))
+	}
+
+	if err := cache.SaveProjects([]Project{{ProjectID: "p2", Name: "P Two", ProjectNumber: "222"}}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
+	if _, err := cache.DeleteProject("p2"); err != nil {
+		t.Fatalf("DeleteProject() error = %v", err)
+	}
+	other, err = cache.ListClusterNodes("p2", "cluster-a")
+	if err != nil {
+		t.Fatalf("ListClusterNodes() error = %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("ListClusterNodes(p2) len = %d, want 0 after project delete", len(other))
 	}
 }
 

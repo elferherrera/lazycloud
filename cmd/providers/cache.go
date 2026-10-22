@@ -152,6 +152,10 @@ func NewCacheAt(path string) (*Cache, error) {
 		zone TEXT NOT NULL,
 		machine_type TEXT NOT NULL DEFAULT '',
 		status TEXT NOT NULL DEFAULT '',
+		labels TEXT NOT NULL DEFAULT '{}',
+		network_tags TEXT NOT NULL DEFAULT '',
+		service_accounts TEXT NOT NULL DEFAULT '[]',
+		instance_template TEXT NOT NULL DEFAULT '',
 		interfaces TEXT NOT NULL DEFAULT '[]',
 		boot_disk TEXT NOT NULL DEFAULT 'null',
 		data_disks TEXT NOT NULL DEFAULT '[]',
@@ -162,6 +166,22 @@ func NewCacheAt(path string) (*Cache, error) {
 		return nil, err
 	}
 	if err := ensureColumn(db, "vms", "instance_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "vms", "labels", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "vms", "network_tags", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "vms", "service_accounts", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "vms", "instance_template", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -273,6 +293,19 @@ func NewCacheAt(path string) (*Cache, error) {
 		images TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (project_id, cluster, kind, namespace, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS cluster_nodes (
+		project_id TEXT NOT NULL,
+		cluster TEXT NOT NULL,
+		name TEXT NOT NULL,
+		node_pool TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT '',
+		internal_ip TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, cluster, name)
 	)`); err != nil {
 		db.Close()
 		return nil, err
@@ -810,7 +843,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "dns_zones", "dns_records"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -971,10 +1004,19 @@ func (c *Cache) SaveVMs(projectID string, vms []VM) error {
 		if err != nil {
 			return err
 		}
+		labels, err := json.Marshal(vm.Labels)
+		if err != nil {
+			return err
+		}
+		serviceAccounts, err := json.Marshal(vm.ServiceAccounts)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`INSERT INTO vms
-			(project_id, name, instance_id, zone, machine_type, status, interfaces, boot_disk, data_disks, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(project_id, name, instance_id, zone, machine_type, status, labels, network_tags, service_accounts, instance_template, interfaces, boot_disk, data_disks, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			projectID, vm.Name, vm.InstanceID, vm.Zone, vm.MachineType, vm.Status,
+			string(labels), strings.Join(vm.NetworkTags, ","), string(serviceAccounts), vm.InstanceTemplate,
 			string(interfaces), string(bootDisk), string(dataDisks), updatedAt); err != nil {
 			return err
 		}
@@ -986,9 +1028,19 @@ func scanVMs(rows *sql.Rows) ([]VM, error) {
 	var vms []VM
 	for rows.Next() {
 		var vm VM
-		var interfaces, bootDisk, dataDisks string
+		var interfaces, bootDisk, dataDisks, labels, networkTags, serviceAccounts string
 		if err := rows.Scan(&vm.ProjectID, &vm.Name, &vm.InstanceID, &vm.Zone, &vm.MachineType, &vm.Status,
+			&labels, &networkTags, &serviceAccounts, &vm.InstanceTemplate,
 			&interfaces, &bootDisk, &dataDisks, &vm.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(labels), &vm.Labels); err != nil {
+			return nil, err
+		}
+		if networkTags != "" {
+			vm.NetworkTags = strings.Split(networkTags, ",")
+		}
+		if err := json.Unmarshal([]byte(serviceAccounts), &vm.ServiceAccounts); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(interfaces), &vm.Interfaces); err != nil {
@@ -1006,7 +1058,7 @@ func scanVMs(rows *sql.Rows) ([]VM, error) {
 }
 
 func (c *Cache) ListVMs(projectID string) ([]VM, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, interfaces, boot_disk, data_disks, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, labels, network_tags, service_accounts, instance_template, interfaces, boot_disk, data_disks, updated_at
 		FROM vms WHERE project_id = ? ORDER BY zone, name`, projectID)
 	if err != nil {
 		return nil, err
@@ -1016,7 +1068,7 @@ func (c *Cache) ListVMs(projectID string) ([]VM, error) {
 }
 
 func (c *Cache) ListAllVMs() ([]VM, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, interfaces, boot_disk, data_disks, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, labels, network_tags, service_accounts, instance_template, interfaces, boot_disk, data_disks, updated_at
 		FROM vms ORDER BY project_id, zone, name`)
 	if err != nil {
 		return nil, err
@@ -1026,7 +1078,7 @@ func (c *Cache) ListAllVMs() ([]VM, error) {
 }
 
 func (c *Cache) GetVM(projectID, zone, name string) (*VM, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, interfaces, boot_disk, data_disks, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, labels, network_tags, service_accounts, instance_template, interfaces, boot_disk, data_disks, updated_at
 		FROM vms WHERE project_id = ? AND name = ? AND zone = ?`, projectID, name, zone)
 	if err != nil {
 		return nil, err
@@ -1709,6 +1761,49 @@ func (c *Cache) GetWorkload(projectID, cluster, kind, namespace, name string) (*
 		return nil, nil
 	}
 	return &workloads[0], nil
+}
+
+func (c *Cache) SaveClusterNodes(projectID, cluster string, nodes []ClusterNode) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM cluster_nodes WHERE project_id = ? AND cluster = ?", projectID, cluster); err != nil {
+		return err
+	}
+	for _, n := range nodes {
+		if _, err := tx.Exec(`INSERT INTO cluster_nodes
+			(project_id, cluster, name, node_pool, status, internal_ip, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			projectID, cluster, n.Name, n.NodePool, n.Status, n.InternalIP, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanClusterNodes(rows *sql.Rows) ([]ClusterNode, error) {
+	var nodes []ClusterNode
+	for rows.Next() {
+		var n ClusterNode
+		if err := rows.Scan(&n.ProjectID, &n.Cluster, &n.Name, &n.NodePool, &n.Status, &n.InternalIP, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, rows.Err()
+}
+
+func (c *Cache) ListClusterNodes(projectID, cluster string) ([]ClusterNode, error) {
+	rows, err := c.db.Query(`SELECT project_id, cluster, name, node_pool, status, internal_ip, updated_at
+		FROM cluster_nodes WHERE project_id = ? AND cluster = ? ORDER BY node_pool, name`, projectID, cluster)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanClusterNodes(rows)
 }
 
 func (c *Cache) Close() error {

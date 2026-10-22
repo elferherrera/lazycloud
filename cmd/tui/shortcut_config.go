@@ -53,6 +53,14 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 			}
 			a.setView(viewWorkloads)
 		}
+	case viewNodePools:
+		return func(a *app) {
+			if appState.Cluster == "" {
+				a.statusText("[red]No cluster selected[-]")
+				return
+			}
+			a.setView(viewNodePools)
+		}
 	case viewDNSRecords:
 		return func(a *app) {
 			if appState.Zone == "" {

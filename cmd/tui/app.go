@@ -23,6 +23,7 @@ type app struct {
 	logger    *providers.Logger
 	shortcuts *tview.Table
 	helpRow   *tview.Flex
+	screen    tcell.Screen
 
 	viewHeaders []string
 	allRows     [][]string
@@ -150,6 +151,48 @@ func (a *app) changed(text string) {
 	if appState.CmdMode == modeFilter {
 		a.applyFilter()
 	}
+}
+
+func overlayHeight(lines, screenHeight int) int {
+	height := lines + 2
+	if screenHeight > 0 && height > screenHeight-2 {
+		height = screenHeight - 2
+	}
+	if height < 3 {
+		height = 3
+	}
+	return height
+}
+
+func overlayWidth(screenWidth int) int {
+	width := 80
+	if screenWidth > 0 && width > screenWidth-2 {
+		width = screenWidth - 2
+	}
+	if width < 10 {
+		width = 10
+	}
+	return width
+}
+
+func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
+	text := tview.NewTextView().SetDynamicColors(true).SetText(content)
+	text.SetBorder(true).SetTitle(title)
+	lines := strings.Count(text.GetText(true), "\n")
+	screenWidth, screenHeight := 0, 0
+	if a.screen != nil {
+		screenWidth, screenHeight = a.screen.Size()
+	}
+	height := overlayHeight(lines, screenHeight)
+	width := overlayWidth(screenWidth)
+	overlay := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(text, height, 1, true).
+			AddItem(nil, 0, 1, false), width, 1, true).
+		AddItem(nil, 0, 1, false)
+	return overlay, text
 }
 
 func (a *app) selected(row, col int) {

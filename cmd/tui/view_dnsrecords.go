@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rivo/tview"
-
 	"lazycloud/cmd/providers"
 )
 
@@ -44,22 +42,6 @@ var dnsRecordsView = viewDef{
 	},
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("[yellow]%d dns records for zone %s (project %s)[-]", count, appState.Zone, appState.ZoneProject)
-	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		r, err := a.cache.GetDNSRecord(appState.ZoneProject, appState.Zone,
-			a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load dns record: [-]" + err.Error())
-			return
-		}
-		if r == nil {
-			a.statusText("[red]DNS record not found in cache (press u to refresh)[-]")
-			return
-		}
-		a.showDNSRecordDetails(r)
 	},
 	refresh: func(a *app) {
 		if appState.ZoneProject == "" || appState.Zone == "" {
@@ -125,16 +107,8 @@ func dnsRecordDetails(r *providers.DNSRecord) string {
 }
 
 func (a *app) showDNSRecordDetails(r *providers.DNSRecord) {
-	text := tview.NewTextView().SetDynamicColors(true).SetText(dnsRecordDetails(r))
-	text.SetBorder(true).SetTitle(fmt.Sprintf(" DNS %s ", r.Type))
-	height := strings.Count(text.GetText(true), "\n") + 2
-	overlay := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), 80, 1, true).
-		AddItem(nil, 0, 1, false)
+	overlay, text := a.newOverlay(fmt.Sprintf(" DNS %s ", r.Type), dnsRecordDetails(r))
 	a.pages.RemovePage("dns")
 	a.pages.AddPage("dns", overlay, true, true)
+	a.tapp.SetFocus(text)
 }

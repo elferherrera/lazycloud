@@ -25,6 +25,7 @@ const (
 	viewClusters     viewKind = "clusters"
 	viewClustersAll  viewKind = "clusters-all"
 	viewWorkloads    viewKind = "workloads"
+	viewNodePools    viewKind = "nodepools"
 	viewDNSZones     viewKind = "dns-zones"
 	viewDNSZonesAll  viewKind = "dns-zones-all"
 	viewDNSRecords   viewKind = "dns-records"

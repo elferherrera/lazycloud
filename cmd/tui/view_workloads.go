@@ -108,6 +108,29 @@ func (a *app) openWorkloadLogs() {
 	a.statusText("[green]Opened workload logs in browser[-]")
 }
 
+func (a *app) openWorkloadEvents() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
+	if err != nil {
+		a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+		return
+	}
+	if cl == nil {
+		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+		return
+	}
+	workloadName := a.info.GetCell(row, 2).Text
+	eventsURL := providers.GCPWorkloadEventsURL(appState.ClusterProject, cl.Location, appState.Cluster, workloadName)
+	if err := openBrowser(eventsURL); err != nil {
+		a.statusText("[red]Failed to open browser: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened events for %s in browser[-]", workloadName))
+}
+
 func (a *app) showClusterWorkloads() {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {

@@ -7,8 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/rivo/tview"
-
 	"lazycloud/cmd/providers"
 )
 
@@ -92,21 +90,6 @@ var clustersView = viewDef{
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyCluster(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		cl, err := a.cache.GetCluster(appState.ProjectID, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load cluster: [-]" + err.Error())
-			return
-		}
-		if cl == nil {
-			a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
-			return
-		}
-		a.showClusterDetails(cl)
-	},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -166,21 +149,6 @@ var clustersAllView = viewDef{
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyCluster(a, a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
 	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		cl, err := a.cache.GetCluster(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load cluster: [-]" + err.Error())
-			return
-		}
-		if cl == nil {
-			a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
-			return
-		}
-		a.showClusterDetails(cl)
-	},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -222,6 +190,23 @@ func (a *app) getClusterCredentials() {
 	a.statusText(fmt.Sprintf("[green]Fetched credentials for %s[-]", name))
 }
 
+func (a *app) openClusterNodeEvents() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewClustersAll {
+		projectID = a.info.GetCell(row, 7).Text
+	}
+	clusterName := a.info.GetCell(row, 0).Text
+	if err := openBrowser(providers.GCPClusterEventsURL(projectID, clusterName)); err != nil {
+		a.statusText("[red]Failed to open browser: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened node events for %s in browser[-]", clusterName))
+}
+
 func showClusters(a *app) {
 	if !appState.AllProjects && appState.ProjectID == "" {
 		a.statusText("[red]No project selected[-]")
@@ -249,16 +234,8 @@ func clusterDetails(cl *providers.Cluster) string {
 }
 
 func (a *app) showClusterDetails(cl *providers.Cluster) {
-	text := tview.NewTextView().SetDynamicColors(true).SetText(clusterDetails(cl))
-	text.SetBorder(true).SetTitle(fmt.Sprintf(" Cluster %s ", cl.Name))
-	height := strings.Count(text.GetText(true), "\n") + 2
-	overlay := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), 80, 1, true).
-		AddItem(nil, 0, 1, false)
+	overlay, text := a.newOverlay(fmt.Sprintf(" Cluster %s ", cl.Name), clusterDetails(cl))
 	a.pages.RemovePage("cluster")
 	a.pages.AddPage("cluster", overlay, true, true)
+	a.tapp.SetFocus(text)
 }

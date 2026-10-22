@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
-
-	"github.com/rivo/tview"
 
 	"lazycloud/cmd/providers"
 )
@@ -93,21 +92,6 @@ var vmsView = viewDef{
 			})
 		}()
 	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		vm, err := a.cache.GetVM(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load VM: [-]" + err.Error())
-			return
-		}
-		if vm == nil {
-			a.statusText("[red]VM not found in cache (press u to refresh)[-]")
-			return
-		}
-		a.showVMDetails(vm)
-	},
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyVM(a, appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -179,22 +163,6 @@ var vmsAllView = viewDef{
 			})
 		}()
 	},
-	selectRow: func(a *app, row, _ int) {
-		if row <= 0 || row >= a.info.GetRowCount() {
-			return
-		}
-		projectID := a.info.GetCell(row, 6).Text
-		vm, err := a.cache.GetVM(projectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			a.statusText("[red]Failed to load VM: [-]" + err.Error())
-			return
-		}
-		if vm == nil {
-			a.statusText("[red]VM not found in cache (press u to refresh)[-]")
-			return
-		}
-		a.showVMDetails(vm)
-	},
 	copyRow: func(a *app, row int) ([]byte, error) {
 		return copyVM(a, a.info.GetCell(row, 6).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -222,6 +190,33 @@ func (a *app) vmDetails(vm *providers.VM) string {
 	fmt.Fprintf(&sb, "[yellow]Zone: [-]%s\n", vm.Zone)
 	fmt.Fprintf(&sb, "[yellow]Machine type: [-]%s\n", vm.MachineType)
 	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", vm.Status)
+	if len(vm.NetworkTags) > 0 {
+		fmt.Fprintf(&sb, "[yellow]Network tags: [-]%s\n", strings.Join(vm.NetworkTags, ","))
+	}
+	if len(vm.Labels) > 0 {
+		keys := make([]string, 0, len(vm.Labels))
+		for k := range vm.Labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(&sb, "[yellow]Labels: [-]\n")
+		for _, k := range keys {
+			fmt.Fprintf(&sb, "  %s=%s\n", k, vm.Labels[k])
+		}
+	}
+	if len(vm.ServiceAccounts) > 0 {
+		fmt.Fprintf(&sb, "[yellow]Service accounts: [-]\n")
+		for _, sa := range vm.ServiceAccounts {
+			line := "  " + sa.Email
+			if len(sa.Scopes) > 0 {
+				line += "  (" + strings.Join(sa.Scopes, ",") + ")"
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+	if vm.InstanceTemplate != "" {
+		fmt.Fprintf(&sb, "[yellow]Instance template: [-]%s\n", vm.InstanceTemplate)
+	}
 	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n\n", formatUpdatedAt(vm.UpdatedAt))
 
 	sb.WriteString("[yellow]Network interfaces:[-]\n")
@@ -281,18 +276,10 @@ func (a *app) vmDetails(vm *providers.VM) string {
 }
 
 func (a *app) showVMDetails(vm *providers.VM) {
-	text := tview.NewTextView().SetDynamicColors(true).SetText(a.vmDetails(vm))
-	text.SetBorder(true).SetTitle(fmt.Sprintf(" VM %s ", vm.Name))
-	height := strings.Count(text.GetText(true), "\n") + 2
-	overlay := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), 80, 1, true).
-		AddItem(nil, 0, 1, false)
+	overlay, text := a.newOverlay(fmt.Sprintf(" VM %s ", vm.Name), a.vmDetails(vm))
 	a.pages.RemovePage("vm")
 	a.pages.AddPage("vm", overlay, true, true)
+	a.tapp.SetFocus(text)
 }
 
 func (a *app) openVMLogging() {

@@ -40,6 +40,56 @@ func TestGCPClusterURL(t *testing.T) {
 	}
 }
 
+func TestGCPClusterNodePoolURL(t *testing.T) {
+	got := GCPClusterNodePoolURL("revolut-prod-apps", "europe-west2", "apps-prod-europe-west2", "default-pool")
+	want := "https://console.cloud.google.com/kubernetes/nodepool/europe-west2/apps-prod-europe-west2/default-pool?project=revolut-prod-apps"
+	if got != want {
+		t.Fatalf("GCPClusterNodePoolURL() = %q, want %q", got, want)
+	}
+}
+
+func TestGCPClusterEventsURL(t *testing.T) {
+	got := GCPClusterEventsURL("revolut-prod-apps", "apps-prod-europe-west2")
+	want := "https://console.cloud.google.com/logs/query;query=" +
+		"log_id%28%22events%22%29" +
+		"%0Aresource.type%3D%22k8s_cluster%22" +
+		"%0Aresource.labels.cluster_name%3D%22apps-prod-europe-west2%22" +
+		"%0Aresource.labels.project_id%3D%22revolut-prod-apps%22" +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-prod-apps"
+	if got != want {
+		t.Fatalf("GCPClusterNodeEventsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPWorkloadEventsURL(t *testing.T) {
+	got := GCPWorkloadEventsURL("revolut-prod-apps", "europe-west2", "apps-prod-europe-west2", "web")
+	want := "https://console.cloud.google.com/logs/query;query=" +
+		"log_id%28%22events%22%29" +
+		"%0Aresource.type%3D%22k8s_pod%22" +
+		"%0Aresource.labels.cluster_name%3D%22apps-prod-europe-west2%22" +
+		"%0Aresource.labels.location%3D%22europe-west2%22" +
+		"%0Aresource.labels.project_id%3D%22revolut-prod-apps%22" +
+		"%0A%22web%22" +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-prod-apps"
+	if got != want {
+		t.Fatalf("GCPWorkloadEventsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPNodePoolEventsURL(t *testing.T) {
+	got := GCPNodePoolEventsURL("revolut-labs", "integration", "default-pool")
+	want := "https://console.cloud.google.com/logs/query;query=" +
+		"log_id%28%22events%22%29" +
+		"%0Aresource.type%3D%22k8s_node%22" +
+		"%0Aresource.labels.cluster_name%3D%22integration%22" +
+		"%0Aresource.labels.project_id%3D%22revolut-labs%22" +
+		"%0A%22default-pool%22" +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPNodePoolEventsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestGCPLoadBalancerURL(t *testing.T) {
 	got := GCPLoadBalancerURL("revolut-dev-apps", "alert-courier")
 	want := "https://console.cloud.google.com/net-services/loadbalancing/details/http/alert-courier?project=revolut-dev-apps"

@@ -106,6 +106,10 @@ func main() {
 	tapp.SetRoot(a.pages, true)
 	tapp.SetInputCapture(a.inputCapture)
 	tapp.SetFocus(a.info)
+	tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		a.screen = screen
+		return false
+	})
 
 	if err := tapp.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error running application:", err)

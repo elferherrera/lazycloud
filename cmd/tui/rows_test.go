@@ -1,12 +1,110 @@
 package main
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"lazycloud/cmd/providers"
 )
+
+func TestNodePoolRows(t *testing.T) {
+	pools := []providers.ClusterNodePool{
+		{Name: "pool-a", Version: "1.31.1-gke.1", NodeCount: 3},
+		{Name: "pool-b", Version: "1.31.1-gke.1", NodeCount: 2},
+	}
+	rows := nodePoolRows(pools, nil)
+	if len(rows) != 2 {
+		t.Fatalf("nodePoolRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"pool-a", "1.31.1-gke.1", "3"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("nodePoolRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+
+	nodes := []providers.ClusterNode{
+		{Name: "gke-cl-1-pool-a-aaa", NodePool: "pool-a"},
+		{Name: "gke-cl-1-pool-a-bbb", NodePool: "pool-a"},
+		{Name: "gke-cl-1-pool-b-ccc", NodePool: "pool-b"},
+	}
+	rows = nodePoolRows(pools, nodes)
+	if rows[0][2] != "2" {
+		t.Fatalf("nodePoolRows()[0] nodes = %q, want 2", rows[0][2])
+	}
+	if rows[1][2] != "1" {
+		t.Fatalf("nodePoolRows()[1] nodes = %q, want 1", rows[1][2])
+	}
+}
+
+func TestOverlayHeight(t *testing.T) {
+	if got := overlayHeight(5, 40); got != 7 {
+		t.Errorf("overlayHeight(5, 40) = %d, want 7", got)
+	}
+	if got := overlayHeight(100, 40); got != 38 {
+		t.Errorf("overlayHeight(100, 40) = %d, want 38 (capped to screen)", got)
+	}
+	if got := overlayHeight(5, 0); got != 7 {
+		t.Errorf("overlayHeight(5, 0) = %d, want 7 (no screen info)", got)
+	}
+	if got := overlayHeight(0, 2); got != 3 {
+		t.Errorf("overlayHeight(0, 2) = %d, want 3 (minimum)", got)
+	}
+}
+
+func TestOverlayWidth(t *testing.T) {
+	if got := overlayWidth(120); got != 80 {
+		t.Errorf("overlayWidth(120) = %d, want 80", got)
+	}
+	if got := overlayWidth(60); got != 58 {
+		t.Errorf("overlayWidth(60) = %d, want 58 (capped to screen)", got)
+	}
+	if got := overlayWidth(0); got != 80 {
+		t.Errorf("overlayWidth(0) = %d, want 80 (no screen info)", got)
+	}
+	if got := overlayWidth(5); got != 10 {
+		t.Errorf("overlayWidth(5) = %d, want 10 (minimum)", got)
+	}
+}
+
+func TestVMMatchesNodePool(t *testing.T) {
+	if !vmMatchesNodePool(providers.VM{Labels: map[string]string{"goog-k8s-node-pool-name": "pool-a"}}, "pool-a") {
+		t.Error("vmMatchesNodePool() = false, want true for label value match")
+	}
+	if vmMatchesNodePool(providers.VM{Labels: map[string]string{"env": "pool-a"}}, "pool-b") {
+		t.Error("vmMatchesNodePool() = true, want false for non-matching pool")
+	}
+	if vmMatchesNodePool(providers.VM{}, "pool-a") {
+		t.Error("vmMatchesNodePool() = true, want false for VM without labels")
+	}
+}
+
+func TestAppendRowDetails(t *testing.T) {
+	data := `{"ProjectID":"p1","Interfaces":[{"InternalIP":"10.0.0.1"}],"Tags":["a","b"],"Empty":null}`
+	var parsed any
+	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, parsed, "")
+	got := sb.String()
+	for _, want := range []string{
+		"[yellow]ProjectID: [-]p1",
+		"[yellow]Interfaces:[-]",
+		"  [yellow]0:[-]",
+		"    [yellow]InternalIP: [-]10.0.0.1",
+		"[yellow]Tags:[-]",
+		"  a",
+		"  b",
+		"[yellow]Empty: [-]<nil>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("appendRowDetails() output missing %q:\n%s", want, got)
+		}
+	}
+}
 
 func TestProjectRows(t *testing.T) {
 	projects := []providers.Project{

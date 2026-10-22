@@ -83,9 +83,50 @@ func GCPWorkloadOverviewURL(projectID, namespace string) string {
 		"&pageState=(%22savedViews%22:(%22n%22:%5B%22" + namespace + "%22%5D))"
 }
 
+func GCPWorkloadEventsURL(projectID, location, clusterName, workloadName string) string {
+	var sb strings.Builder
+	sb.WriteString("log_id(\"events\")\n")
+	sb.WriteString("resource.type=\"k8s_pod\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString(fmt.Sprintf("%q", workloadName))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
+func GCPClusterEventsURL(projectID, clusterName string) string {
+	var sb strings.Builder
+	sb.WriteString("log_id(\"events\")\n")
+	sb.WriteString("resource.type=\"k8s_cluster\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"", projectID))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
+func GCPNodePoolEventsURL(projectID, clusterName, poolName string) string {
+	var sb strings.Builder
+	sb.WriteString("log_id(\"events\")\n")
+	sb.WriteString("resource.type=\"k8s_node\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString(fmt.Sprintf("%q", poolName))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
 func GCPClusterURL(projectID, location, name string) string {
 	return "https://console.cloud.google.com/kubernetes/clusters/details/" +
 		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}
+
+func GCPClusterNodePoolURL(projectID, location, cluster, pool string) string {
+	return "https://console.cloud.google.com/kubernetes/nodepool/" +
+		url.PathEscape(location) + "/" + url.PathEscape(cluster) + "/" + url.PathEscape(pool) + "?project=" + url.QueryEscape(projectID)
 }
 
 func GCPLoadBalancerURL(projectID, urlMapName string) string {

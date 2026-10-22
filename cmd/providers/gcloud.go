@@ -79,17 +79,26 @@ type VMDisk struct {
 	SizeGB     int64
 }
 
+type VMServiceAccount struct {
+	Email  string
+	Scopes []string
+}
+
 type VM struct {
-	ProjectID   string
-	Name        string
-	InstanceID  string
-	Zone        string
-	MachineType string
-	Status      string
-	Interfaces  []VMInterface
-	BootDisk    *VMDisk
-	DataDisks   []VMDisk
-	UpdatedAt   string
+	ProjectID       string
+	Name            string
+	InstanceID      string
+	Zone            string
+	MachineType     string
+	Status          string
+	Labels          map[string]string
+	NetworkTags     []string
+	ServiceAccounts []VMServiceAccount
+	InstanceTemplate string
+	Interfaces      []VMInterface
+	BootDisk        *VMDisk
+	DataDisks       []VMDisk
+	UpdatedAt       string
 }
 
 type Disk struct {
@@ -431,14 +440,25 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 			if inst.GetZone() == "" {
 				continue
 			}
-			vm := VM{
-				ProjectID:   projectID,
-				Name:        inst.GetName(),
-				InstanceID:  strconv.FormatUint(inst.GetId(), 10),
-				Zone:        resourceShortName(inst.GetZone(), ""),
-				MachineType: resourceShortName(inst.GetMachineType(), ""),
-				Status:      inst.GetStatus(),
+vm := VM{
+			ProjectID:   projectID,
+			Name:        inst.GetName(),
+			InstanceID:  strconv.FormatUint(inst.GetId(), 10),
+			Zone:        resourceShortName(inst.GetZone(), ""),
+			MachineType: resourceShortName(inst.GetMachineType(), ""),
+			Status:      inst.GetStatus(),
+			Labels:      inst.GetLabels(),
+			NetworkTags: inst.GetTags().GetItems(),
+		}
+		for _, sa := range inst.GetServiceAccounts() {
+			vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+		}
+		for _, m := range inst.GetMetadata().GetItems() {
+			if m.GetKey() == "instance-template" {
+				vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
+				break
 			}
+		}
 			for _, iface := range inst.GetNetworkInterfaces() {
 				vmi := VMInterface{
 					Network:    resourceShortName(iface.GetNetwork(), ""),
@@ -1018,6 +1038,101 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 		workloads = append(workloads, w)
 	}
 	return workloads, nil
+}
+
+type ClusterNode struct {
+	ProjectID  string
+	Cluster    string
+	Name       string
+	NodePool   string
+	Status     string
+	InternalIP string
+	UpdatedAt  string
+}
+
+type k8sNode struct {
+	Metadata struct {
+		Name   string            `json:"name"`
+		Labels map[string]string `json:"labels"`
+	} `json:"metadata"`
+	Status struct {
+		Conditions []struct {
+			Type   string `json:"type"`
+			Status string `json:"status"`
+		} `json:"conditions"`
+		Addresses []struct {
+			Type    string `json:"type"`
+			Address string `json:"address"`
+		} `json:"addresses"`
+	} `json:"status"`
+}
+
+type k8sNodeList struct {
+	Items []k8sNode `json:"items"`
+}
+
+func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
+	scopeFlag := "--region"
+	if strings.Count(location, "-") > 1 {
+		scopeFlag = "--zone"
+	}
+	dir, err := os.MkdirTemp("", "lazycloud-kube-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	kubeconfig := filepath.Join(dir, "config")
+
+	creds := exec.Command("gcloud", "container", "clusters", "get-credentials", name,
+		scopeFlag, location, "--project", projectID)
+	creds.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	if out, err := creds.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("gcloud get-credentials: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	get := exec.Command("kubectl", "get", "nodes", "--output", "json")
+	get.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	out, err := get.Output()
+	if err != nil {
+		message := err.Error()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			message = string(exitErr.Stderr)
+		}
+		return nil, fmt.Errorf("kubectl get: %s", strings.TrimSpace(message))
+	}
+
+	var list k8sNodeList
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, err
+	}
+
+	nodes := make([]ClusterNode, 0, len(list.Items))
+	for _, item := range list.Items {
+		node := ClusterNode{
+			ProjectID: projectID,
+			Cluster:    name,
+			Name:       item.Metadata.Name,
+			NodePool:   item.Metadata.Labels["cloud.google.com/gke-nodepool"],
+			Status:     "NotReady",
+		}
+		for _, c := range item.Status.Conditions {
+			if c.Type == "Ready" {
+				if c.Status == "True" {
+					node.Status = "Ready"
+				}
+				break
+			}
+		}
+		for _, addr := range item.Status.Addresses {
+			if addr.Type == "InternalIP" {
+				node.InternalIP = addr.Address
+				break
+			}
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
 }
 
 type DNSZone struct {

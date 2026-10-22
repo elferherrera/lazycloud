@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -36,17 +38,21 @@ func inClustersView() bool {
 	return appState.ViewKind == viewClusters || appState.ViewKind == viewClustersAll
 }
 
+func inNodePoolsView() bool {
+	return appState.ViewKind == viewNodePools
+}
+
 func inDNSZonesView() bool {
 	return appState.ViewKind == viewDNSZones || appState.ViewKind == viewDNSZonesAll
 }
 
 func inNestedView() bool {
-	return appState.ViewKind == viewWorkloads || appState.ViewKind == viewDNSRecords
+	return appState.ViewKind == viewWorkloads || appState.ViewKind == viewNodePools || appState.ViewKind == viewDNSRecords
 }
 
 func (a *app) backToParentView() {
 	switch appState.ViewKind {
-	case viewWorkloads:
+	case viewWorkloads, viewNodePools:
 		a.setView(clustersViewKind())
 	case viewDNSRecords:
 		a.setView(dnsZonesViewKind())
@@ -54,7 +60,7 @@ func (a *app) backToParentView() {
 }
 
 func inLogsView() bool {
-	return inVMView() || appState.ViewKind == viewWorkloads
+	return inVMView() || inClustersView() || inNodePoolsView() || appState.ViewKind == viewWorkloads
 }
 
 // The shortcuts table is the single source of truth for key bindings: the
@@ -100,6 +106,20 @@ func init() {
 			run:     (*app).showClusterWorkloads,
 		},
 		{
+			key:     'n',
+			desc:    "show node pools for cluster",
+			visible: inClustersView,
+			enabled: func(a *app) bool { return inClustersView() },
+			run:     (*app).showClusterNodePools,
+		},
+		{
+			key:     'm',
+			desc:    "show VMs for node pool",
+			visible: inNodePoolsView,
+			enabled: func(a *app) bool { return inNodePoolsView() },
+			run:     (*app).showNodePoolVMs,
+		},
+		{
 			key:     'd',
 			desc:    "show dns records for zone",
 			visible: inDNSZonesView,
@@ -112,6 +132,13 @@ func init() {
 			visible: inNestedView,
 			enabled: func(a *app) bool { return inNestedView() },
 			run:     (*app).backToParentView,
+		},
+		{
+			key:     'e',
+			desc:    "open workload events in GCP console",
+			visible: func() bool { return appState.ViewKind == viewWorkloads },
+			enabled: func(a *app) bool { return appState.ViewKind == viewWorkloads },
+			run:     (*app).openWorkloadEvents,
 		},
 		{
 			key:     'c',
@@ -136,6 +163,7 @@ func init() {
 		},
 		{key: 'u', desc: "update cache", run: (*app).refreshView},
 		{key: 'y', desc: "copy row to clipboard", run: (*app).copyRow},
+		{key: 'v', desc: "show row details", run: (*app).showRowDetails},
 		{key: 'g', desc: "open in GCP console", run: (*app).openConsole},
 		{
 			key:     'l',
@@ -369,6 +397,14 @@ func (a *app) restoreProject() {
 }
 
 func (a *app) openLogs() {
+	if inClustersView() {
+		a.openClusterNodeEvents()
+		return
+	}
+	if inNodePoolsView() {
+		a.openNodePoolEvents()
+		return
+	}
 	if appState.ViewKind == viewWorkloads {
 		a.openWorkloadLogs()
 		return
@@ -437,6 +473,63 @@ func (a *app) copyRow() {
 	a.statusText("[green]Copied JSON to clipboard[-]")
 }
 
+func (a *app) showRowDetails() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	def := views[appState.ViewKind]
+	if def.copyRow == nil {
+		return
+	}
+	jsonBytes, err := def.copyRow(a, row)
+	if err != nil {
+		a.statusText("[red]Failed to load row details: [-]" + err.Error())
+		return
+	}
+	var data any
+	if err := json.Unmarshal(jsonBytes, &data); err != nil {
+		a.statusText("[red]Failed to parse row details: [-]" + err.Error())
+		return
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, data, "")
+	overlay, text := a.newOverlay(fmt.Sprintf(" %s details ", views[appState.ViewKind].title), sb.String())
+	a.pages.RemovePage("row")
+	a.pages.AddPage("row", overlay, true, true)
+	a.tapp.SetFocus(text)
+}
+
+func appendRowDetails(sb *strings.Builder, data any, indent string) {
+	switch v := data.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			switch v[k].(type) {
+			case map[string]any, []any:
+				fmt.Fprintf(sb, "%s[yellow]%s:[-]\n", indent, k)
+				appendRowDetails(sb, v[k], indent+"  ")
+			default:
+				fmt.Fprintf(sb, "%s[yellow]%s: [-]%v\n", indent, k, v[k])
+			}
+		}
+	case []any:
+		for i, item := range v {
+			switch item.(type) {
+			case map[string]any, []any:
+				fmt.Fprintf(sb, "%s[yellow]%d:[-]\n", indent, i)
+				appendRowDetails(sb, item, indent+"  ")
+			default:
+				fmt.Fprintf(sb, "%s%v\n", indent, item)
+			}
+		}
+	}
+}
+
 func (a *app) openConsole() {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {
@@ -463,8 +556,9 @@ func (a *app) quit() {
 }
 
 func (a *app) escapePressed() {
-	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" {
+	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" {
 		a.pages.RemovePage(name)
+		a.tapp.SetFocus(a.info)
 		return
 	}
 	a.cmd.SetBorder(false)
