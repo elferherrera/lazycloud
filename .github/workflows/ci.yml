@@ -24,5 +24,8 @@ jobs:
       - name: Build
         run: mise run build
 
-      - name: Vet and test
-        run: mise run check
+      - name: Vet
+        run: mise run vet
+
+      - name: Test
+        run: mise run test
