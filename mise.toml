@@ -1,0 +1,32 @@
+[tools]
+go = "1.27.1"
+
+[env]
+# go.mod pins the version, so never let go auto-download a different toolchain
+GOTOOLCHAIN = "local"
+
+[tasks.run]
+description = "Run the TUI locally"
+run = "go run ."
+
+[tasks.build]
+description = "Build the TUI binary to bin/lazycloud"
+run = "go build -o bin/lazycloud ."
+sources = ["*.go", "cmd/**/*.go", "pkg/**/*.go", "go.mod", "go.sum"]
+outputs = ["bin/lazycloud"]
+
+[tasks.install]
+description = "Install the lazycloud binary to the mise-managed GOBIN (on PATH)"
+run = "go install ."
+
+[tasks.test]
+description = "Run the tests"
+run = "go test ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.check]
+description = "Run all checks (vet + tests)"
+depends = ["vet", "test"]

@@ -36,13 +36,15 @@ cmd/
 
 ## Build & test
 
-Task is the task runner (`Taskfile.yml`):
+mise is the tool manager and task runner (`mise.toml`):
 
-- `task run` — run the TUI locally (`go run .`)
-- `task build` — build to `bin/lazycloud`
-- `task install` — install to `GOPATH/bin`
-- `task test` — `go test ./...`
-- `task vet` — `go vet ./...`
+- Go 1.27.1 is pinned in `[tools]`, with `GOTOOLCHAIN = "local"` so `go` never auto-switches toolchains. `mise install` sets everything up, `mise run <task>` runs a task.
+- `mise run run` — run the TUI locally (`go run .`)
+- `mise run build` — build to `bin/lazycloud` (skipped when sources are unchanged)
+- `mise run install` — `go install .` into mise-managed `GOBIN` (already on `PATH`)
+- `mise run test` — `go test ./...`
+- `mise run vet` — `go vet ./...`
+- `mise run check` — `vet` + `test` together
 
 Cache DB lives at `~/.config/lazycloud/cache.db`.
 
@@ -115,5 +117,5 @@ The cache (cache.go) mirrors each struct to a SQLite table (e.g. `ip_addresses`)
 
 - No comments in code; keep it that way.
 - New view fields are optional function fields on `viewDef` — views without a behavior leave them nil.
-- Tests live next to the code (`*_test.go` in both packages); run `task test` before considering work done.
+- Tests live next to the code (`*_test.go` in both packages); run `mise run test` before considering work done.
 - Background work (API fetches) uses `a.tapp.QueueUpdateDraw` to touch UI state; errors during fetch go through `a.reportError` (status + log), never panic.
