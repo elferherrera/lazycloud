@@ -1,3 +1,7 @@
+[settings]
+# Resolve the Go version from go.mod
+idiomatic_version_file_enable_tools = ["go"]
+
 [env]
 # Let mise handle the toolchain instead of go
 GOTOOLCHAIN = "local"
