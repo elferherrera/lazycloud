@@ -542,6 +542,10 @@ func (a *app) quit() {
 }
 
 func (a *app) escapePressed() {
+	if name, _ := a.pages.GetFrontPage(); name == "help" {
+		a.toggleHelp()
+		return
+	}
 	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" {
 		a.pages.RemovePage(name)
 		a.tapp.SetFocus(a.info)
