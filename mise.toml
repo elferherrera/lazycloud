@@ -1,5 +1,5 @@
 [env]
-# Let mise itself handle the toolchain
+# Let mise handle the toolchain instead of go
 GOTOOLCHAIN = "local"
 
 [tasks.run]
