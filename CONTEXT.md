@@ -15,28 +15,30 @@ A terminal UI (TUI) application for browsing Google Cloud Platform (GCP) resourc
 ## Layout
 
 ```
+main.go               Thin entry point; calls `app.Run()`
+pkg/
+├── app/              All UI code (package app)
+│   ├── run.go        App entry point; builds layout, installs input capture
+│   ├── app.go        `app` struct, info table population, view switching
+│   ├── handlers.go   Keyboard shortcuts, filter/command mode, overlay dismissal
+│   ├── views.go      `viewDef` registry (per-view-kind definitions)
+│   ├── state.go      `appState`, view kind constants
+│   └── view_*.go     One file per resource view (see Views below)
 cmd/
-├── tui/          All UI code (package main)
-│   ├── main.go         App entry point; builds layout, installs input capture
-│   ├── app.go          `app` struct, info table population, view switching
-│   ├── handlers.go      Keyboard shortcuts, filter/command mode, overlays dismissal
-│   ├── views.go         `viewDef` registry (per-view-kind definitions)
-│   ├── state.go         `appState`, view kind constants
-│   ├── view_*.go        One file per resource view (see Views below)
-├── providers/    Cloud + cache logic
-│   ├── gcloud.go       GCP API calls + resource structs (VM, IPAddress, Disk, ...)
-│   ├── cache.go        SQLite cache (read-through persistence layer)
-│   ├── console.go      GCP Console URL builders (deep links)
-│   ├── log.go          Usage log (per resource type / project)
-│   ├── shortcuts.go    Numeric shortcut config file (`shortcuts.json`)
-│   └── state.go        `appState` (project ID, view kind) helpers
+└── providers/        Cloud + cache logic
+    ├── gcloud.go     GCP API calls + resource structs (VM, IPAddress, Disk, ...)
+    ├── cache.go      SQLite cache (read-through persistence layer)
+    ├── console.go    GCP Console URL builders (deep links)
+    ├── log.go        Usage log (per resource type / project)
+    ├── shortcuts.go  Numeric shortcut config file (`shortcuts.json`)
+    └── state.go      `appState` (project ID, view kind) helpers
 ```
 
 ## Build & test
 
 Task is the task runner (`Taskfile.yml`):
 
-- `task run` — run the TUI locally (`go run ./cmd/tui`)
+- `task run` — run the TUI locally (`go run .`)
 - `task build` — build to `bin/lazycloud`
 - `task install` — install to `GOPATH/bin`
 - `task test` — `go test ./...`

@@ -1,4 +1,4 @@
-package main
+package app
 
 // viewDef describes a single view of the information panel: how its rows are
 // loaded from the cache, how it is refreshed from Google, and which actions
