@@ -14,17 +14,17 @@ tasks:
   run:
     desc: Run the TUI locally
     cmds:
-      - go run ./cmd/tui
+      - go run .
 
   build:
     desc: Build the TUI binary
     cmds:
-      - go build -o bin/lazycloud ./cmd/tui
+      - go build -o bin/lazycloud .
 
   install:
     desc: Install the app to GOPATH/bin
     cmds:
-      - go build -o {{.GOPATH}}/bin/lazycloud ./cmd/tui
+      - go build -o {{.GOPATH}}/bin/lazycloud .
     vars:
       GOPATH:
         sh: go env GOPATH

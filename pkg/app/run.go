@@ -1,8 +1,7 @@
-package main
+package app
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -10,7 +9,7 @@ import (
 	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
-func main() {
+func Run() error {
 	tview.Borders.HorizontalFocus = tview.Borders.Horizontal
 	tview.Borders.VerticalFocus = tview.Borders.Vertical
 	tview.Borders.TopLeftFocus = tview.Borders.TopLeft
@@ -23,29 +22,25 @@ func main() {
 
 	cache, err := providers.NewCache()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error opening cache:", err)
-		os.Exit(1)
+		return fmt.Errorf("opening cache: %w", err)
 	}
 	defer cache.Close()
 
 	logger, err := providers.NewLogger()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error opening log file:", err)
-		os.Exit(1)
+		return fmt.Errorf("opening log file: %w", err)
 	}
 	defer logger.Close()
 
 	shortcutConfig, err := providers.LoadShortcuts(defaultShortcutConfig())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error loading shortcuts config:", err)
-		os.Exit(1)
+		return fmt.Errorf("loading shortcuts config: %w", err)
 	}
 	applyShortcutConfig(shortcutConfig)
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error loading last project:", err)
-		os.Exit(1)
+		return fmt.Errorf("loading last project: %w", err)
 	}
 	if lastProject.ProjectID != "" {
 		appState.ProjectID = lastProject.ProjectID
@@ -111,8 +106,5 @@ func main() {
 		return false
 	})
 
-	if err := tapp.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "error running application:", err)
-		os.Exit(1)
-	}
+	return tapp.Run()
 }
