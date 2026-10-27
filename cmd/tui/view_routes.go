@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func routeRows(routes []providers.Route) [][]string {

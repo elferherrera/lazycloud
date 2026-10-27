@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func dnsRecordRows(records []providers.DNSRecord) [][]string {

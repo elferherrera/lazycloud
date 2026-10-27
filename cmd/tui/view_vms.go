@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func vmRows(vms []providers.VM) [][]string {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func ipAddressRows(ips []providers.IPAddress) [][]string {

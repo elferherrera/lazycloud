@@ -1,4 +1,4 @@
-module lazycloud
+module github.com/elferherrera/lazycloud
 
 go 1.27.1
 

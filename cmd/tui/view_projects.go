@@ -5,7 +5,7 @@ import (
 	"fmt"
 	neturl "net/url"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func projectRows(projects []providers.Project) [][]string {

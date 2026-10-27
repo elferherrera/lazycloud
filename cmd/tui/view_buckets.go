@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func bucketRows(buckets []providers.Bucket) [][]string {

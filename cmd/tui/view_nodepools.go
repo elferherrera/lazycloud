@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func nodePoolRows(pools []providers.ClusterNodePool, nodes []providers.ClusterNode) [][]string {

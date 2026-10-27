@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func TestNodePoolRows(t *testing.T) {
