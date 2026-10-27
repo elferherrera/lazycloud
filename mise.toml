@@ -10,8 +10,6 @@ run = "go run ."
 [tasks.build]
 description = "Build the binary"
 run = "go build -o bin/lazycloud ."
-sources = ["*.go", "cmd/**/*.go", "pkg/**/*.go", "go.mod", "go.sum"]
-outputs = ["bin/lazycloud"]
 
 [tasks.install]
 description = "Install the binary to GOBIN (on PATH)"
