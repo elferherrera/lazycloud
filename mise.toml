@@ -1,16 +1,14 @@
-[tools]
-go = "1.27.1"
-
 [env]
-# go.mod pins the version, so never let go auto-download a different toolchain
+# Let mise itself handle the toolchain
 GOTOOLCHAIN = "local"
 
 [tasks.run]
 description = "Run locally"
+alias = "default"
 run = "go run ."
 
 [tasks.build]
-description = "Build the binary to bin/"
+description = "Build the binary"
 run = "go build -o bin/lazycloud ."
 sources = ["*.go", "cmd/**/*.go", "pkg/**/*.go", "go.mod", "go.sum"]
 outputs = ["bin/lazycloud"]
@@ -28,5 +26,5 @@ description = "Run go vet"
 run = "go vet ./..."
 
 [tasks.check]
-description = "Run all checks (vet + tests)"
+description = "Run all checks"
 depends = ["vet", "test"]

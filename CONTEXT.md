@@ -36,15 +36,11 @@ cmd/
 
 ## Build & test
 
-mise is the tool manager and task runner (`mise.toml`):
+mise manages tool versions and tasks (`mise.toml`):
 
-- Go 1.27.1 is pinned in `[tools]`, with `GOTOOLCHAIN = "local"` so `go` never auto-switches toolchains. `mise install` sets everything up, `mise run <task>` runs a task.
-- `mise run run` — run the TUI locally (`go run .`)
-- `mise run build` — build to `bin/lazycloud` (skipped when sources are unchanged)
-- `mise run install` — `go install .` into mise-managed `GOBIN` (already on `PATH`)
-- `mise run test` — `go test ./...`
-- `mise run vet` — `go vet ./...`
-- `mise run check` — `vet` + `test` together
+- Go's version comes from go.mod, `mise install` installs it
+- `mise run` runs the app; `mise run <task>` runs a task
+- tasks: `build`, `install`, `test`, `vet`, `check` (vet + test)
 
 Cache DB lives at `~/.config/lazycloud/cache.db`.
 
