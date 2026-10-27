@@ -37,7 +37,7 @@ mise reads the required Go version from `go.mod`, so no manual toolchain setup i
 | Command | Description |
 |---|---|
 | `mise run` | Run the TUI locally (`go run .`) |
-| `mise run build` | Build the binary to `bin/lazycloud` |
+| `mise run build` | Build the binary to `./lazycloud` |
 | `mise run install` | Install the binary to `GOBIN` (on `PATH`) |
 | `mise run test` | Run the tests (`go test ./...`) |
 | `mise run vet` | Run `go vet ./...` |

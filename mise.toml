@@ -9,7 +9,7 @@ run = "go run ."
 
 [tasks.build]
 description = "Build the binary"
-run = "go build -o bin/lazycloud ."
+run = "go build ."
 
 [tasks.install]
 description = "Install the binary to GOBIN (on PATH)"
