@@ -4,67 +4,46 @@ A terminal UI (TUI) for browsing Google Cloud Platform resources — think lazyg
 
 Requires Go 1.27+ and an authenticated `gcloud` CLI. The workloads view additionally requires `kubectl` on your PATH.
 
-## Getting started
+## Installation
 
-### Option 1: mise (recommended)
+### mise (recommended)
 
-[mise](https://mise.jdx.dev/) is a polyglot dev tool, task runner, and environment manager. Install it:
-
-```sh
-curl https://mise.run | sh
-```
-
-Then add it to your shell (restart afterwards):
+Install [mise](https://mise.jdx.dev/installing-mise.html), with its shims directory on your `PATH`, then:
 
 ```sh
-echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
+mise use -g go:github.com/elferherrera/lazycloud
 ```
 
-mise reads the project's Go version requirement automatically. Install the tools and run the TUI:
+### Go
 
 ```sh
-mise use go@1.27   # pins the Go version in the project
-mise exec -- go run .
+go install github.com/elferherrera/lazycloud@latest
 ```
 
-Or install the [task](https://taskfile.dev) plugin to use the project's `Taskfile.yml` through mise:
+This puts the binary in `$(go env GOPATH)/bin`, so make sure that directory is on your `PATH`.
+
+## Development
+
+Install [mise](https://mise.jdx.dev/installing-mise.html), then:
 
 ```sh
-mise plugin add task
-mise task run
+git clone https://github.com/elferherrera/lazycloud.git
+cd lazycloud
+mise run
 ```
 
-### Option 2: Task (or plain Go)
+mise reads the required Go version from `go.mod`, so no manual toolchain setup is needed. Available tasks:
 
-[Task](https://taskfile.dev) is a task runner used by this project (`Taskfile.yml`). Install it:
-
-```sh
-sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
-```
-
-(Or with Homebrew: `brew install go-task`.)
-
-Make sure Go 1.27+ is installed, then use the tasks:
-
-| Task | Description |
+| Command | Description |
 |---|---|
-| `task run` | Run the TUI locally (`go run .`) |
-| `task build` | Build the binary to `bin/lazycloud` |
-| `task install` | Install the app to `$GOPATH/bin` |
-| `task test` | Run the tests (`go test ./...`) |
-| `task vet` | Run `go vet ./...` |
+| `mise run` | Run the TUI locally (`go run .`) |
+| `mise run build` | Build the binary to `./lazycloud` |
+| `mise run install` | Install the binary to `GOBIN` (on `PATH`) |
+| `mise run test` | Run the tests (`go test ./...`) |
+| `mise run vet` | Run `go vet ./...` |
+| `mise run check` | Run `vet` and `test` |
 
-To install lazycloud permanently on your system:
-
-```sh
-task install        # then make sure $(go env GOPATH)/bin is on your PATH
-```
-
-Or with plain Go:
-
-```sh
-go install .
-```
+Run `mise tasks` to list all tasks.
 
 ## Configuration files
 

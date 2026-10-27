@@ -1,0 +1,28 @@
+[env]
+# Let mise handle the toolchain instead of go
+GOTOOLCHAIN = "local"
+
+[tasks.run]
+description = "Run locally"
+alias = "default"
+run = "go run ."
+
+[tasks.build]
+description = "Build the binary"
+run = "go build ."
+
+[tasks.install]
+description = "Install the binary to GOBIN (on PATH)"
+run = "go install ."
+
+[tasks.test]
+description = "Run the tests"
+run = "go test ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.check]
+description = "Run all checks"
+depends = ["vet", "test"]
