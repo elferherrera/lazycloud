@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 const (

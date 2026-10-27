@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func workloadRows(workloads []providers.Workload) [][]string {

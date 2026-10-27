@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func firewallRows(rules []providers.FirewallRule) [][]string {

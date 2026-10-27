@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func nodePoolsColumn(pools []providers.ClusterNodePool) string {
