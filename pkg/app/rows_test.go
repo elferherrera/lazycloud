@@ -801,6 +801,32 @@ func TestRenderSummaryAllProjects(t *testing.T) {
 	}
 }
 
+func TestVMsInInstanceGroup(t *testing.T) {
+	vms := []providers.VM{
+		{Name: "vm-a", Zone: "europe-west2-b"},
+		{Name: "vm-a", Zone: "europe-west2-c"},
+		{Name: "vm-b", Zone: "europe-west2-b"},
+	}
+	members := []providers.InstanceGroupMember{
+		{Zone: "europe-west2-b", Name: "vm-a"},
+		{Zone: "europe-west2-c", Name: "vm-a"},
+	}
+	matched := vmsInInstanceGroup(vms, members)
+	if len(matched) != 2 {
+		t.Fatalf("vmsInInstanceGroup() len = %d, want 2", len(matched))
+	}
+	for _, vm := range matched {
+		if vm.Name != "vm-a" {
+			t.Fatalf("vmsInInstanceGroup() matched %q, want only vm-a", vm.Name)
+		}
+	}
+
+	matched = vmsInInstanceGroup(vms, []providers.InstanceGroupMember{{Zone: "europe-west2-b", Name: "vm-missing"}})
+	if len(matched) != 0 {
+		t.Fatalf("vmsInInstanceGroup() len = %d, want 0 for unknown member", len(matched))
+	}
+}
+
 func TestInstanceGroupRows(t *testing.T) {
 	groups := []providers.InstanceGroup{
 		{

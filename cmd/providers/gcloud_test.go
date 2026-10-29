@@ -8,6 +8,24 @@ import (
 
 func strptr(s string) *string { return &s }
 
+func TestInstanceRefFromLink(t *testing.T) {
+	link := "https://www.googleapis.com/compute/v1/projects/revolut-labs/zones/europe-west2-c/instances/guacamole-nfnz"
+	zone, name := instanceRefFromLink(link)
+	if zone != "europe-west2-c" || name != "guacamole-nfnz" {
+		t.Fatalf("instanceRefFromLink() = %q, %q, want europe-west2-c, guacamole-nfnz", zone, name)
+	}
+
+	zone, name = instanceRefFromLink("projects/p/regions/europe-west2/instances/vm-a")
+	if zone != "europe-west2" || name != "vm-a" {
+		t.Fatalf("instanceRefFromLink() region = %q, %q, want europe-west2, vm-a", zone, name)
+	}
+
+	zone, name = instanceRefFromLink("")
+	if zone != "" || name != "" {
+		t.Fatalf("instanceRefFromLink() empty = %q, %q, want empty", zone, name)
+	}
+}
+
 func TestForwardingRuleFrom(t *testing.T) {
 	rule := forwardingRuleFrom("p1", "global", &computepb.ForwardingRule{
 		Name:                strptr("fr-web"),

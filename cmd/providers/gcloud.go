@@ -1586,3 +1586,68 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 	}
 	return groups, nil
 }
+
+type InstanceGroupMember struct {
+	Zone string
+	Name string
+}
+
+func instanceRefFromLink(link string) (string, string) {
+	parts := strings.Split(link, "/")
+	zone := ""
+	name := ""
+	for i, part := range parts {
+		if (part == "zones" || part == "regions") && i+1 < len(parts) {
+			zone = parts[i+1]
+		}
+		if part == "instances" && i+1 < len(parts) {
+			name = parts[i+1]
+		}
+	}
+	return zone, name
+}
+
+func instanceGroupMembers(it *computev1.InstanceWithNamedPortsIterator) ([]InstanceGroupMember, error) {
+	var members []InstanceGroupMember
+	for {
+		item, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		zone, name := instanceRefFromLink(item.GetInstance())
+		if zone == "" || name == "" {
+			continue
+		}
+		members = append(members, InstanceGroupMember{Zone: zone, Name: name})
+	}
+	return members, nil
+}
+
+func ListInstanceGroupVMs(projectID, location, name string) ([]InstanceGroupMember, error) {
+	ctx := context.Background()
+	if strings.Count(location, "-") > 1 {
+		client, err := computev1.NewInstanceGroupsRESTClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer client.Close()
+		return instanceGroupMembers(client.ListInstances(ctx, &computepb.ListInstancesInstanceGroupsRequest{
+			Project:       projectID,
+			Zone:          location,
+			InstanceGroup: name,
+		}))
+	}
+	client, err := computev1.NewRegionInstanceGroupsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+	return instanceGroupMembers(client.ListInstances(ctx, &computepb.ListInstancesRegionInstanceGroupsRequest{
+		Project:       projectID,
+		Region:        location,
+		InstanceGroup: name,
+	}))
+}

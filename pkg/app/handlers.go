@@ -46,6 +46,10 @@ func inDNSZonesView() bool {
 	return appState.ViewKind == viewDNSZones || appState.ViewKind == viewDNSZonesAll
 }
 
+func inInstanceGroupsView() bool {
+	return appState.ViewKind == viewInstanceGroups || appState.ViewKind == viewInstanceGroupsAll
+}
+
 func inLogsView() bool {
 	return inVMView() || inClustersView() || inNodePoolsView() || appState.ViewKind == viewWorkloads
 }
@@ -108,6 +112,13 @@ func init() {
 			visible: inNodePoolsView,
 			enabled: func(a *app) bool { return inNodePoolsView() },
 			run:     (*app).showNodePoolVMs,
+		},
+		{
+			key:     'm',
+			desc:    "show VMs for instance group",
+			visible: inInstanceGroupsView,
+			enabled: func(a *app) bool { return inInstanceGroupsView() },
+			run:     (*app).showInstanceGroupVMs,
 		},
 		{
 			key:     'd',

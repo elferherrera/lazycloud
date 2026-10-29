@@ -149,3 +149,95 @@ func showInstanceGroups(a *app) {
 	}
 	a.setView(instanceGroupsViewKind())
 }
+
+func instanceGroupMemberKeys(members []providers.InstanceGroupMember) map[string]bool {
+	keys := make(map[string]bool, len(members))
+	for _, m := range members {
+		keys[m.Zone+"/"+m.Name] = true
+	}
+	return keys
+}
+
+func vmsInInstanceGroup(vms []providers.VM, members []providers.InstanceGroupMember) []providers.VM {
+	keys := instanceGroupMemberKeys(members)
+	matched := make([]providers.VM, 0, len(vms))
+	for _, vm := range vms {
+		if keys[vm.Zone+"/"+vm.Name] {
+			matched = append(matched, vm)
+		}
+	}
+	return matched
+}
+
+func (a *app) showInstanceGroupVMs() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	group := a.info.GetCell(row, 0).Text
+	location := a.info.GetCell(row, 1).Text
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewInstanceGroupsAll {
+		projectID = a.info.GetCell(row, 8).Text
+	}
+	appState.AllProjects = false
+	appState.ProjectID = projectID
+	if p, err := a.cache.GetProject(projectID); err == nil && p != nil {
+		appState.Name = p.Name
+		appState.ProjectNumber = p.ProjectNumber
+	}
+	renderSummary(a.summary)
+	a.statusText(fmt.Sprintf("[yellow]Fetching VMs for instance group %s...[-]", group))
+	go a.fetchInstanceGroupVMs(location, group)
+}
+
+func (a *app) fetchInstanceGroupVMs(location, group string) {
+	projectID := appState.ProjectID
+	vms, err := a.cache.ListVMs(projectID)
+	if err != nil {
+		a.reportError("vms", projectID, "Failed to load VMs", err)
+		return
+	}
+	if len(vms) == 0 {
+		vms, err = providers.ListProjectVMs(projectID)
+		if err != nil {
+			a.reportError("vms", projectID, "Failed to fetch VMs", err)
+			return
+		}
+		if err := a.cache.SaveVMs(projectID, vms); err != nil {
+			a.reportError("vms", projectID, "Failed to update cache", err)
+			return
+		}
+		a.logger.Update("vms", projectID, len(vms))
+	}
+	members, err := providers.ListInstanceGroupVMs(projectID, location, group)
+	if err != nil {
+		a.reportError("instance-groups", projectID+"/"+group, "Failed to fetch instance group VMs", err)
+		return
+	}
+	a.tapp.QueueUpdateDraw(func() {
+		a.setView(viewVMs)
+		a.applyInstanceGroupVMFilter(group, members)
+	})
+}
+
+func (a *app) applyInstanceGroupVMFilter(group string, members []providers.InstanceGroupMember) {
+	vms, err := a.cache.ListVMs(appState.ProjectID)
+	if err != nil {
+		a.statusText("[red]Failed to load VMs: [-]" + err.Error())
+		return
+	}
+	matched := vmsInInstanceGroup(vms, members)
+	appState.CmdMode = modeFilter
+	a.filterBase = vmRows(matched)
+	a.cmd.SetBorder(true)
+	a.cmd.SetLabel(" / ")
+	a.cmd.SetText("")
+	a.applyFilter()
+	a.tapp.SetFocus(a.info)
+	if len(matched) == 0 {
+		a.statusText(fmt.Sprintf("[red]No cached VMs are members of %s (press u to refresh)[-]", group))
+		return
+	}
+	a.statusText(fmt.Sprintf("[yellow]%d VMs for instance group %s (Esc clears)[-]", len(matched), group))
+}
