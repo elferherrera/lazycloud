@@ -89,7 +89,24 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `8` | Kubernetes clusters |
 | `9` | Routes |
 | `0` | Firewall rules |
-| `:dns` | DNS zones (no numeric shortcut) |
+
+### View switching (command mode)
+
+| Command | View |
+|---|---|
+| `:projects` | Projects |
+| `:vms` | VMs |
+| `:buckets` | Storage buckets |
+| `:accounts` / `:sa` | Service accounts |
+| `:ips` | IP addresses (a raw IP like `:10.0.0.5` jumps here too) |
+| `:networks` / `:vpcs` | VPCs and subnets |
+| `:lbs` / `:loadbalancers` | Load balancers |
+| `:clusters` / `:gke` | Kubernetes clusters |
+| `:routes` | Routes |
+| `:firewalls` | Firewall rules |
+| `:dns` / `:zones` | DNS zones |
+| `:routers` / `:cloud-routers` | Cloud routers |
+| `:vpns` / `:vpn` | VPN gateways |
 
 ### Context-sensitive
 
