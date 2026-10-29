@@ -151,3 +151,17 @@ func TestGCPVPNGatewayURL(t *testing.T) {
 		t.Fatalf("GCPVPNGatewayURL() classic =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPInstanceGroupURL(t *testing.T) {
+	got := GCPInstanceGroupURL("revolut-labs", "europe-west2-b", "vpn-gateway-labs-nebius-prod")
+	want := "https://console.cloud.google.com/compute/instanceGroups/details/europe-west2-b/vpn-gateway-labs-nebius-prod?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPInstanceGroupURL() =\n%s\nwant\n%s", got, want)
+	}
+
+	got = GCPInstanceGroupURL("revolut-labs", "europe-west2", "guacamole")
+	want = "https://console.cloud.google.com/compute/instanceGroups/details/europe-west2/guacamole?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPInstanceGroupURL() regional =\n%s\nwant\n%s", got, want)
+	}
+}

@@ -800,3 +800,34 @@ func TestRenderSummaryAllProjects(t *testing.T) {
 		t.Fatalf("renderSummary() = %q, want %q", text, want)
 	}
 }
+
+func TestInstanceGroupRows(t *testing.T) {
+	groups := []providers.InstanceGroup{
+		{
+			ProjectID: "p1", Name: "ig-a", Zone: "europe-west2-b", Type: "managed", Size: 3,
+			Network: "vpc-a", Subnetwork: "sn-a", Template: "tpl-a", Description: "gke nodes",
+			UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{Name: "ig-b", UpdatedAt: "not-a-date"},
+	}
+	rows := instanceGroupRows(groups)
+	if len(rows) != 2 {
+		t.Fatalf("instanceGroupRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"ig-a", "europe-west2-b", "managed", "3", "vpc-a", "sn-a", "gke nodes"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("instanceGroupRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if len(rows[0]) != 8 {
+		t.Fatalf("instanceGroupRows()[0] len = %d, want 8", len(rows[0]))
+	}
+	rowsAll := instanceGroupRowsAll(groups)
+	if len(rowsAll) != 2 || rowsAll[0][8] != "p1" {
+		t.Fatalf("instanceGroupRowsAll() = %v, want project id in column 8", rowsAll)
+	}
+	if len(rowsAll[0]) != 9 {
+		t.Fatalf("instanceGroupRowsAll()[0] len = %d, want 9", len(rowsAll[0]))
+	}
+}

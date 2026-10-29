@@ -367,6 +367,22 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS instance_groups (
+		project_id TEXT NOT NULL,
+		zone TEXT NOT NULL,
+		name TEXT NOT NULL,
+		type TEXT NOT NULL DEFAULT '',
+		size INTEGER NOT NULL DEFAULT 0,
+		network TEXT NOT NULL DEFAULT '',
+		subnetwork TEXT NOT NULL DEFAULT '',
+		template TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, zone, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -875,7 +891,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -2138,4 +2154,72 @@ func (c *Cache) GetVPNGateway(projectID, region, name string) (*VPNGateway, erro
 		return nil, nil
 	}
 	return &gateways[0], nil
+}
+
+func (c *Cache) SaveInstanceGroups(projectID string, groups []InstanceGroup) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM instance_groups WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, g := range groups {
+		if _, err := tx.Exec(`INSERT INTO instance_groups
+			(project_id, zone, name, type, size, network, subnetwork, template, description, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, g.Zone, g.Name, g.Type, g.Size, g.Network, g.Subnetwork, g.Template, g.Description, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanInstanceGroups(rows *sql.Rows) ([]InstanceGroup, error) {
+	defer rows.Close()
+	var groups []InstanceGroup
+	for rows.Next() {
+		var g InstanceGroup
+		if err := rows.Scan(&g.ProjectID, &g.Zone, &g.Name, &g.Type, &g.Size, &g.Network, &g.Subnetwork, &g.Template, &g.Description, &g.UpdatedAt); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	return groups, rows.Err()
+}
+
+func (c *Cache) ListInstanceGroups(projectID string) ([]InstanceGroup, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, size, network, subnetwork, template, description, updated_at
+		FROM instance_groups WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanInstanceGroups(rows)
+}
+
+func (c *Cache) ListAllInstanceGroups() ([]InstanceGroup, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, size, network, subnetwork, template, description, updated_at
+		FROM instance_groups ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanInstanceGroups(rows)
+}
+
+func (c *Cache) GetInstanceGroup(projectID, zone, name string) (*InstanceGroup, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, size, network, subnetwork, template, description, updated_at
+		FROM instance_groups WHERE project_id = ? AND zone = ? AND name = ?`, projectID, zone, name)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := scanInstanceGroups(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(groups) == 0 {
+		return nil, nil
+	}
+	return &groups[0], nil
 }

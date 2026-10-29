@@ -107,6 +107,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `:dns` / `:zones` | DNS zones |
 | `:routers` / `:cloud-routers` | Cloud routers |
 | `:vpns` / `:vpn` | VPN gateways |
+| `:igs` / `:instance-groups` | Instance groups |
 
 ### Context-sensitive
 

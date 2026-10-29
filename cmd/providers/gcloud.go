@@ -641,7 +641,11 @@ func targetRef(targetURL string) (string, string) {
 }
 
 func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) ForwardingRule {
-	kind, target := targetRef(r.GetTarget())
+	targetURL := r.GetTarget()
+	if targetURL == "" {
+		targetURL = r.GetBackendService()
+	}
+	kind, target := targetRef(targetURL)
 	return ForwardingRule{
 		ProjectID:  projectID,
 		Name:       r.GetName(),
@@ -1476,4 +1480,109 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 		}
 	}
 	return gateways, nil
+}
+
+type InstanceGroup struct {
+	ProjectID   string
+	Name        string
+	Zone        string
+	Type        string
+	Size        int32
+	Network     string
+	Subnetwork  string
+	Template    string
+	Description string
+	UpdatedAt   string
+}
+
+func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
+	ctx := context.Background()
+
+	groupsClient, err := computev1.NewInstanceGroupsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer groupsClient.Close()
+
+	managersClient, err := computev1.NewInstanceGroupManagersRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer managersClient.Close()
+
+	unmanaged := make(map[string]InstanceGroup)
+	groupsIt := groupsClient.AggregatedList(ctx, &computepb.AggregatedListInstanceGroupsRequest{Project: projectID})
+	for {
+		entry, err := groupsIt.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range entry.Value.GetInstanceGroups() {
+			if g.GetZone() == "" && g.GetRegion() == "" {
+				continue
+			}
+			location := resourceShortName(g.GetZone(), "")
+			if location == "" {
+				location = resourceShortName(g.GetRegion(), "")
+			}
+			unmanaged[location+"/"+g.GetName()] = InstanceGroup{
+				ProjectID:   projectID,
+				Name:        g.GetName(),
+				Zone:        location,
+				Type:        "unmanaged",
+				Size:        g.GetSize(),
+				Network:     resourceShortName(g.GetNetwork(), ""),
+				Subnetwork:  resourceShortName(g.GetSubnetwork(), ""),
+				Description: g.GetDescription(),
+			}
+		}
+	}
+
+	var groups []InstanceGroup
+	managed := make(map[string]bool)
+	managersIt := managersClient.AggregatedList(ctx, &computepb.AggregatedListInstanceGroupManagersRequest{Project: projectID})
+	for {
+		entry, err := managersIt.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range entry.Value.GetInstanceGroupManagers() {
+			if m.GetZone() == "" && m.GetRegion() == "" {
+				continue
+			}
+			location := resourceShortName(m.GetZone(), "")
+			if location == "" {
+				location = resourceShortName(m.GetRegion(), "")
+			}
+			key := location + "/" + m.GetName()
+			managed[key] = true
+			group := InstanceGroup{
+				ProjectID:   projectID,
+				Name:        m.GetName(),
+				Zone:        location,
+				Type:        "managed",
+				Size:        m.GetTargetSize(),
+				Template:    resourceShortName(m.GetInstanceTemplate(), ""),
+				Description: m.GetDescription(),
+			}
+			if g, ok := unmanaged[key]; ok {
+				group.Network = g.Network
+				group.Subnetwork = g.Subnetwork
+			}
+			groups = append(groups, group)
+		}
+	}
+	for _, g := range unmanaged {
+		if managed[g.Zone+"/"+g.Name] {
+			continue
+		}
+		groups = append(groups, g)
+	}
+	return groups, nil
 }

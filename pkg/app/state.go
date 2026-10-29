@@ -5,34 +5,36 @@ import "github.com/rivo/tview"
 type viewKind string
 
 const (
-	viewProjects        viewKind = "projects"
-	viewIPs             viewKind = "ips"
-	viewIPsAll          viewKind = "ips-all"
-	viewNetworks        viewKind = "networks"
-	viewNetworksAll     viewKind = "networks-all"
-	viewRoutes          viewKind = "routes"
-	viewRoutesAll       viewKind = "routes-all"
-	viewFirewalls       viewKind = "firewalls"
-	viewFirewallsAll    viewKind = "firewalls-all"
-	viewAccounts        viewKind = "accounts"
-	viewAccountsAll     viewKind = "accounts-all"
-	viewVMs             viewKind = "vms"
-	viewVMsAll          viewKind = "vms-all"
-	viewBuckets         viewKind = "buckets"
-	viewBucketsAll      viewKind = "buckets-all"
-	viewLBs             viewKind = "lbs"
-	viewLBsAll          viewKind = "lbs-all"
-	viewClusters        viewKind = "clusters"
-	viewClustersAll     viewKind = "clusters-all"
-	viewWorkloads       viewKind = "workloads"
-	viewNodePools       viewKind = "nodepools"
-	viewDNSZones        viewKind = "dns-zones"
-	viewDNSZonesAll     viewKind = "dns-zones-all"
-	viewDNSRecords      viewKind = "dns-records"
-	viewCloudRouters    viewKind = "cloud-routers"
-	viewCloudRoutersAll viewKind = "cloud-routers-all"
-	viewVPNs            viewKind = "vpns"
-	viewVPNsAll         viewKind = "vpns-all"
+	viewProjects          viewKind = "projects"
+	viewIPs               viewKind = "ips"
+	viewIPsAll            viewKind = "ips-all"
+	viewNetworks          viewKind = "networks"
+	viewNetworksAll       viewKind = "networks-all"
+	viewRoutes            viewKind = "routes"
+	viewRoutesAll         viewKind = "routes-all"
+	viewFirewalls         viewKind = "firewalls"
+	viewFirewallsAll      viewKind = "firewalls-all"
+	viewAccounts          viewKind = "accounts"
+	viewAccountsAll       viewKind = "accounts-all"
+	viewVMs               viewKind = "vms"
+	viewVMsAll            viewKind = "vms-all"
+	viewBuckets           viewKind = "buckets"
+	viewBucketsAll        viewKind = "buckets-all"
+	viewLBs               viewKind = "lbs"
+	viewLBsAll            viewKind = "lbs-all"
+	viewClusters          viewKind = "clusters"
+	viewClustersAll       viewKind = "clusters-all"
+	viewWorkloads         viewKind = "workloads"
+	viewNodePools         viewKind = "nodepools"
+	viewDNSZones          viewKind = "dns-zones"
+	viewDNSZonesAll       viewKind = "dns-zones-all"
+	viewDNSRecords        viewKind = "dns-records"
+	viewCloudRouters      viewKind = "cloud-routers"
+	viewCloudRoutersAll   viewKind = "cloud-routers-all"
+	viewVPNs              viewKind = "vpns"
+	viewVPNsAll           viewKind = "vpns-all"
+	viewInstanceGroups    viewKind = "instance-groups"
+	viewInstanceGroupsAll viewKind = "instance-groups-all"
 )
 
 type cmdMode string
@@ -151,4 +153,11 @@ func vpnsViewKind() viewKind {
 		return viewVPNsAll
 	}
 	return viewVPNs
+}
+
+func instanceGroupsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewInstanceGroupsAll
+	}
+	return viewInstanceGroups
 }

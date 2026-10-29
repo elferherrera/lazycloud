@@ -65,6 +65,7 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewDNSRecords` | view_dnsrecords.go | DNS records of the zone focused via `d` in the DNS zones views: Name, Type, TTL, Data, Updated |
 | `viewCloudRouters` / `viewCloudRoutersAll` | view_cloudrouters.go | Cloud routers: Name, Region, Network, ASN, Peers, NATs, Description, Updated (+ Project in All) |
 | `viewVPNs` / `viewVPNsAll` | view_vpns.go | VPN gateways: Type, Name, Region, Network, IPs, Tunnels, Description, Updated (+ Project in All) |
+| `viewInstanceGroups` / `viewInstanceGroupsAll` | view_instancegroups.go | Instance groups: Name, Location, Type, Size, Network, Subnetwork, Description, Updated (+ Project in All) |
 
 ### Workload fetching
 
@@ -81,6 +82,10 @@ Cloud Routers are fetched via `ListProjectCloudRouters` (Routers aggregated list
 ### VPNs
 
 VPN rows are gateways of both kinds: `ListProjectVPNGateways` fetches HA VPN gateways, classic target VPN gateways and all VPN tunnels, grouping the tunnels by gateway self-link (`VpnGateway` for HA, `TargetVpnGateway` for classic) into `Tunnels` (`VPNTunnel` with interface/peer IP/IKE/status/router; the Router short name matches rows in the cloud routers view). Everything is cached in `vpn_gateways` keyed by `(project, region, name)`, `IPs` (HA interface addresses) and `Tunnels` stored as JSON. The view is reached via `:vpns` (`vpn` alias works too; no numeric shortcut). The Type column is `ha`/`classic` like the networks view's Type column; classic rows have no IPs (classic gateway IPs live on their forwarding rules). `y`/`v` expose the full tunnel list via the cached `VPNGateway` JSON, and `g` opens the VPN gateway details page (`GCPVPNGatewayURL`, region-scoped).
+
+### Instance groups
+
+Rows are instance groups of both kinds: `ListProjectInstanceGroups` fetches managed groups (`instanceGroupManagers` aggregated list → Type `managed`, size = target size, template short name) and unmanaged groups (`instanceGroups` aggregated list → Type `unmanaged`, size = member count, network/subnetwork); a managed group also exposes a same-named underlying instance group, so the unmanaged pass skips `(zone, name)` keys claimed by a manager and the managed row inherits its network/subnetwork. Groups can be zonal or regional — the Location column holds the zone or region short name. Everything is cached in `instance_groups` keyed by `(project, zone, name)`. The view is reached via `:igs` (`instance-groups` alias works too; no numeric shortcut). `y`/`v` expose the cached `InstanceGroup` JSON, and `g` opens the instance groups details page (`GCPInstanceGroupURL`).
 
 ### Load balancer composition
 

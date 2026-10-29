@@ -187,3 +187,8 @@ func GCPVPNGatewayURL(projectID, region, name string, isHA bool) string {
 		url.PathEscape(region) + "/" + url.PathEscape(name) +
 		"?project=" + url.QueryEscape(projectID) + "&isHA=" + isHAParam
 }
+
+func GCPInstanceGroupURL(projectID, location, name string) string {
+	return "https://console.cloud.google.com/compute/instanceGroups/details/" +
+		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}

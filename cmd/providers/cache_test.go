@@ -1716,3 +1716,81 @@ func TestSaveAndListVPNGateways(t *testing.T) {
 		t.Fatalf("ListVPNGateways(p2) len = %d, want 1 (other project untouched)", len(got))
 	}
 }
+
+func TestSaveAndListInstanceGroups(t *testing.T) {
+	cache := newTestCache(t)
+	groups := []InstanceGroup{
+		{Name: "ig-b", Zone: "europe-west2-b", Type: "unmanaged", Size: 3, Network: "vpc-a", Subnetwork: "subnet-a", Description: "second"},
+		{Name: "ig-a", Zone: "europe-west1-b", Type: "managed", Size: 2, Template: "tpl-a", Network: "vpc-a", Description: "first"},
+	}
+	if err := cache.SaveInstanceGroups("p1", groups); err != nil {
+		t.Fatalf("SaveInstanceGroups() error = %v", err)
+	}
+	if err := cache.SaveInstanceGroups("p2", groups[:1]); err != nil {
+		t.Fatalf("SaveInstanceGroups() other project error = %v", err)
+	}
+
+	got, err := cache.ListInstanceGroups("p1")
+	if err != nil {
+		t.Fatalf("ListInstanceGroups() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListInstanceGroups() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "ig-a" || got[1].Name != "ig-b" {
+		t.Fatalf("ListInstanceGroups() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].Type != "managed" || got[0].Size != 2 || got[0].Template != "tpl-a" {
+		t.Fatalf("ListInstanceGroups()[0] = %+v", got[0])
+	}
+	if got[1].Type != "unmanaged" || got[1].Size != 3 || got[1].Network != "vpc-a" || got[1].Subnetwork != "subnet-a" {
+		t.Fatalf("ListInstanceGroups()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListInstanceGroups()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllInstanceGroups()
+	if err != nil {
+		t.Fatalf("ListAllInstanceGroups() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllInstanceGroups() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[1].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllInstanceGroups() not ordered by project then name: %+v", all)
+	}
+
+	if err := cache.SaveInstanceGroups("p1", groups[:1]); err != nil {
+		t.Fatalf("SaveInstanceGroups() replace error = %v", err)
+	}
+	got, err = cache.ListInstanceGroups("p1")
+	if err != nil {
+		t.Fatalf("ListInstanceGroups() replace error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListInstanceGroups() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListInstanceGroups("p2")
+	if err != nil {
+		t.Fatalf("ListInstanceGroups(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListInstanceGroups(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+
+	single, err := cache.GetInstanceGroup("p2", "europe-west2-b", "ig-b")
+	if err != nil {
+		t.Fatalf("GetInstanceGroup() error = %v", err)
+	}
+	if single == nil || single.Type != "unmanaged" || single.Size != 3 {
+		t.Fatalf("GetInstanceGroup() = %+v", single)
+	}
+	single, err = cache.GetInstanceGroup("p2", "europe-west2-b", "ig-missing")
+	if err != nil {
+		t.Fatalf("GetInstanceGroup() missing error = %v", err)
+	}
+	if single != nil {
+		t.Fatalf("GetInstanceGroup() missing = %+v, want nil", single)
+	}
+}
