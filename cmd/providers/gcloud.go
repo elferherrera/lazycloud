@@ -1273,3 +1273,207 @@ func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
 	}
 	return addresses, nil
 }
+
+type CloudRouterPeer struct {
+	Name      string
+	Interface string
+	IPAddress string
+	PeerIP    string
+	PeerASN   uint32
+	Priority  uint32
+}
+
+type CloudRouter struct {
+	ProjectID   string
+	Name        string
+	Region      string
+	Network     string
+	Description string
+	BGPASN      uint32
+	Peers       []CloudRouterPeer
+	NATs        []string
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewRoutersRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var routers []CloudRouter
+	it := client.AggregatedList(ctx, &computepb.AggregatedListRoutersRequest{Project: projectID})
+	for {
+		entry, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range entry.Value.GetRouters() {
+			if r.GetRegion() == "" {
+				continue
+			}
+			peers := make([]CloudRouterPeer, 0, len(r.GetBgpPeers()))
+			for _, p := range r.GetBgpPeers() {
+				peers = append(peers, CloudRouterPeer{
+					Name:      p.GetName(),
+					Interface: p.GetInterfaceName(),
+					IPAddress: p.GetIpAddress(),
+					PeerIP:    p.GetPeerIpAddress(),
+					PeerASN:   p.GetPeerAsn(),
+					Priority:  p.GetAdvertisedRoutePriority(),
+				})
+			}
+			nats := make([]string, 0, len(r.GetNats()))
+			for _, n := range r.GetNats() {
+				nats = append(nats, n.GetName())
+			}
+			routers = append(routers, CloudRouter{
+				ProjectID:   projectID,
+				Name:        r.GetName(),
+				Region:      resourceShortName(r.GetRegion(), ""),
+				Network:     resourceShortName(r.GetNetwork(), ""),
+				Description: r.GetDescription(),
+				BGPASN:      r.GetBgp().GetAsn(),
+				Peers:       peers,
+				NATs:        nats,
+				CreatedAt:   r.GetCreationTimestamp(),
+			})
+		}
+	}
+	return routers, nil
+}
+
+type VPNTunnel struct {
+	Name      string
+	Interface int32
+	PeerIP    string
+	IKE       int32
+	Status    string
+	Router    string
+}
+
+type VPNGateway struct {
+	ProjectID   string
+	Name        string
+	Type        string
+	Region      string
+	Network     string
+	IPs         []string
+	Description string
+	Tunnels     []VPNTunnel
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
+	ctx := context.Background()
+
+	haClient, err := computev1.NewVpnGatewaysRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer haClient.Close()
+
+	classicClient, err := computev1.NewTargetVpnGatewaysRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer classicClient.Close()
+
+	tunnelsClient, err := computev1.NewVpnTunnelsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tunnelsClient.Close()
+
+	tunnelsByGateway := map[string][]VPNTunnel{}
+	tunnelsIt := tunnelsClient.AggregatedList(ctx, &computepb.AggregatedListVpnTunnelsRequest{Project: projectID})
+	for {
+		entry, err := tunnelsIt.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range entry.Value.GetVpnTunnels() {
+			gateway := t.GetVpnGateway()
+			if gateway == "" {
+				gateway = t.GetTargetVpnGateway()
+			}
+			tunnelsByGateway[gateway] = append(tunnelsByGateway[gateway], VPNTunnel{
+				Name:      t.GetName(),
+				Interface: t.GetVpnGatewayInterface(),
+				PeerIP:    t.GetPeerIp(),
+				IKE:       t.GetIkeVersion(),
+				Status:    t.GetStatus(),
+				Router:    resourceShortName(t.GetRouter(), ""),
+			})
+		}
+	}
+
+	var gateways []VPNGateway
+	haIt := haClient.AggregatedList(ctx, &computepb.AggregatedListVpnGatewaysRequest{Project: projectID})
+	for {
+		entry, err := haIt.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range entry.Value.GetVpnGateways() {
+			if g.GetRegion() == "" {
+				continue
+			}
+			ips := make([]string, 0, len(g.GetVpnInterfaces()))
+			for _, i := range g.GetVpnInterfaces() {
+				ips = append(ips, i.GetIpAddress())
+			}
+			gateways = append(gateways, VPNGateway{
+				ProjectID:   projectID,
+				Name:        g.GetName(),
+				Type:        "ha",
+				Region:      resourceShortName(g.GetRegion(), ""),
+				Network:     resourceShortName(g.GetNetwork(), ""),
+				IPs:         ips,
+				Description: g.GetDescription(),
+				Tunnels:     tunnelsByGateway[g.GetSelfLink()],
+				CreatedAt:   g.GetCreationTimestamp(),
+			})
+		}
+	}
+	classicIt := classicClient.AggregatedList(ctx, &computepb.AggregatedListTargetVpnGatewaysRequest{Project: projectID})
+	for {
+		entry, err := classicIt.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range entry.Value.GetTargetVpnGateways() {
+			if g.GetRegion() == "" {
+				continue
+			}
+			gateways = append(gateways, VPNGateway{
+				ProjectID:   projectID,
+				Name:        g.GetName(),
+				Type:        "classic",
+				Region:      resourceShortName(g.GetRegion(), ""),
+				Network:     resourceShortName(g.GetNetwork(), ""),
+				Description: g.GetDescription(),
+				Tunnels:     tunnelsByGateway[g.GetSelfLink()],
+				CreatedAt:   g.GetCreationTimestamp(),
+			})
+		}
+	}
+	return gateways, nil
+}

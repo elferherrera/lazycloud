@@ -209,6 +209,47 @@ func TestNetworkRowsAll(t *testing.T) {
 	}
 }
 
+func TestRouteRows(t *testing.T) {
+	routes := []providers.Route{
+		{
+			ProjectID: "p1", Name: "route-a", Network: "vpc-a", DestRange: "0.0.0.0/0", Priority: 1000,
+			NextHopKind: "gateway", NextHop: "default-internet-gateway", Description: "default egress",
+			UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{Name: "route-b", UpdatedAt: "not-a-date"},
+	}
+	rows := routeRows(routes)
+	if len(rows) != 2 {
+		t.Fatalf("routeRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"route-a", "vpc-a", "0.0.0.0/0", "1000", "gateway", "default-internet-gateway", "default egress"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("routeRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if len(rows[0]) != 8 {
+		t.Fatalf("routeRows()[0] len = %d, want 8", len(rows[0]))
+	}
+	if rows[1][6] != "" {
+		t.Fatalf("routeRows()[1][6] = %q, want empty description", rows[1][6])
+	}
+	if rows[1][7] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][7])
+	}
+
+	rowsAll := routeRowsAll(routes)
+	if len(rowsAll) != 2 {
+		t.Fatalf("routeRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 9 {
+		t.Fatalf("routeRowsAll()[0] len = %d, want 9", len(rowsAll[0]))
+	}
+	if rowsAll[0][8] != "p1" {
+		t.Fatalf("routeRowsAll()[0][8] = %q, want project id", rowsAll[0][8])
+	}
+}
+
 func TestServiceAccountRows(t *testing.T) {
 	accounts := []providers.ServiceAccount{
 		{ProjectID: "p1", Email: "sa-a@p1.iam.gserviceaccount.com", DisplayName: "SA A", UniqueID: "111", Disabled: false, UpdatedAt: "2026-10-12T18:23:12Z"},
@@ -617,6 +658,101 @@ func TestWorkloadRows(t *testing.T) {
 	}
 	if len(rows[0]) != 6 {
 		t.Fatalf("workloadRows()[0] len = %d, want 6", len(rows[0]))
+	}
+}
+
+func TestCloudRouterRows(t *testing.T) {
+	routers := []providers.CloudRouter{
+		{
+			ProjectID: "p1", Name: "router-a", Region: "europe-west1", Network: "vpc-a", BGPASN: 64512,
+			Peers:       []providers.CloudRouterPeer{{Name: "peer-a", Interface: "if-0", IPAddress: "169.254.0.2", PeerIP: "169.254.0.1", PeerASN: 65001}},
+			NATs:        []string{"nat-a"},
+			Description: "primary",
+			UpdatedAt:   "2026-10-12T18:23:12Z",
+		},
+		{Name: "router-b", UpdatedAt: "not-a-date"},
+	}
+	rows := cloudRouterRows(routers)
+	if len(rows) != 2 {
+		t.Fatalf("cloudRouterRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"router-a", "europe-west1", "vpc-a", "64512", "1", "1", "primary"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("cloudRouterRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if len(rows[0]) != 8 {
+		t.Fatalf("cloudRouterRows()[0] len = %d, want 8", len(rows[0]))
+	}
+	if rows[1][3] != "" {
+		t.Fatalf("cloudRouterRows()[1][3] = %q, want empty for router without BGP", rows[1][3])
+	}
+	if rows[1][4] != "0" || rows[1][5] != "0" {
+		t.Fatalf("cloudRouterRows()[1] peers/nats = %q, %q, want 0, 0", rows[1][4], rows[1][5])
+	}
+	if rows[1][7] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][7])
+	}
+
+	rowsAll := cloudRouterRowsAll(routers)
+	if len(rowsAll) != 2 {
+		t.Fatalf("cloudRouterRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 9 {
+		t.Fatalf("cloudRouterRowsAll()[0] len = %d, want 9", len(rowsAll[0]))
+	}
+	if rowsAll[0][8] != "p1" {
+		t.Fatalf("cloudRouterRowsAll()[0][8] = %q, want project id", rowsAll[0][8])
+	}
+}
+
+func TestVPNGatewayRows(t *testing.T) {
+	gateways := []providers.VPNGateway{
+		{
+			ProjectID: "p1", Name: "gw-a", Type: "ha", Region: "europe-west1", Network: "vpc-a",
+			IPs:         []string{"34.1.1.1", "34.1.1.2"},
+			Description: "primary",
+			Tunnels: []providers.VPNTunnel{
+				{Name: "tunnel-1", Interface: 0, PeerIP: "203.0.113.1", IKE: 2, Status: "ESTABLISHED", Router: "router-a"},
+				{Name: "tunnel-2", Interface: 1, PeerIP: "203.0.113.2", IKE: 2, Status: "DOWN", Router: "router-a"},
+			},
+			UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{Name: "gw-b", Type: "classic", Region: "us-central1", Network: "vpc-b", UpdatedAt: "not-a-date"},
+	}
+	rows := vpnGatewayRows(gateways)
+	if len(rows) != 2 {
+		t.Fatalf("vpnGatewayRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"ha", "gw-a", "europe-west1", "vpc-a", "34.1.1.1,34.1.1.2", "2", "primary"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("vpnGatewayRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if len(rows[0]) != 8 {
+		t.Fatalf("vpnGatewayRows()[0] len = %d, want 8", len(rows[0]))
+	}
+	if rows[1][4] != "" {
+		t.Fatalf("vpnGatewayRows()[1][4] = %q, want empty for classic gateway without interfaces", rows[1][4])
+	}
+	if rows[1][5] != "0" {
+		t.Fatalf("vpnGatewayRows()[1][5] = %q, want 0 tunnels", rows[1][5])
+	}
+	if rows[1][7] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][7])
+	}
+
+	rowsAll := vpnGatewayRowsAll(gateways)
+	if len(rowsAll) != 2 {
+		t.Fatalf("vpnGatewayRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 9 {
+		t.Fatalf("vpnGatewayRowsAll()[0] len = %d, want 9", len(rowsAll[0]))
+	}
+	if rowsAll[0][8] != "p1" {
+		t.Fatalf("vpnGatewayRowsAll()[0][8] = %q, want project id", rowsAll[0][8])
 	}
 }
 

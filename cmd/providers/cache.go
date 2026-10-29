@@ -335,6 +335,38 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS cloud_routers (
+		project_id TEXT NOT NULL,
+		region TEXT NOT NULL,
+		name TEXT NOT NULL,
+		network TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		bgp_asn INTEGER NOT NULL DEFAULT 0,
+		peers TEXT NOT NULL DEFAULT '[]',
+		nats TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, region, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS vpn_gateways (
+		project_id TEXT NOT NULL,
+		region TEXT NOT NULL,
+		name TEXT NOT NULL,
+		type TEXT NOT NULL DEFAULT '',
+		network TEXT NOT NULL DEFAULT '',
+		ips TEXT NOT NULL DEFAULT '[]',
+		description TEXT NOT NULL DEFAULT '',
+		tunnels TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, region, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -843,7 +875,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -1940,4 +1972,170 @@ func (c *Cache) GetDNSRecord(projectID, zone, name, recordType string) (*DNSReco
 		return nil, nil
 	}
 	return &records[0], nil
+}
+
+func (c *Cache) SaveCloudRouters(projectID string, routers []CloudRouter) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM cloud_routers WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range routers {
+		peers, err := json.Marshal(r.Peers)
+		if err != nil {
+			return err
+		}
+		nats, err := json.Marshal(r.NATs)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO cloud_routers
+			(project_id, region, name, network, description, bgp_asn, peers, nats, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Region, r.Name, r.Network, r.Description, r.BGPASN, string(peers), string(nats), r.CreatedAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanCloudRouters(rows *sql.Rows) ([]CloudRouter, error) {
+	defer rows.Close()
+	var routers []CloudRouter
+	for rows.Next() {
+		var r CloudRouter
+		var peers, nats string
+		if err := rows.Scan(&r.ProjectID, &r.Region, &r.Name, &r.Network, &r.Description, &r.BGPASN, &peers, &nats, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(peers), &r.Peers); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(nats), &r.NATs); err != nil {
+			return nil, err
+		}
+		routers = append(routers, r)
+	}
+	return routers, rows.Err()
+}
+
+func (c *Cache) ListCloudRouters(projectID string) ([]CloudRouter, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, network, description, bgp_asn, peers, nats, created_at, updated_at
+		FROM cloud_routers WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanCloudRouters(rows)
+}
+
+func (c *Cache) ListAllCloudRouters() ([]CloudRouter, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, network, description, bgp_asn, peers, nats, created_at, updated_at
+		FROM cloud_routers ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanCloudRouters(rows)
+}
+
+func (c *Cache) GetCloudRouter(projectID, region, name string) (*CloudRouter, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, network, description, bgp_asn, peers, nats, created_at, updated_at
+		FROM cloud_routers WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	routers, err := scanCloudRouters(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(routers) == 0 {
+		return nil, nil
+	}
+	return &routers[0], nil
+}
+
+func (c *Cache) SaveVPNGateways(projectID string, gateways []VPNGateway) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM vpn_gateways WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, g := range gateways {
+		ips, err := json.Marshal(g.IPs)
+		if err != nil {
+			return err
+		}
+		tunnels, err := json.Marshal(g.Tunnels)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO vpn_gateways
+			(project_id, region, name, type, network, ips, description, tunnels, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, g.Region, g.Name, g.Type, g.Network, string(ips), g.Description, string(tunnels), g.CreatedAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanVPNGateways(rows *sql.Rows) ([]VPNGateway, error) {
+	defer rows.Close()
+	var gateways []VPNGateway
+	for rows.Next() {
+		var g VPNGateway
+		var ips, tunnels string
+		if err := rows.Scan(&g.ProjectID, &g.Region, &g.Name, &g.Type, &g.Network, &ips, &g.Description, &tunnels, &g.CreatedAt, &g.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(ips), &g.IPs); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(tunnels), &g.Tunnels); err != nil {
+			return nil, err
+		}
+		gateways = append(gateways, g)
+	}
+	return gateways, rows.Err()
+}
+
+func (c *Cache) ListVPNGateways(projectID string) ([]VPNGateway, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, type, network, ips, description, tunnels, created_at, updated_at
+		FROM vpn_gateways WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanVPNGateways(rows)
+}
+
+func (c *Cache) ListAllVPNGateways() ([]VPNGateway, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, type, network, ips, description, tunnels, created_at, updated_at
+		FROM vpn_gateways ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanVPNGateways(rows)
+}
+
+func (c *Cache) GetVPNGateway(projectID, region, name string) (*VPNGateway, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, type, network, ips, description, tunnels, created_at, updated_at
+		FROM vpn_gateways WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	gateways, err := scanVPNGateways(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(gateways) == 0 {
+		return nil, nil
+	}
+	return &gateways[0], nil
 }

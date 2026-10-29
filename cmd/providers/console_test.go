@@ -129,3 +129,25 @@ func TestGCPFirewallsURL(t *testing.T) {
 		t.Fatalf("GCPFirewallsURL() =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPCloudRouterURL(t *testing.T) {
+	got := GCPCloudRouterURL("revolut-labs", "europe-west2", "router-vpns-net-nebius-dev-europe-west2")
+	want := "https://console.cloud.google.com/hybrid/routers/details/europe-west2/router-vpns-net-nebius-dev-europe-west2?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPCloudRouterURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPVPNGatewayURL(t *testing.T) {
+	got := GCPVPNGatewayURL("revolut-labs", "europe-west2", "ha-vpn-gw-dev-ai-nbs-euw2", true)
+	want := "https://console.cloud.google.com/hybrid/vpn/gateways/details/europe-west2/ha-vpn-gw-dev-ai-nbs-euw2?project=revolut-labs&isHA=true"
+	if got != want {
+		t.Fatalf("GCPVPNGatewayURL() =\n%s\nwant\n%s", got, want)
+	}
+
+	got = GCPVPNGatewayURL("revolut-labs", "europe-west2", "gw-classic", false)
+	want = "https://console.cloud.google.com/hybrid/vpn/gateways/details/europe-west2/gw-classic?project=revolut-labs&isHA=false"
+	if got != want {
+		t.Fatalf("GCPVPNGatewayURL() classic =\n%s\nwant\n%s", got, want)
+	}
+}

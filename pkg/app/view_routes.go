@@ -13,7 +13,7 @@ func routeRows(routes []providers.Route) [][]string {
 	for _, r := range routes {
 		rows = append(rows, []string{
 			r.Name, r.Network, r.DestRange, strconv.FormatInt(r.Priority, 10),
-			r.NextHopKind, r.NextHop, formatUpdatedAt(r.UpdatedAt),
+			r.NextHopKind, r.NextHop, r.Description, formatUpdatedAt(r.UpdatedAt),
 		})
 	}
 	return rows
@@ -40,7 +40,7 @@ func copyRoute(a *app, projectID, name string) ([]byte, error) {
 
 var routesView = viewDef{
 	title:   "Routes",
-	headers: []string{"Name", "Network", "Destination", "Priority", "Next Hop Type", "Next Hop", "Updated"},
+	headers: []string{"Name", "Network", "Destination", "Priority", "Next Hop Type", "Next Hop", "Description", "Updated"},
 	load: func(a *app) ([][]string, error) {
 		routes, err := a.cache.ListRoutes(appState.ProjectID)
 		if err != nil {
@@ -85,7 +85,7 @@ var routesView = viewDef{
 
 var routesAllView = viewDef{
 	title:   "Routes",
-	headers: []string{"Name", "Network", "Destination", "Priority", "Next Hop Type", "Next Hop", "Updated", "Project"},
+	headers: []string{"Name", "Network", "Destination", "Priority", "Next Hop Type", "Next Hop", "Description", "Updated", "Project"},
 	load: func(a *app) ([][]string, error) {
 		routes, err := a.cache.ListAllRoutes()
 		if err != nil {
@@ -135,10 +135,10 @@ var routesAllView = viewDef{
 		}()
 	},
 	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyRoute(a, a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
+		return copyRoute(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
 	},
 	consoleURL: func(a *app, row int) string {
-		return providers.GCPRoutesURL(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
+		return providers.GCPRoutesURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
 	},
 }
 

@@ -54,7 +54,7 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewVMs` / `viewVMsAll` | view_vms.go | Name, Zone, Machine Type, Status, Internal IPs, Updated (+ Project in All) |
 | `viewIPs` / `viewIPsAll` | view_ips.go, view_ips_all.go | Name, Address, Region, Status, Updated (+ Project in All) |
 | `viewNetworks` | view_networks.go | — also defines `formatUpdatedAt` helper |
-| `viewRoutes` / `viewRoutesAll` | view_routes.go | Routes: Name, Network, Destination, Priority, Next Hop Type, Next Hop, Updated (+ Project in All) |
+| `viewRoutes` / `viewRoutesAll` | view_routes.go | Routes: Name, Network, Destination, Priority, Next Hop Type, Next Hop, Description, Updated (+ Project in All) |
 | `viewFirewalls` / `viewFirewallsAll` | view_firewalls.go | Firewall rules: Name, Network, Direction, Priority, Action (allow/deny proto:ports), Source, Targets, Updated (+ Project in All) |
 | `viewBuckets` | view_buckets.go | Storage buckets |
 | `viewAccounts` | view_accounts.go | Service accounts |
@@ -63,6 +63,8 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewWorkloads` | view_workloads.go | Workloads of the cluster focused via `w` in the clusters views: Namespace, Kind, Name, Replicas, Images, Updated |
 | `viewDNSZones` / `viewDNSZonesAll` | view_dnszones.go | DNS zones: Name, DNS Name, Visibility, Description, Updated (+ Project in All) |
 | `viewDNSRecords` | view_dnsrecords.go | DNS records of the zone focused via `d` in the DNS zones views: Name, Type, TTL, Data, Updated |
+| `viewCloudRouters` / `viewCloudRoutersAll` | view_cloudrouters.go | Cloud routers: Name, Region, Network, ASN, Peers, NATs, Description, Updated (+ Project in All) |
+| `viewVPNs` / `viewVPNsAll` | view_vpns.go | VPN gateways: Type, Name, Region, Network, IPs, Tunnels, Description, Updated (+ Project in All) |
 
 ### Workload fetching
 
@@ -71,6 +73,14 @@ GKE workloads are Kubernetes resources, so `ListClusterWorkloads` shells out: it
 ### DNS zones and records
 
 Cloud DNS zones are fetched via `ListProjectDNSZones` (ManagedZones list) and cached in `dns_zones`; records via `ListZoneDNSRecords(projectID, zone)` (ResourceRecordSets list), cached per `(project, zone)` in `dns_records`. The DNS zones view is reached via `:dns` (no numeric shortcut; all ten are taken). Pressing `d` on a zone row sets `appState.Zone`/`appState.ZoneProject` and switches to the zone-scoped records view, the same flow as clusters → workloads; `refresh` re-fetches only the focused zone, and `g` opens the Cloud DNS zone records page in the console.
+
+### Cloud routers
+
+Cloud Routers are fetched via `ListProjectCloudRouters` (Routers aggregated list; `BgpPeers` → `CloudRouterPeer` with interface/IP/ASN, `Nats` → names, `Bgp.Asn` → `BGPASN`) and cached in `cloud_routers` keyed by `(project, region, name)`, with `Peers`/`NATs` stored as JSON like VM interfaces. The view is reached via `:routers` (`cloud-routers` alias works too; no numeric shortcut). The table shows the router ASN with `Peers`/`NATs` counts; `y`/`v` expose the full peer list via the cached `CloudRouter` JSON, and `g` opens the Cloud Router details page (`GCPCloudRouterURL`, region-scoped like the cluster deep link).
+
+### VPNs
+
+VPN rows are gateways of both kinds: `ListProjectVPNGateways` fetches HA VPN gateways, classic target VPN gateways and all VPN tunnels, grouping the tunnels by gateway self-link (`VpnGateway` for HA, `TargetVpnGateway` for classic) into `Tunnels` (`VPNTunnel` with interface/peer IP/IKE/status/router; the Router short name matches rows in the cloud routers view). Everything is cached in `vpn_gateways` keyed by `(project, region, name)`, `IPs` (HA interface addresses) and `Tunnels` stored as JSON. The view is reached via `:vpns` (`vpn` alias works too; no numeric shortcut). The Type column is `ha`/`classic` like the networks view's Type column; classic rows have no IPs (classic gateway IPs live on their forwarding rules). `y`/`v` expose the full tunnel list via the cached `VPNGateway` JSON, and `g` opens the VPN gateway details page (`GCPVPNGatewayURL`, region-scoped).
 
 ### Load balancer composition
 

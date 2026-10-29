@@ -45,6 +45,10 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		return showFirewalls
 	case viewDNSZones:
 		return showDNSZones
+	case viewCloudRouters:
+		return showCloudRouters
+	case viewVPNs:
+		return showVPNs
 	case viewWorkloads:
 		return func(a *app) {
 			if appState.Cluster == "" {
@@ -70,7 +74,8 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 			a.setView(viewDNSRecords)
 		}
 	case viewIPsAll, viewNetworksAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
-		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll:
+		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
+		viewVPNsAll:
 		return func(a *app) { a.setView(kind) }
 	}
 	return nil

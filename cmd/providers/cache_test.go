@@ -1534,3 +1534,185 @@ func TestListAllIPAddresses(t *testing.T) {
 		t.Fatalf("ListAllIPAddresses() second = %+v, want p2", got[1])
 	}
 }
+
+func TestSaveAndListCloudRouters(t *testing.T) {
+	cache := newTestCache(t)
+	routers := []CloudRouter{
+		{
+			Name: "router-b", Region: "europe-west1", Network: "vpc-a", Description: "second", BGPASN: 64514,
+			Peers: []CloudRouterPeer{{Name: "peer-b", Interface: "if-0", IPAddress: "169.254.0.2", PeerIP: "169.254.0.1", PeerASN: 65001, Priority: 100}},
+			NATs:  []string{"nat-b"},
+		},
+		{Name: "router-a", Region: "us-central1", Network: "vpc-a", Description: "first", BGPASN: 64512},
+	}
+	if err := cache.SaveCloudRouters("p1", routers); err != nil {
+		t.Fatalf("SaveCloudRouters() error = %v", err)
+	}
+	if err := cache.SaveCloudRouters("p2", routers[:1]); err != nil {
+		t.Fatalf("SaveCloudRouters() other project error = %v", err)
+	}
+
+	got, err := cache.ListCloudRouters("p1")
+	if err != nil {
+		t.Fatalf("ListCloudRouters() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListCloudRouters() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "router-a" || got[1].Name != "router-b" {
+		t.Fatalf("ListCloudRouters() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].BGPASN != 64512 {
+		t.Fatalf("ListCloudRouters()[0] = %+v", got[0])
+	}
+	if len(got[1].Peers) != 1 || got[1].Peers[0].Name != "peer-b" || got[1].Peers[0].PeerASN != 65001 || got[1].Peers[0].PeerIP != "169.254.0.1" {
+		t.Fatalf("ListCloudRouters()[1] peers = %+v", got[1].Peers)
+	}
+	if len(got[1].NATs) != 1 || got[1].NATs[0] != "nat-b" {
+		t.Fatalf("ListCloudRouters()[1] nats = %+v", got[1].NATs)
+	}
+	if got[1].Description != "second" {
+		t.Fatalf("ListCloudRouters()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListCloudRouters()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllCloudRouters()
+	if err != nil {
+		t.Fatalf("ListAllCloudRouters() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllCloudRouters() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllCloudRouters() not ordered by project: %+v", all)
+	}
+
+	r, err := cache.GetCloudRouter("p1", "europe-west1", "router-b")
+	if err != nil {
+		t.Fatalf("GetCloudRouter() error = %v", err)
+	}
+	if r == nil || r.BGPASN != 64514 || len(r.Peers) != 1 {
+		t.Fatalf("GetCloudRouter() = %+v", r)
+	}
+	r, err = cache.GetCloudRouter("p1", "europe-west1", "missing")
+	if err != nil {
+		t.Fatalf("GetCloudRouter() error = %v", err)
+	}
+	if r != nil {
+		t.Fatalf("GetCloudRouter() = %+v, want nil", r)
+	}
+
+	if err := cache.SaveCloudRouters("p1", routers[:1]); err != nil {
+		t.Fatalf("SaveCloudRouters() replace error = %v", err)
+	}
+	got, err = cache.ListCloudRouters("p1")
+	if err != nil {
+		t.Fatalf("ListCloudRouters() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListCloudRouters() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListCloudRouters("p2")
+	if err != nil {
+		t.Fatalf("ListCloudRouters(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListCloudRouters(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+}
+
+func TestSaveAndListVPNGateways(t *testing.T) {
+	cache := newTestCache(t)
+	gateways := []VPNGateway{
+		{
+			Name: "gw-b", Type: "ha", Region: "europe-west1", Network: "vpc-a", Description: "second",
+			IPs: []string{"34.1.1.1", "34.1.1.2"},
+			Tunnels: []VPNTunnel{
+				{Name: "tunnel-1", Interface: 0, PeerIP: "203.0.113.1", IKE: 2, Status: "ESTABLISHED", Router: "router-a"},
+				{Name: "tunnel-2", Interface: 1, PeerIP: "203.0.113.2", IKE: 2, Status: "DOWN", Router: "router-a"},
+			},
+		},
+		{Name: "gw-a", Type: "classic", Region: "us-central1", Network: "vpc-a", Description: "first"},
+	}
+	if err := cache.SaveVPNGateways("p1", gateways); err != nil {
+		t.Fatalf("SaveVPNGateways() error = %v", err)
+	}
+	if err := cache.SaveVPNGateways("p2", gateways[:1]); err != nil {
+		t.Fatalf("SaveVPNGateways() other project error = %v", err)
+	}
+
+	got, err := cache.ListVPNGateways("p1")
+	if err != nil {
+		t.Fatalf("ListVPNGateways() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListVPNGateways() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "gw-a" || got[1].Name != "gw-b" {
+		t.Fatalf("ListVPNGateways() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].Type != "classic" || len(got[0].IPs) != 0 {
+		t.Fatalf("ListVPNGateways()[0] = %+v", got[0])
+	}
+	if len(got[1].IPs) != 2 || got[1].IPs[0] != "34.1.1.1" {
+		t.Fatalf("ListVPNGateways()[1] ips = %+v", got[1].IPs)
+	}
+	if len(got[1].Tunnels) != 2 || got[1].Tunnels[0].Name != "tunnel-1" || got[1].Tunnels[0].PeerIP != "203.0.113.1" || got[1].Tunnels[1].Status != "DOWN" {
+		t.Fatalf("ListVPNGateways()[1] tunnels = %+v", got[1].Tunnels)
+	}
+	if got[1].Tunnels[0].IKE != 2 || got[1].Tunnels[0].Router != "router-a" || got[1].Tunnels[0].Interface != 0 {
+		t.Fatalf("ListVPNGateways()[1] tunnel details = %+v", got[1].Tunnels[0])
+	}
+	if got[1].Description != "second" {
+		t.Fatalf("ListVPNGateways()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListVPNGateways()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllVPNGateways()
+	if err != nil {
+		t.Fatalf("ListAllVPNGateways() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllVPNGateways() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllVPNGateways() not ordered by project: %+v", all)
+	}
+
+	g, err := cache.GetVPNGateway("p1", "europe-west1", "gw-b")
+	if err != nil {
+		t.Fatalf("GetVPNGateway() error = %v", err)
+	}
+	if g == nil || g.Type != "ha" || len(g.Tunnels) != 2 {
+		t.Fatalf("GetVPNGateway() = %+v", g)
+	}
+	g, err = cache.GetVPNGateway("p1", "europe-west1", "missing")
+	if err != nil {
+		t.Fatalf("GetVPNGateway() error = %v", err)
+	}
+	if g != nil {
+		t.Fatalf("GetVPNGateway() = %+v, want nil", g)
+	}
+
+	if err := cache.SaveVPNGateways("p1", gateways[:1]); err != nil {
+		t.Fatalf("SaveVPNGateways() replace error = %v", err)
+	}
+	got, err = cache.ListVPNGateways("p1")
+	if err != nil {
+		t.Fatalf("ListVPNGateways() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListVPNGateways() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListVPNGateways("p2")
+	if err != nil {
+		t.Fatalf("ListVPNGateways(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListVPNGateways(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+}

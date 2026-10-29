@@ -72,6 +72,8 @@ func init() {
 			{":routes", "show routes", viewRoutes},
 			{":firewalls", "show firewall rules", viewFirewalls},
 			{":dns", "show DNS zones", viewDNSZones},
+			{":routers", "show cloud routers", viewCloudRouters},
+			{":vpns", "show VPN gateways", viewVPNs},
 		}},
 		{key: '/', desc: "filter list", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -365,6 +367,18 @@ func (a *app) toggleAllProjects() {
 		} else {
 			a.setView(dnsZonesViewKind())
 		}
+	case viewCloudRouters, viewCloudRoutersAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(cloudRoutersViewKind())
+		}
+	case viewVPNs, viewVPNsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(vpnsViewKind())
+		}
 	}
 }
 
@@ -602,6 +616,10 @@ func (a *app) commandEnter() {
 		showClusters(a)
 	case text == "dns" || text == "zones":
 		showDNSZones(a)
+	case text == "routers" || text == "cloud-routers":
+		showCloudRouters(a)
+	case text == "vpns" || text == "vpn":
+		showVPNs(a)
 	case text == "projects":
 		a.setView(viewProjects)
 	default:

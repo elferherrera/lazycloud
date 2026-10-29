@@ -172,3 +172,18 @@ func GCPDNSZoneURL(projectID, zone string) string {
 	return "https://console.cloud.google.com/net-services/dns/zones/" +
 		url.PathEscape(zone) + "/records?project=" + url.QueryEscape(projectID)
 }
+
+func GCPCloudRouterURL(projectID, region, name string) string {
+	return "https://console.cloud.google.com/hybrid/routers/details/" +
+		url.PathEscape(region) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}
+
+func GCPVPNGatewayURL(projectID, region, name string, isHA bool) string {
+	isHAParam := "false"
+	if isHA {
+		isHAParam = "true"
+	}
+	return "https://console.cloud.google.com/hybrid/vpn/gateways/details/" +
+		url.PathEscape(region) + "/" + url.PathEscape(name) +
+		"?project=" + url.QueryEscape(projectID) + "&isHA=" + isHAParam
+}
