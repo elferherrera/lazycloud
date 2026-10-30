@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -18,7 +17,7 @@ func workloadRows(workloads []providers.Workload) [][]string {
 	return rows
 }
 
-func copyWorkload(a *app, projectID, cluster, kind, namespace, name string) ([]byte, error) {
+func workloadResource(a *app, projectID, cluster, kind, namespace, name string) (any, error) {
 	w, err := a.cache.GetWorkload(projectID, cluster, kind, namespace, name)
 	if err != nil {
 		return nil, err
@@ -26,7 +25,7 @@ func copyWorkload(a *app, projectID, cluster, kind, namespace, name string) ([]b
 	if w == nil {
 		return nil, fmt.Errorf("workload not found in cache")
 	}
-	return json.MarshalIndent(w, "", "  ")
+	return w, nil
 }
 
 var workloadsView = viewDef{
@@ -76,10 +75,10 @@ var workloadsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyWorkload(a, appState.ClusterProject, appState.Cluster,
-			a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 2).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return workloadResource(a, appState.ClusterProject, appState.Cluster, row[1], row[0], row[2])
 	},
+	samples: []any{providers.Workload{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPWorkloadOverviewURL(appState.ClusterProject, a.info.GetCell(row, 0).Text)
 	},

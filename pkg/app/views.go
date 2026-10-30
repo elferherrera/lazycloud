@@ -11,7 +11,8 @@ type viewDef struct {
 	status     func(a *app, count int) string
 	refresh    func(a *app)
 	selectRow  func(a *app, row, col int)
-	copyRow    func(a *app, row int) ([]byte, error)
+	resource   func(a *app, row []string) (any, error)
+	samples    []any
 	consoleURL func(a *app, row int) string
 }
 

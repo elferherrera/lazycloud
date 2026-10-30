@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -25,7 +24,7 @@ func bucketRowsAll(buckets []providers.Bucket) [][]string {
 	return rows
 }
 
-func copyBucket(a *app, projectID, name string) ([]byte, error) {
+func bucketResource(a *app, projectID, name string) (any, error) {
 	b, err := a.cache.GetBucket(projectID, name)
 	if err != nil {
 		return nil, err
@@ -33,7 +32,7 @@ func copyBucket(a *app, projectID, name string) ([]byte, error) {
 	if b == nil {
 		return nil, fmt.Errorf("bucket not found in cache")
 	}
-	return json.MarshalIndent(b, "", "  ")
+	return b, nil
 }
 
 var bucketsView = viewDef{
@@ -73,9 +72,10 @@ var bucketsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyBucket(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return bucketResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.Bucket{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPBucketURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -132,9 +132,10 @@ var bucketsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyBucket(a, a.info.GetCell(row, 6).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return bucketResource(a, row[6], row[0])
 	},
+	samples: []any{providers.Bucket{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPBucketURL(a.info.GetCell(row, 6).Text, a.info.GetCell(row, 0).Text)
 	},

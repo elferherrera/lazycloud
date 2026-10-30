@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -35,7 +34,7 @@ func cloudRouterRowsAll(routers []providers.CloudRouter) [][]string {
 	return rows
 }
 
-func copyCloudRouter(a *app, projectID, region, name string) ([]byte, error) {
+func cloudRouterResource(a *app, projectID, region, name string) (any, error) {
 	r, err := a.cache.GetCloudRouter(projectID, region, name)
 	if err != nil {
 		return nil, err
@@ -43,7 +42,7 @@ func copyCloudRouter(a *app, projectID, region, name string) ([]byte, error) {
 	if r == nil {
 		return nil, fmt.Errorf("cloud router not found in cache")
 	}
-	return json.MarshalIndent(r, "", "  ")
+	return r, nil
 }
 
 var cloudRoutersView = viewDef{
@@ -83,9 +82,10 @@ var cloudRoutersView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyCloudRouter(a, appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return cloudRouterResource(a, appState.ProjectID, row[1], row[0])
 	},
+	samples: []any{providers.CloudRouter{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPCloudRouterURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -142,9 +142,10 @@ var cloudRoutersAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyCloudRouter(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return cloudRouterResource(a, row[8], row[1], row[0])
 	},
+	samples: []any{providers.CloudRouter{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPCloudRouterURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -39,7 +38,7 @@ func clusterRowsAll(clusters []providers.Cluster) [][]string {
 	return rows
 }
 
-func copyCluster(a *app, projectID, name string) ([]byte, error) {
+func clusterResource(a *app, projectID, name string) (any, error) {
 	cl, err := a.cache.GetCluster(projectID, name)
 	if err != nil {
 		return nil, err
@@ -47,7 +46,7 @@ func copyCluster(a *app, projectID, name string) ([]byte, error) {
 	if cl == nil {
 		return nil, fmt.Errorf("cluster not found in cache")
 	}
-	return json.MarshalIndent(cl, "", "  ")
+	return cl, nil
 }
 
 var clustersView = viewDef{
@@ -87,9 +86,10 @@ var clustersView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyCluster(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return clusterResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.Cluster{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -146,9 +146,10 @@ var clustersAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyCluster(a, a.info.GetCell(row, 7).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return clusterResource(a, row[7], row[0])
 	},
+	samples: []any{providers.Cluster{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPClusterURL(a.info.GetCell(row, 7).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},

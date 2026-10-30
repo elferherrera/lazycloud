@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -25,7 +24,7 @@ func nodePoolRows(pools []providers.ClusterNodePool, nodes []providers.ClusterNo
 	return rows
 }
 
-func copyNodePool(a *app, projectID, cluster, name string) ([]byte, error) {
+func nodePoolResource(a *app, projectID, cluster, name string) (any, error) {
 	cl, err := a.cache.GetCluster(projectID, cluster)
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func copyNodePool(a *app, projectID, cluster, name string) ([]byte, error) {
 	}
 	for i := range cl.NodePools {
 		if cl.NodePools[i].Name == name {
-			return json.MarshalIndent(cl.NodePools[i], "", "  ")
+			return cl.NodePools[i], nil
 		}
 	}
 	return nil, fmt.Errorf("node pool not found in cache")
@@ -98,9 +97,10 @@ var nodePoolsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyNodePool(a, appState.ClusterProject, appState.Cluster, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return nodePoolResource(a, appState.ClusterProject, appState.Cluster, row[0])
 	},
+	samples: []any{providers.ClusterNodePool{}},
 	consoleURL: func(a *app, row int) string {
 		cl, _ := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
 		location := ""
@@ -133,7 +133,7 @@ func (a *app) applyNodePoolVMFilter(pool string) {
 		}
 	}
 	appState.CmdMode = modeFilter
-	a.filterBase = vmRows(matched)
+	a.setFilterBase(vmRows(matched))
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")
 	a.cmd.SetText("")

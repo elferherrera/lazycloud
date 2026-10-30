@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -27,7 +26,7 @@ func firewallRowsAll(rules []providers.FirewallRule) [][]string {
 	return rows
 }
 
-func copyFirewallRule(a *app, projectID, name string) ([]byte, error) {
+func firewallRuleResource(a *app, projectID, name string) (any, error) {
 	r, err := a.cache.GetFirewallRule(projectID, name)
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func copyFirewallRule(a *app, projectID, name string) ([]byte, error) {
 	if r == nil {
 		return nil, fmt.Errorf("firewall rule not found in cache")
 	}
-	return json.MarshalIndent(r, "", "  ")
+	return r, nil
 }
 
 var firewallsView = viewDef{
@@ -75,9 +74,10 @@ var firewallsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyFirewallRule(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return firewallRuleResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.FirewallRule{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPFirewallsURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -134,9 +134,10 @@ var firewallsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyFirewallRule(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return firewallRuleResource(a, row[8], row[0])
 	},
+	samples: []any{providers.FirewallRule{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPFirewallsURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
 	},

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -34,7 +33,7 @@ func serviceAccountRowsAll(accounts []providers.ServiceAccount) [][]string {
 	return rows
 }
 
-func copyServiceAccount(a *app, projectID, email string) ([]byte, error) {
+func serviceAccountResource(a *app, projectID, email string) (any, error) {
 	sa, err := a.cache.GetServiceAccount(projectID, email)
 	if err != nil {
 		return nil, err
@@ -42,7 +41,7 @@ func copyServiceAccount(a *app, projectID, email string) ([]byte, error) {
 	if sa == nil {
 		return nil, fmt.Errorf("service account not found in cache")
 	}
-	return json.MarshalIndent(sa, "", "  ")
+	return sa, nil
 }
 
 var accountsView = viewDef{
@@ -82,9 +81,10 @@ var accountsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyServiceAccount(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return serviceAccountResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.ServiceAccount{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPServiceAccountURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -141,9 +141,10 @@ var accountsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyServiceAccount(a, a.info.GetCell(row, 5).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return serviceAccountResource(a, row[5], row[0])
 	},
+	samples: []any{providers.ServiceAccount{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPServiceAccountURL(a.info.GetCell(row, 5).Text, a.info.GetCell(row, 0).Text)
 	},

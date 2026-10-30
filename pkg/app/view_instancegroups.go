@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -27,7 +26,7 @@ func instanceGroupRowsAll(groups []providers.InstanceGroup) [][]string {
 	return rows
 }
 
-func copyInstanceGroup(a *app, projectID, zone, name string) ([]byte, error) {
+func instanceGroupResource(a *app, projectID, zone, name string) (any, error) {
 	g, err := a.cache.GetInstanceGroup(projectID, zone, name)
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func copyInstanceGroup(a *app, projectID, zone, name string) ([]byte, error) {
 	if g == nil {
 		return nil, fmt.Errorf("instance group not found in cache")
 	}
-	return json.MarshalIndent(g, "", "  ")
+	return g, nil
 }
 
 var instanceGroupsView = viewDef{
@@ -75,9 +74,10 @@ var instanceGroupsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyInstanceGroup(a, appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return instanceGroupResource(a, appState.ProjectID, row[1], row[0])
 	},
+	samples: []any{providers.InstanceGroup{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPInstanceGroupURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -134,9 +134,10 @@ var instanceGroupsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyInstanceGroup(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return instanceGroupResource(a, row[8], row[1], row[0])
 	},
+	samples: []any{providers.InstanceGroup{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPInstanceGroupURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -229,7 +230,7 @@ func (a *app) applyInstanceGroupVMFilter(group string, members []providers.Insta
 	}
 	matched := vmsInInstanceGroup(vms, members)
 	appState.CmdMode = modeFilter
-	a.filterBase = vmRows(matched)
+	a.setFilterBase(vmRows(matched))
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")
 	a.cmd.SetText("")

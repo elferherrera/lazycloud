@@ -25,10 +25,11 @@ type app struct {
 	helpRow   *tview.Flex
 	screen    tcell.Screen
 
-	viewHeaders []string
-	allRows     [][]string
-	filterBase  [][]string
-	visibleRows [][]string
+	viewHeaders  []string
+	allRows      [][]string
+	filterBase   [][]string
+	visibleRows  [][]string
+	rowResources []any
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -98,15 +99,51 @@ func (a *app) updateInfoTitle() {
 
 func (a *app) applyFilter() {
 	include, excludes := splitFilterQuery(strings.ToLower(a.cmd.GetText()))
+	samples := views[appState.ViewKind].samples
+	includeTerm := parseFilterTerm(include, samples)
+	excludeTerms := make([]filterTerm, len(excludes))
+	for i, exclude := range excludes {
+		excludeTerms[i] = parseFilterTerm(exclude, samples)
+	}
+	var resources []any
+	if hasDetailTerm(includeTerm) || hasDetailTerm(excludeTerms...) {
+		resources = a.resolveRowResources()
+	}
 	filtered := make([][]string, 0, len(a.filterBase))
-	for _, r := range a.filterBase {
-		if rowMatchesFilter(r, include, excludes) {
+	for i, r := range a.filterBase {
+		var res any
+		if resources != nil && i < len(resources) {
+			res = resources[i]
+		}
+		if rowMatches(r, res, includeTerm, excludeTerms) {
 			filtered = append(filtered, r)
 		}
 	}
 	a.visibleRows = filtered
 	populateInfoPanel(a.info, a.viewHeaders, filtered)
 	a.updateInfoTitle()
+}
+
+func (a *app) resolveRowResources() []any {
+	if a.rowResources != nil {
+		return a.rowResources
+	}
+	def := views[appState.ViewKind]
+	resources := make([]any, len(a.filterBase))
+	if def.resource != nil {
+		for i, row := range a.filterBase {
+			if res, err := def.resource(a, row); err == nil {
+				resources[i] = res
+			}
+		}
+	}
+	a.rowResources = resources
+	return resources
+}
+
+func (a *app) setFilterBase(rows [][]string) {
+	a.filterBase = rows
+	a.rowResources = nil
 }
 
 func splitFilterQuery(query string) (string, []string) {
@@ -122,27 +159,6 @@ func splitFilterQuery(query string) (string, []string) {
 		}
 	}
 	return include, excludes
-}
-
-func rowMatchesFilter(row []string, include string, excludes []string) bool {
-	matched := false
-	for _, val := range row {
-		if strings.Contains(strings.ToLower(val), include) {
-			matched = true
-			break
-		}
-	}
-	if !matched {
-		return false
-	}
-	for _, exclude := range excludes {
-		for _, val := range row {
-			if strings.Contains(strings.ToLower(val), exclude) {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func (a *app) refreshShortcuts() {
@@ -165,7 +181,7 @@ func (a *app) setView(kind viewKind) {
 	a.refreshShortcuts()
 	a.viewHeaders = def.headers
 	a.allRows = rows
-	a.filterBase = rows
+	a.setFilterBase(rows)
 	a.cmd.SetText("")
 	a.applyFilter()
 	if def.status != nil {
@@ -174,12 +190,12 @@ func (a *app) setView(kind viewKind) {
 }
 
 func (a *app) enterFilterMode() {
-	a.statusText("[yellow]filter mode ('- x' excludes x)[-]")
+	a.statusText("[yellow]filter mode ('- x' excludes x, 'Field v' or 'List.*.Sub v' filters details)[-]")
 }
 
 func (a *app) exitFilterMode() {
 	appState.CmdMode = modeCmd
-	a.filterBase = a.allRows
+	a.setFilterBase(a.allRows)
 	a.statusText("")
 }
 

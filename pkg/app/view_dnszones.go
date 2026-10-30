@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -25,7 +24,7 @@ func dnsZoneRowsAll(zones []providers.DNSZone) [][]string {
 	return rows
 }
 
-func copyDNSZone(a *app, projectID, name string) ([]byte, error) {
+func dnsZoneResource(a *app, projectID, name string) (any, error) {
 	z, err := a.cache.GetDNSZone(projectID, name)
 	if err != nil {
 		return nil, err
@@ -33,7 +32,7 @@ func copyDNSZone(a *app, projectID, name string) ([]byte, error) {
 	if z == nil {
 		return nil, fmt.Errorf("dns zone not found in cache")
 	}
-	return json.MarshalIndent(z, "", "  ")
+	return z, nil
 }
 
 var dnsZonesView = viewDef{
@@ -73,9 +72,10 @@ var dnsZonesView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyDNSZone(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return dnsZoneResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.DNSZone{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPDNSZoneURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -132,9 +132,10 @@ var dnsZonesAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyDNSZone(a, a.info.GetCell(row, 5).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return dnsZoneResource(a, row[5], row[0])
 	},
+	samples: []any{providers.DNSZone{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPDNSZoneURL(a.info.GetCell(row, 5).Text, a.info.GetCell(row, 0).Text)
 	},

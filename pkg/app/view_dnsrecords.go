@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,7 +18,7 @@ func dnsRecordRows(records []providers.DNSRecord) [][]string {
 	return rows
 }
 
-func copyDNSRecord(a *app, projectID, zone, name, recordType string) ([]byte, error) {
+func dnsRecordResource(a *app, projectID, zone, name, recordType string) (any, error) {
 	r, err := a.cache.GetDNSRecord(projectID, zone, name, recordType)
 	if err != nil {
 		return nil, err
@@ -27,7 +26,7 @@ func copyDNSRecord(a *app, projectID, zone, name, recordType string) ([]byte, er
 	if r == nil {
 		return nil, fmt.Errorf("dns record not found in cache")
 	}
-	return json.MarshalIndent(r, "", "  ")
+	return r, nil
 }
 
 var dnsRecordsView = viewDef{
@@ -68,10 +67,10 @@ var dnsRecordsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyDNSRecord(a, appState.ZoneProject, appState.Zone,
-			a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return dnsRecordResource(a, appState.ZoneProject, appState.Zone, row[0], row[1])
 	},
+	samples: []any{providers.DNSRecord{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPDNSZoneURL(appState.ZoneProject, appState.Zone)
 	},

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -134,13 +133,10 @@ var lbsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		lb, err := resolveLB(a, appState.ProjectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			return nil, err
-		}
-		return json.MarshalIndent(lb, "", "  ")
+	resource: func(a *app, row []string) (any, error) {
+		return resolveLB(a, appState.ProjectID, row[2], row[0])
 	},
+	samples: []any{providers.LoadBalancer{}},
 	consoleURL: func(a *app, row int) string {
 		return lbConsoleURL(a.cache, appState.ProjectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -191,14 +187,10 @@ var lbsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		projectID := a.info.GetCell(row, 7).Text
-		lb, err := resolveLB(a, projectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)
-		if err != nil {
-			return nil, err
-		}
-		return json.MarshalIndent(lb, "", "  ")
+	resource: func(a *app, row []string) (any, error) {
+		return resolveLB(a, row[7], row[2], row[0])
 	},
+	samples: []any{providers.LoadBalancer{}},
 	consoleURL: func(a *app, row int) string {
 		projectID := a.info.GetCell(row, 7).Text
 		return lbConsoleURL(a.cache, projectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 0).Text)

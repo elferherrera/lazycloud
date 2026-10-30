@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ func vpnGatewayRowsAll(gateways []providers.VPNGateway) [][]string {
 	return rows
 }
 
-func copyVPNGateway(a *app, projectID, region, name string) ([]byte, error) {
+func vpnGatewayResource(a *app, projectID, region, name string) (any, error) {
 	g, err := a.cache.GetVPNGateway(projectID, region, name)
 	if err != nil {
 		return nil, err
@@ -38,7 +37,7 @@ func copyVPNGateway(a *app, projectID, region, name string) ([]byte, error) {
 	if g == nil {
 		return nil, fmt.Errorf("vpn gateway not found in cache")
 	}
-	return json.MarshalIndent(g, "", "  ")
+	return g, nil
 }
 
 var vpnsView = viewDef{
@@ -78,9 +77,10 @@ var vpnsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyVPNGateway(a, appState.ProjectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 1).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return vpnGatewayResource(a, appState.ProjectID, row[2], row[1])
 	},
+	samples: []any{providers.VPNGateway{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPVPNGatewayURL(appState.ProjectID, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text == vpnKindHA)
 	},
@@ -137,9 +137,10 @@ var vpnsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyVPNGateway(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 1).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return vpnGatewayResource(a, row[8], row[2], row[1])
 	},
+	samples: []any{providers.VPNGateway{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPVPNGatewayURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 2).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text == vpnKindHA)
 	},

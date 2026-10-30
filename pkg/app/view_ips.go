@@ -1,13 +1,27 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
 )
+
+func ipAddressResource(a *app, projectID, name, address string) (any, error) {
+	ips, err := a.cache.GetIPAddresses(projectID, name, address)
+	if err != nil {
+		return nil, err
+	}
+	switch len(ips) {
+	case 0:
+		return nil, fmt.Errorf("IP address not found in cache")
+	case 1:
+		return ips[0], nil
+	default:
+		return ips, nil
+	}
+}
 
 func ipAddressRows(ips []providers.IPAddress) [][]string {
 	rows := make([][]string, 0, len(ips))
@@ -58,20 +72,10 @@ var ipsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		ips, err := a.cache.GetIPAddresses(appState.ProjectID, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
-		if err != nil {
-			return nil, err
-		}
-		switch len(ips) {
-		case 0:
-			return nil, fmt.Errorf("IP address not found in cache")
-		case 1:
-			return json.MarshalIndent(ips[0], "", "  ")
-		default:
-			return json.MarshalIndent(ips, "", "  ")
-		}
+	resource: func(a *app, row []string) (any, error) {
+		return ipAddressResource(a, appState.ProjectID, row[0], row[1])
 	},
+	samples: []any{providers.IPAddress{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPAddressesURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -168,21 +172,10 @@ var ipsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		projectID := a.info.GetCell(row, 5).Text
-		ips, err := a.cache.GetIPAddresses(projectID, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
-		if err != nil {
-			return nil, err
-		}
-		switch len(ips) {
-		case 0:
-			return nil, fmt.Errorf("IP address not found in cache")
-		case 1:
-			return json.MarshalIndent(ips[0], "", "  ")
-		default:
-			return json.MarshalIndent(ips, "", "  ")
-		}
+	resource: func(a *app, row []string) (any, error) {
+		return ipAddressResource(a, row[5], row[0], row[1])
 	},
+	samples: []any{providers.IPAddress{}},
 	consoleURL: func(a *app, row int) string {
 		projectID := a.info.GetCell(row, 5).Text
 		return providers.GCPAddressesURL(projectID, a.info.GetCell(row, 0).Text)

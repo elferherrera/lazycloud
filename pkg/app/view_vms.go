@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,7 +35,7 @@ func vmRowsAll(vms []providers.VM) [][]string {
 	return rows
 }
 
-func copyVM(a *app, projectID, zone, name string) ([]byte, error) {
+func vmResource(a *app, projectID, zone, name string) (any, error) {
 	vm, err := a.cache.GetVM(projectID, zone, name)
 	if err != nil {
 		return nil, err
@@ -44,7 +43,7 @@ func copyVM(a *app, projectID, zone, name string) ([]byte, error) {
 	if vm == nil {
 		return nil, fmt.Errorf("VM not found in cache")
 	}
-	return json.MarshalIndent(vm, "", "  ")
+	return vm, nil
 }
 
 var vmsView = viewDef{
@@ -92,9 +91,10 @@ var vmsView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyVM(a, appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return vmResource(a, appState.ProjectID, row[1], row[0])
 	},
+	samples: []any{providers.VM{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPVMURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
@@ -163,9 +163,10 @@ var vmsAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyVM(a, a.info.GetCell(row, 6).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return vmResource(a, row[6], row[1], row[0])
 	},
+	samples: []any{providers.VM{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPVMURL(a.info.GetCell(row, 6).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},

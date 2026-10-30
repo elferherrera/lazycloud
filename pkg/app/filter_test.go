@@ -2,6 +2,7 @@ package app
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -18,13 +19,13 @@ func newFilterTestApp(t *testing.T) *app {
 	}
 	t.Cleanup(func() { cache.Close() })
 	a := &app{
-		tapp:     tview.NewApplication(),
-		cmd:      tview.NewInputField(),
-		info:     newInfoPanel(),
-		summary:  newSummaryPanel(),
-		status:   tview.NewTextView().SetDynamicColors(true),
-		pages:    tview.NewPages(),
-		cache:    cache,
+		tapp:      tview.NewApplication(),
+		cmd:       tview.NewInputField(),
+		info:      newInfoPanel(),
+		summary:   newSummaryPanel(),
+		status:    tview.NewTextView().SetDynamicColors(true),
+		pages:     tview.NewPages(),
+		cache:     cache,
 		shortcuts: newShortcutsPanel(),
 	}
 	_, a.helpRow = newHelpOverlay(a.shortcuts)
@@ -44,7 +45,9 @@ func newFilterTestApp(t *testing.T) *app {
 	vms := []providers.VM{
 		{ProjectID: "p1", Name: "gke-cl-1-pool-a-aaa", Zone: "europe-west2-b", Status: "RUNNING", Labels: map[string]string{"goog-k8s-node-pool-name": "pool-a"}},
 		{ProjectID: "p1", Name: "gke-cl-1-pool-a-bbb", Zone: "europe-west2-b", Status: "RUNNING", Labels: map[string]string{"goog-k8s-node-pool-name": "pool-a"}},
-		{ProjectID: "p1", Name: "other-vm", Zone: "europe-west2-c", Status: "RUNNING", Labels: map[string]string{"env": "prod"}},
+		{ProjectID: "p1", Name: "other-vm", Zone: "europe-west2-c", Status: "RUNNING", Labels: map[string]string{"env": "prod"},
+			ServiceAccounts: []providers.VMServiceAccount{{Email: "vm-sa@p1.iam.gserviceaccount.com"}},
+			DataDisks:       []providers.VMDisk{{Name: "data-1", DeviceName: "data-1", Mode: "READ_WRITE", SizeGB: 100}}},
 	}
 	if err := a.cache.SaveVMs("p1", vms); err != nil {
 		t.Fatalf("SaveVMs() error = %v", err)
@@ -187,9 +190,129 @@ func TestApplyFilterDashWithoutSpaceIsLiteral(t *testing.T) {
 	a.applyFilter()
 
 	if len(a.visibleRows) != 1 {
-		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+		t.Fatalf("visibleRows len = %d, want 1", len(a.visibleRows))
 	}
 	if a.visibleRows[0][0] != "gke-cl-1-pool-a-aaa" {
 		t.Fatalf("row = %q, want gke-cl-1-pool-a-aaa", a.visibleRows[0][0])
+	}
+}
+
+func TestSplitDetailPath(t *testing.T) {
+	for _, tc := range []struct {
+		head string
+		want []string
+		ok   bool
+	}{
+		{head: "labels", want: []string{"labels"}, ok: true},
+		{head: "labels.env", want: []string{"labels", "env"}, ok: true},
+		{head: "ServiceAccounts.*.Email", want: []string{"ServiceAccounts", "*", "Email"}, ok: true},
+		{head: "DataDisks.*.SizeGB", want: []string{"DataDisks", "*", "SizeGB"}, ok: true},
+		{head: "a.b.c", want: []string{"a", "b", "c"}, ok: true},
+		{head: "labels.env.x", want: []string{"labels", "env", "x"}, ok: true},
+		{head: "", ok: false},
+		{head: ".labels", ok: false},
+		{head: "labels.", ok: false},
+		{head: "*.labels", ok: false},
+		{head: "labels.*", ok: false},
+		{head: "labels.**.env", ok: false},
+		{head: "*labels", ok: false},
+		{head: "labels.*a.env", ok: false},
+	} {
+		got, ok := splitDetailPath(tc.head)
+		if ok != tc.ok {
+			t.Fatalf("splitDetailPath(%q) ok = %v, want %v", tc.head, ok, tc.ok)
+		}
+		if ok && !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("splitDetailPath(%q) = %q, want %q", tc.head, got, tc.want)
+		}
+	}
+}
+
+func applyVMsFilter(t *testing.T, a *app, query string) [][]string {
+	t.Helper()
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText(query)
+	a.applyFilter()
+	return a.visibleRows
+}
+
+func TestApplyFilterDetailLabels(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "Labels env=prod")
+	if len(rows) != 1 || rows[0][0] != "other-vm" {
+		t.Fatalf("rows = %q, want only other-vm", rows)
+	}
+	rows = applyVMsFilter(t, a, "labels pool-a")
+	if len(rows) != 2 {
+		t.Fatalf("rows len = %d, want 2: %q", len(rows), rows)
+	}
+}
+
+func TestApplyFilterDetailMapKey(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "labels.env prod")
+	if len(rows) != 1 || rows[0][0] != "other-vm" {
+		t.Fatalf("rows = %q, want only other-vm", rows)
+	}
+	rows = applyVMsFilter(t, a, "labels.env staging")
+	if len(rows) != 0 {
+		t.Fatalf("rows len = %d, want 0", len(rows))
+	}
+}
+
+func TestApplyFilterDetailServiceAccounts(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "ServiceAccounts.*.Email vm-sa")
+	if len(rows) != 1 || rows[0][0] != "other-vm" {
+		t.Fatalf("rows = %q, want only other-vm", rows)
+	}
+	rows = applyVMsFilter(t, a, "ServiceAccount.*.Email vm-sa")
+	if len(rows) != 1 || rows[0][0] != "other-vm" {
+		t.Fatalf("rows = %q, want only other-vm (singular alias)", rows)
+	}
+}
+
+func TestApplyFilterDetailDataDisks(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "DataDisks.*.SizeGB 100")
+	if len(rows) != 1 || rows[0][0] != "other-vm" {
+		t.Fatalf("rows = %q, want only other-vm", rows)
+	}
+	rows = applyVMsFilter(t, a, "datadisks.*.sizegb 50")
+	if len(rows) != 0 {
+		t.Fatalf("rows len = %d, want 0", len(rows))
+	}
+}
+
+func TestApplyFilterDetailStatus(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "status running")
+	if len(rows) != 3 {
+		t.Fatalf("rows len = %d, want 3", len(rows))
+	}
+}
+
+func TestApplyFilterDetailUnknownFieldFallsBackToPlain(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "env prod")
+	if len(rows) != 0 {
+		t.Fatalf("rows len = %d, want 0 (plain substring matches no cell)", len(rows))
+	}
+}
+
+func TestApplyFilterDetailExclude(t *testing.T) {
+	a := newFilterTestApp(t)
+	rows := applyVMsFilter(t, a, "europe - labels env=prod")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %q, want the two gke VMs", rows)
+	}
+	for _, row := range rows {
+		if row[0] == "other-vm" {
+			t.Fatalf("other-vm should be excluded by the detail exclusion: %q", row)
+		}
 	}
 }

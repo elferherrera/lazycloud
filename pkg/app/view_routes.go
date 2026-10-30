@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -27,7 +26,7 @@ func routeRowsAll(routes []providers.Route) [][]string {
 	return rows
 }
 
-func copyRoute(a *app, projectID, name string) ([]byte, error) {
+func routeResource(a *app, projectID, name string) (any, error) {
 	r, err := a.cache.GetRoute(projectID, name)
 	if err != nil {
 		return nil, err
@@ -35,7 +34,7 @@ func copyRoute(a *app, projectID, name string) ([]byte, error) {
 	if r == nil {
 		return nil, fmt.Errorf("route not found in cache")
 	}
-	return json.MarshalIndent(r, "", "  ")
+	return r, nil
 }
 
 var routesView = viewDef{
@@ -75,9 +74,10 @@ var routesView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyRoute(a, appState.ProjectID, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return routeResource(a, appState.ProjectID, row[0])
 	},
+	samples: []any{providers.Route{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPRoutesURL(appState.ProjectID, a.info.GetCell(row, 0).Text)
 	},
@@ -134,9 +134,10 @@ var routesAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		return copyRoute(a, a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		return routeResource(a, row[8], row[0])
 	},
+	samples: []any{providers.Route{}},
 	consoleURL: func(a *app, row int) string {
 		return providers.GCPRoutesURL(a.info.GetCell(row, 8).Text, a.info.GetCell(row, 0).Text)
 	},

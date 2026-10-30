@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	neturl "net/url"
 
@@ -67,16 +66,17 @@ var projectsView = viewDef{
 			a.logger.Error("projects", appState.ProjectID, "Failed to save last project: "+err.Error())
 		}
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		p, err := a.cache.GetProject(a.info.GetCell(row, 0).Text)
+	resource: func(a *app, row []string) (any, error) {
+		p, err := a.cache.GetProject(row[0])
 		if err != nil {
 			return nil, err
 		}
 		if p == nil {
 			return nil, fmt.Errorf("project not found in cache")
 		}
-		return json.MarshalIndent(p, "", "  ")
+		return p, nil
 	},
+	samples: []any{providers.Project{}},
 	consoleURL: func(a *app, row int) string {
 		return "https://console.cloud.google.com/home/dashboard?project=" +
 			neturl.QueryEscape(a.info.GetCell(row, 0).Text)

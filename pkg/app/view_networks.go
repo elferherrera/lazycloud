@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -50,6 +49,31 @@ func networkRowsAll(networks []providers.Network, subnetworks []providers.Subnet
 	return rows
 }
 
+func networkResource(a *app, projectID, kind, region, name string) (any, error) {
+	switch kind {
+	case networkKindVPC:
+		n, err := a.cache.GetNetwork(projectID, name)
+		if err != nil {
+			return nil, err
+		}
+		if n == nil {
+			return nil, fmt.Errorf("network not found in cache")
+		}
+		return n, nil
+	case networkKindSubnet:
+		s, err := a.cache.GetSubnetwork(projectID, region, name)
+		if err != nil {
+			return nil, err
+		}
+		if s == nil {
+			return nil, fmt.Errorf("subnetwork not found in cache")
+		}
+		return s, nil
+	default:
+		return nil, fmt.Errorf("unknown network kind %q", kind)
+	}
+}
+
 var networksView = viewDef{
 	title:   "Networks",
 	headers: []string{"Type", "Name", "Region", "Network", "IP Range", "Routing", "Status", "Updated"},
@@ -96,33 +120,10 @@ var networksView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		kind := a.info.GetCell(row, 0).Text
-		name := a.info.GetCell(row, 1).Text
-		region := a.info.GetCell(row, 2).Text
-		switch kind {
-		case networkKindVPC:
-			n, err := a.cache.GetNetwork(appState.ProjectID, name)
-			if err != nil {
-				return nil, err
-			}
-			if n == nil {
-				return nil, fmt.Errorf("network not found in cache")
-			}
-			return json.MarshalIndent(n, "", "  ")
-		case networkKindSubnet:
-			s, err := a.cache.GetSubnetwork(appState.ProjectID, region, name)
-			if err != nil {
-				return nil, err
-			}
-			if s == nil {
-				return nil, fmt.Errorf("subnetwork not found in cache")
-			}
-			return json.MarshalIndent(s, "", "  ")
-		default:
-			return nil, fmt.Errorf("unknown network kind %q", kind)
-		}
+	resource: func(a *app, row []string) (any, error) {
+		return networkResource(a, appState.ProjectID, row[0], row[2], row[1])
 	},
+	samples: []any{providers.Network{}, providers.Subnetwork{}},
 	consoleURL: func(a *app, row int) string {
 		name := a.info.GetCell(row, 1).Text
 		region := a.info.GetCell(row, 2).Text
@@ -196,34 +197,10 @@ var networksAllView = viewDef{
 			})
 		}()
 	},
-	copyRow: func(a *app, row int) ([]byte, error) {
-		projectID := a.info.GetCell(row, 8).Text
-		kind := a.info.GetCell(row, 0).Text
-		name := a.info.GetCell(row, 1).Text
-		region := a.info.GetCell(row, 2).Text
-		switch kind {
-		case networkKindVPC:
-			n, err := a.cache.GetNetwork(projectID, name)
-			if err != nil {
-				return nil, err
-			}
-			if n == nil {
-				return nil, fmt.Errorf("network not found in cache")
-			}
-			return json.MarshalIndent(n, "", "  ")
-		case networkKindSubnet:
-			s, err := a.cache.GetSubnetwork(projectID, region, name)
-			if err != nil {
-				return nil, err
-			}
-			if s == nil {
-				return nil, fmt.Errorf("subnetwork not found in cache")
-			}
-			return json.MarshalIndent(s, "", "  ")
-		default:
-			return nil, fmt.Errorf("unknown network kind %q", kind)
-		}
+	resource: func(a *app, row []string) (any, error) {
+		return networkResource(a, row[8], row[0], row[2], row[1])
 	},
+	samples: []any{providers.Network{}, providers.Subnetwork{}},
 	consoleURL: func(a *app, row int) string {
 		projectID := a.info.GetCell(row, 8).Text
 		name := a.info.GetCell(row, 1).Text

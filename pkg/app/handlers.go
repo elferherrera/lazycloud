@@ -80,7 +80,7 @@ func init() {
 			{":vpns", "show VPN gateways", viewVPNs},
 			{":igs", "show instance groups", viewInstanceGroups},
 		}},
-		{key: '/', desc: "filter list ('- x' excludes x)", run: (*app).startFilter},
+		{key: '/', desc: "filter list ('- x' excludes x, field value)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
@@ -298,14 +298,14 @@ func (a *app) focusCmd() {
 
 func (a *app) startFilter() {
 	if appState.CmdMode == modeFilter && a.tapp.GetFocus() == a.info {
-		a.filterBase = a.visibleRows
+		a.setFilterBase(a.visibleRows)
 		a.cmd.SetText("")
 	} else {
 		if appState.CmdMode == modeFilter {
 			a.exitFilterMode()
 		}
 		appState.CmdMode = modeFilter
-		a.filterBase = a.allRows
+		a.setFilterBase(a.allRows)
 		a.cmd.SetBorder(true)
 		a.cmd.SetLabel(" / ")
 		a.cmd.SetText("")
@@ -474,12 +474,29 @@ func (a *app) refreshView() {
 	views[appState.ViewKind].refresh(a)
 }
 
+func (a *app) tableRowCells(row int) []string {
+	cells := make([]string, a.info.GetColumnCount())
+	for c := range cells {
+		cells[c] = a.info.GetCell(row, c).Text
+	}
+	return cells
+}
+
 func (a *app) copyRow() {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {
 		return
 	}
-	jsonBytes, err := views[appState.ViewKind].copyRow(a, row)
+	def := views[appState.ViewKind]
+	if def.resource == nil {
+		return
+	}
+	res, err := def.resource(a, a.tableRowCells(row))
+	if err != nil {
+		a.statusText("[red]Failed to copy: [-]" + err.Error())
+		return
+	}
+	jsonBytes, err := json.MarshalIndent(res, "", "  ")
 	if err != nil {
 		a.statusText("[red]Failed to copy: [-]" + err.Error())
 		return
@@ -497,12 +514,17 @@ func (a *app) showRowDetails() {
 		return
 	}
 	def := views[appState.ViewKind]
-	if def.copyRow == nil {
+	if def.resource == nil {
 		return
 	}
-	jsonBytes, err := def.copyRow(a, row)
+	res, err := def.resource(a, a.tableRowCells(row))
 	if err != nil {
 		a.statusText("[red]Failed to load row details: [-]" + err.Error())
+		return
+	}
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		a.statusText("[red]Failed to parse row details: [-]" + err.Error())
 		return
 	}
 	var data any
