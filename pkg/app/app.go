@@ -98,15 +98,18 @@ func (a *app) updateInfoTitle() {
 }
 
 func (a *app) applyFilter() {
-	include, excludes := splitFilterQuery(strings.ToLower(a.cmd.GetText()))
+	includes, excludes := splitFilterQuery(strings.ToLower(a.cmd.GetText()))
 	samples := views[appState.ViewKind].samples
-	includeTerm := parseFilterTerm(include, samples)
+	includeTerms := make([]filterTerm, 0, len(includes))
+	for _, include := range includes {
+		includeTerms = append(includeTerms, parseFilterTerm(include, samples))
+	}
 	excludeTerms := make([]filterTerm, len(excludes))
 	for i, exclude := range excludes {
 		excludeTerms[i] = parseFilterTerm(exclude, samples)
 	}
 	var resources []any
-	if hasDetailTerm(includeTerm) || hasDetailTerm(excludeTerms...) {
+	if hasDetailTerm(includeTerms...) || hasDetailTerm(excludeTerms...) {
 		resources = a.resolveRowResources()
 	}
 	filtered := make([][]string, 0, len(a.filterBase))
@@ -115,7 +118,7 @@ func (a *app) applyFilter() {
 		if resources != nil && i < len(resources) {
 			res = resources[i]
 		}
-		if rowMatches(r, res, includeTerm, excludeTerms) {
+		if rowMatches(r, res, includeTerms, excludeTerms) {
 			filtered = append(filtered, r)
 		}
 	}
@@ -146,19 +149,25 @@ func (a *app) setFilterBase(rows [][]string) {
 	a.rowResources = nil
 }
 
-func splitFilterQuery(query string) (string, []string) {
-	if !strings.Contains(query, "- ") {
-		return query, nil
-	}
-	parts := strings.Split(query, "- ")
-	include := strings.TrimSpace(parts[0])
-	excludes := make([]string, 0, len(parts)-1)
-	for _, part := range parts[1:] {
-		if term := strings.TrimSpace(part); term != "" {
-			excludes = append(excludes, term)
+func splitFilterQuery(query string) ([]string, []string) {
+	includesPart := query
+	var excludeParts []string
+	if strings.Contains(query, "- ") {
+		parts := strings.Split(query, "- ")
+		includesPart = parts[0]
+		for _, part := range parts[1:] {
+			if term := strings.TrimSpace(part); term != "" {
+				excludeParts = append(excludeParts, term)
+			}
 		}
 	}
-	return include, excludes
+	includes := make([]string, 0, 1)
+	for _, part := range strings.Split(includesPart, "+ ") {
+		if term := strings.TrimSpace(part); term != "" {
+			includes = append(includes, term)
+		}
+	}
+	return includes, excludeParts
 }
 
 func (a *app) refreshShortcuts() {
@@ -190,7 +199,7 @@ func (a *app) setView(kind viewKind) {
 }
 
 func (a *app) enterFilterMode() {
-	a.statusText("[yellow]filter mode (Tab cycles details, '- x' excludes x)[-]")
+	a.statusText("[yellow]filter mode (Tab cycles details, '+ x' requires x, '- x' excludes x)[-]")
 }
 
 func (a *app) exitFilterMode() {

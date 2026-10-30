@@ -139,8 +139,11 @@ Press `/` to filter the current list. Matching is case-insensitive and the list 
 | `Labels.env prod` | rows whose `env` label contains `prod` |
 | `ServiceAccounts.*.Email vm-sa` | rows with any service account whose email contains `vm-sa` |
 | `DataDisks.*.SizeGB 100` | rows with any data disk whose size contains `100` |
+| `web + running` | rows matching both `web` and `running` |
 | `europe - Labels env=prod` | `europe`, excluding rows labeled `env=prod` |
 
 A term is a **detail filter** when its first token (before the first space) is a field path of the view's resource: it matches only that field, not the visible cells. Paths are `.`-separated, descend lists with `*` (any element), and reach map values via their key (`Labels.env`). Field names are case-insensitive with a singular/plural alias (`ServiceAccount` ≡ `ServiceAccounts`), and if the first token is not a valid field path the whole term falls back to a plain substring match.
+
+A `+ ` followed by a space starts an **include term**: a row is only shown when it matches every include term, so `web + running` requires both (`Labels env=prod + running` combines detail and plain includes too). Terms can be combined with `- ` exclusions (`europe + running - other`). A `+` without a following space is matched literally, like a substring.
 
 `Tab` completes and cycles detail paths: a partial path completes to the full one (`Servi` → `ServiceAccounts`), further presses rotate through every available path of the view, and text that matches no path gets the first path prepended. `Backtab` cycles backwards. `Enter` applies the filter and returns focus to the table (press `/` again to narrow further within the visible rows); `Esc` clears the filter.

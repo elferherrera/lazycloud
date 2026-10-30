@@ -174,9 +174,11 @@ func unwrap(v reflect.Value) reflect.Value {
 	return v
 }
 
-func rowMatches(row []string, res any, include filterTerm, excludes []filterTerm) bool {
-	if !termMatches(row, res, include) {
-		return false
+func rowMatches(row []string, res any, includes []filterTerm, excludes []filterTerm) bool {
+	for _, include := range includes {
+		if !termMatches(row, res, include) {
+			return false
+		}
 	}
 	for _, exclude := range excludes {
 		if termMatches(row, res, exclude) {

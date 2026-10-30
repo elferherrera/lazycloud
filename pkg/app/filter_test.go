@@ -198,6 +198,109 @@ func TestApplyFilterDashWithoutSpaceIsLiteral(t *testing.T) {
 	}
 }
 
+func TestApplyFilterMultipleIncludes(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("gke + europe-west2-b + running")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 2 {
+		t.Fatalf("visibleRows len = %d, want 2: %q", len(a.visibleRows), a.visibleRows)
+	}
+	for _, row := range a.visibleRows {
+		if !strings.HasPrefix(row[0], "gke-cl-1-pool-a-") {
+			t.Fatalf("row %q is not a pool-a node VM", row[0])
+		}
+	}
+}
+
+func TestApplyFilterMultipleIncludesNoMatch(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("gke + other")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 0 {
+		t.Fatalf("visibleRows len = %d, want 0: %q", len(a.visibleRows), a.visibleRows)
+	}
+}
+
+func TestApplyFilterTrailingIncludeKeptTyping(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("gke + ")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 2 {
+		t.Fatalf("visibleRows len = %d, want 2 (empty include ignored): %q", len(a.visibleRows), a.visibleRows)
+	}
+}
+
+func TestApplyFilterIncludeWithExclude(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("europe + running - other")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 2 {
+		t.Fatalf("visibleRows len = %d, want 2: %q", len(a.visibleRows), a.visibleRows)
+	}
+	for _, row := range a.visibleRows {
+		if !strings.HasPrefix(row[0], "gke-cl-1-pool-a-") {
+			t.Fatalf("row %q is not a pool-a node VM", row[0])
+		}
+	}
+}
+
+func TestApplyFilterPlusWithoutSpaceIsLiteral(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("c+d")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 0 {
+		t.Fatalf("visibleRows len = %d, want 0 (literal match): %q", len(a.visibleRows), a.visibleRows)
+	}
+}
+
+func TestApplyFilterDetailIncludeWithPlainInclude(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("running + labels env=prod")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+	}
+	if a.visibleRows[0][0] != "other-vm" {
+		t.Fatalf("row = %q, want other-vm", a.visibleRows[0][0])
+	}
+}
+
 func TestSplitDetailPath(t *testing.T) {
 	for _, tc := range []struct {
 		head string
