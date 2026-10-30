@@ -3,6 +3,7 @@ package app
 import (
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -315,4 +316,105 @@ func TestApplyFilterDetailExclude(t *testing.T) {
 			t.Fatalf("other-vm should be excluded by the detail exclusion: %q", row)
 		}
 	}
+}
+
+func TestDetailPaths(t *testing.T) {
+	paths := detailPaths(views[viewVMs].samples)
+	for _, want := range []string{
+		"Labels", "ServiceAccounts.*.Email", "ServiceAccounts.*.Scopes",
+		"DataDisks.*.SizeGB", "Interfaces.*.Network", "BootDisk.SizeGB", "Zone",
+	} {
+		if !slices.Contains(paths, want) {
+			t.Fatalf("detailPaths(vms) missing %q: %q", want, paths)
+		}
+	}
+	if slices.Contains(paths, "Labels.env") {
+		t.Fatalf("detailPaths(vms) must not enumerate map keys: %q", paths)
+	}
+	if slices.Index(paths, "BootDisk") != 0 || slices.Index(paths, "Zone") != len(paths)-1 {
+		t.Fatalf("detailPaths(vms) not sorted with BootDisk first and Zone last: %q", paths)
+	}
+}
+
+func assertCmdText(t *testing.T, a *app, want string) {
+	t.Helper()
+	if got := a.cmd.GetText(); got != want {
+		t.Fatalf("cmd text = %q, want %q", got, want)
+	}
+}
+
+func newFilterCompletionTestApp(t *testing.T) *app {
+	t.Helper()
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	return a
+}
+
+func TestCompleteFilterDetailRotates(t *testing.T) {
+	a := newFilterCompletionTestApp(t)
+
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "BootDisk ")
+
+	a.cmd.SetText("Labels env=prod")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "MachineType env=prod")
+
+	a.cmd.SetText("labels env")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "MachineType env")
+
+	a.cmd.SetText("Zone x")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "x")
+
+	a.cmd.SetText("vm-sa")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "BootDisk vm-sa")
+
+	a.cmd.SetText("MachineType env")
+	a.completeFilterDetail(false)
+	assertCmdText(t, a, "Labels env")
+
+	a.cmd.SetText("BootDisk x")
+	a.completeFilterDetail(false)
+	assertCmdText(t, a, "x")
+}
+
+func TestCompleteFilterDetailCompletesPrefix(t *testing.T) {
+	a := newFilterCompletionTestApp(t)
+
+	a.cmd.SetText("Servi")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "ServiceAccounts ")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "ServiceAccounts.* ")
+
+	a.cmd.SetText("servi vm-sa")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "ServiceAccounts vm-sa")
+
+	a.cmd.SetText("DataDisks.*.S")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "DataDisks.*.SizeGB ")
+
+	a.cmd.SetText("In")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "InstanceID ")
+
+	a.cmd.SetText("s")
+	a.completeFilterDetail(true)
+	assertCmdText(t, a, "ServiceAccounts ")
+
+	a.cmd.SetText("Servi")
+	a.completeFilterDetail(false)
+	assertCmdText(t, a, "ServiceAccounts.*.Scopes ")
+
+	a.cmd.SetText("s")
+	a.completeFilterDetail(false)
+	assertCmdText(t, a, "Status ")
 }

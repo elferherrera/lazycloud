@@ -80,7 +80,7 @@ func init() {
 			{":vpns", "show VPN gateways", viewVPNs},
 			{":igs", "show instance groups", viewInstanceGroups},
 		}},
-		{key: '/', desc: "filter list ('- x' excludes x, field value)", run: (*app).startFilter},
+		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
@@ -264,6 +264,11 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyEsc:
 		a.escapePressed()
 		return nil
+	case tcell.KeyTab, tcell.KeyBacktab:
+		if appState.CmdMode == modeFilter && (a.tapp.GetFocus() == a.cmd || a.tapp.GetFocus() == a.info) {
+			a.completeFilterDetail(event.Key() == tcell.KeyTab)
+			return nil
+		}
 	}
 	if a.tapp.GetFocus() == a.cmd {
 		return event
@@ -312,6 +317,66 @@ func (a *app) startFilter() {
 	}
 	a.enterFilterMode()
 	a.tapp.SetFocus(a.cmd)
+}
+
+func (a *app) completeFilterDetail(forward bool) {
+	paths := detailPaths(views[appState.ViewKind].samples)
+	if len(paths) == 0 {
+		return
+	}
+	text := a.cmd.GetText()
+	head, rest, _ := strings.Cut(text, " ")
+	rest = strings.TrimSpace(rest)
+	idx := -1
+	for i, p := range paths {
+		if strings.EqualFold(head, p) {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		idx = detailPathPrefixIndex(paths, head, forward)
+		if idx < 0 {
+			if forward {
+				a.cmd.SetText(paths[0] + " " + text)
+			} else {
+				a.cmd.SetText(paths[len(paths)-1] + " " + text)
+			}
+			return
+		}
+		a.cmd.SetText(paths[idx] + " " + rest)
+		return
+	}
+	if (forward && idx == len(paths)-1) || (!forward && idx == 0) {
+		a.cmd.SetText(rest)
+		return
+	}
+	if forward {
+		a.cmd.SetText(paths[idx+1] + " " + rest)
+	} else {
+		a.cmd.SetText(paths[idx-1] + " " + rest)
+	}
+}
+
+func detailPathPrefixIndex(paths []string, head string, forward bool) int {
+	if forward {
+		for i, p := range paths {
+			if detailPathHasPrefix(p, head) {
+				return i
+			}
+		}
+		return -1
+	}
+	for i := len(paths) - 1; i >= 0; i-- {
+		if detailPathHasPrefix(paths[i], head) {
+			return i
+		}
+	}
+	return -1
+}
+
+func detailPathHasPrefix(p, head string) bool {
+	return len(head) <= len(p) && strings.EqualFold(p[:len(head)], head)
 }
 
 func (a *app) toggleAllProjects() {

@@ -190,7 +190,7 @@ func (a *app) setView(kind viewKind) {
 }
 
 func (a *app) enterFilterMode() {
-	a.statusText("[yellow]filter mode ('- x' excludes x, 'Field v' or 'List.*.Sub v' filters details)[-]")
+	a.statusText("[yellow]filter mode (Tab cycles details, '- x' excludes x)[-]")
 }
 
 func (a *app) exitFilterMode() {

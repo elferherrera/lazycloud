@@ -108,6 +108,55 @@ func fieldNameMatches(field, name string) bool {
 	return strings.EqualFold(field+"s", name)
 }
 
+func detailPaths(samples []any) []string {
+	seen := make(map[string]bool)
+	var paths []string
+	for _, sample := range samples {
+		collectDetailPaths(reflect.ValueOf(sample), nil, seen, &paths)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func collectDetailPaths(v reflect.Value, prefix []string, seen map[string]bool, paths *[]string) {
+	if len(prefix) >= 6 {
+		return
+	}
+	v = unwrapForValidate(v)
+	if !v.IsValid() || v.Kind() != reflect.Struct {
+		return
+	}
+	for i := range v.Type().NumField() {
+		path := make([]string, len(prefix)+1)
+		copy(path, prefix)
+		path[len(prefix)] = v.Type().Field(i).Name
+		addDetailPath(path, seen, paths)
+		fv := unwrapForValidate(v.Field(i))
+		switch fv.Kind() {
+		case reflect.Struct:
+			collectDetailPaths(fv, path, seen, paths)
+		case reflect.Slice, reflect.Array:
+			elem := unwrapForValidate(reflect.New(fv.Type().Elem()).Elem())
+			if elem.Kind() != reflect.Struct {
+				continue
+			}
+			starred := make([]string, len(path)+1)
+			copy(starred, path)
+			starred[len(path)] = detailListMarker
+			addDetailPath(starred, seen, paths)
+			collectDetailPaths(elem, starred, seen, paths)
+		}
+	}
+}
+
+func addDetailPath(path []string, seen map[string]bool, paths *[]string) {
+	key := strings.Join(path, ".")
+	if !seen[key] {
+		seen[key] = true
+		*paths = append(*paths, key)
+	}
+}
+
 func unwrapForValidate(v reflect.Value) reflect.Value {
 	for v.Kind() == reflect.Ptr {
 		v = reflect.New(v.Type().Elem()).Elem()

@@ -66,7 +66,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 |---|---|
 | `q` / `Ctrl-C` | Quit |
 | `:` | Command mode (e.g. `:vms`, `:dns`, or type an IP address to jump to it) |
-| `/` | Filter the current list |
+| `/` | Filter the current list (see [Filtering](#filtering)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
 | `y` | Copy focused row (JSON) to clipboard |
 | `v` | Show focused row details |
@@ -126,3 +126,21 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `s` | SSH to VM via IAP | VM views |
 | `r` | Restore last deleted project | projects view |
 | `x` | Delete project from cache | projects view |
+
+## Filtering
+
+Press `/` to filter the current list. Matching is case-insensitive and the list repaints on every keystroke.
+
+| Term | Matches |
+|---|---|
+| `web` | any row with a cell containing `web` (substring across all columns) |
+| `web - staging - canary` | `web`, excluding rows matching `staging` or `canary` |
+| `Labels env=prod` | rows whose labels contain the `env=prod` pair |
+| `Labels.env prod` | rows whose `env` label contains `prod` |
+| `ServiceAccounts.*.Email vm-sa` | rows with any service account whose email contains `vm-sa` |
+| `DataDisks.*.SizeGB 100` | rows with any data disk whose size contains `100` |
+| `europe - Labels env=prod` | `europe`, excluding rows labeled `env=prod` |
+
+A term is a **detail filter** when its first token (before the first space) is a field path of the view's resource: it matches only that field, not the visible cells. Paths are `.`-separated, descend lists with `*` (any element), and reach map values via their key (`Labels.env`). Field names are case-insensitive with a singular/plural alias (`ServiceAccount` ≡ `ServiceAccounts`), and if the first token is not a valid field path the whole term falls back to a plain substring match.
+
+`Tab` completes and cycles detail paths: a partial path completes to the full one (`Servi` → `ServiceAccounts`), further presses rotate through every available path of the view, and text that matches no path gets the first path prepended. `Backtab` cycles backwards. `Enter` applies the filter and returns focus to the table (press `/` again to narrow further within the visible rows); `Esc` clears the filter.
