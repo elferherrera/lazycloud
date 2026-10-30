@@ -106,3 +106,90 @@ func TestApplyNodePoolVMFilterNoMatch(t *testing.T) {
 		t.Fatalf("status = %q, want no-match hint", a.status.GetText(true))
 	}
 }
+
+func TestApplyFilterExclude(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("GKE - BBB")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+	}
+	if a.visibleRows[0][0] != "gke-cl-1-pool-a-aaa" {
+		t.Fatalf("row = %q, want gke-cl-1-pool-a-aaa", a.visibleRows[0][0])
+	}
+}
+
+func TestApplyFilterExcludeOnly(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("- pool-a")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+	}
+	if a.visibleRows[0][0] != "other-vm" {
+		t.Fatalf("row = %q, want other-vm", a.visibleRows[0][0])
+	}
+}
+
+func TestApplyFilterMultipleExcludes(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("europe - aaa - bbb")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+	}
+	if a.visibleRows[0][0] != "other-vm" {
+		t.Fatalf("row = %q, want other-vm", a.visibleRows[0][0])
+	}
+}
+
+func TestApplyFilterTrailingExcludeKeptTyping(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("gke - ")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 2 {
+		t.Fatalf("visibleRows len = %d, want 2 (empty exclusion ignored): %q", len(a.visibleRows), a.visibleRows)
+	}
+}
+
+func TestApplyFilterDashWithoutSpaceIsLiteral(t *testing.T) {
+	a := newFilterTestApp(t)
+	appState.ViewKind = viewVMs
+	appState.ProjectID = "p1"
+	appState.AllProjects = false
+	appState.CmdMode = modeFilter
+	a.setView(viewVMs)
+	a.cmd.SetText("pool-a-aaa")
+	a.applyFilter()
+
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows len = %d, want 1: %q", len(a.visibleRows), a.visibleRows)
+	}
+	if a.visibleRows[0][0] != "gke-cl-1-pool-a-aaa" {
+		t.Fatalf("row = %q, want gke-cl-1-pool-a-aaa", a.visibleRows[0][0])
+	}
+}

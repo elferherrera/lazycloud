@@ -80,7 +80,7 @@ func init() {
 			{":vpns", "show VPN gateways", viewVPNs},
 			{":igs", "show instance groups", viewInstanceGroups},
 		}},
-		{key: '/', desc: "filter list", run: (*app).startFilter},
+		{key: '/', desc: "filter list ('- x' excludes x)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},

@@ -97,19 +97,52 @@ func (a *app) updateInfoTitle() {
 }
 
 func (a *app) applyFilter() {
-	query := strings.ToLower(a.cmd.GetText())
+	include, excludes := splitFilterQuery(strings.ToLower(a.cmd.GetText()))
 	filtered := make([][]string, 0, len(a.filterBase))
 	for _, r := range a.filterBase {
-		for _, val := range r {
-			if strings.Contains(strings.ToLower(val), query) {
-				filtered = append(filtered, r)
-				break
-			}
+		if rowMatchesFilter(r, include, excludes) {
+			filtered = append(filtered, r)
 		}
 	}
 	a.visibleRows = filtered
 	populateInfoPanel(a.info, a.viewHeaders, filtered)
 	a.updateInfoTitle()
+}
+
+func splitFilterQuery(query string) (string, []string) {
+	if !strings.Contains(query, "- ") {
+		return query, nil
+	}
+	parts := strings.Split(query, "- ")
+	include := strings.TrimSpace(parts[0])
+	excludes := make([]string, 0, len(parts)-1)
+	for _, part := range parts[1:] {
+		if term := strings.TrimSpace(part); term != "" {
+			excludes = append(excludes, term)
+		}
+	}
+	return include, excludes
+}
+
+func rowMatchesFilter(row []string, include string, excludes []string) bool {
+	matched := false
+	for _, val := range row {
+		if strings.Contains(strings.ToLower(val), include) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return false
+	}
+	for _, exclude := range excludes {
+		for _, val := range row {
+			if strings.Contains(strings.ToLower(val), exclude) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (a *app) refreshShortcuts() {
@@ -141,7 +174,7 @@ func (a *app) setView(kind viewKind) {
 }
 
 func (a *app) enterFilterMode() {
-	a.statusText("[yellow]filter mode[-]")
+	a.statusText("[yellow]filter mode ('- x' excludes x)[-]")
 }
 
 func (a *app) exitFilterMode() {
