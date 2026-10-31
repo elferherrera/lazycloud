@@ -26,11 +26,13 @@ type app struct {
 	helpRow   *tview.Flex
 	screen    tcell.Screen
 
-	viewHeaders  []string
-	allRows      [][]string
-	filterBase   [][]string
-	visibleRows  [][]string
-	rowResources []any
+	viewHeaders   []string
+	allRows       [][]string
+	filterBase    [][]string
+	visibleRows   [][]string
+	rowResources  []any
+	savedFilter   string
+	filterStashed bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -197,6 +199,7 @@ func (a *app) setView(kind viewKind) {
 		appState.PrevViewKind = appState.ViewKind
 	}
 	appState.ViewKind = kind
+	a.clearFilterStash()
 	a.refreshShortcuts()
 	a.viewHeaders = def.headers
 	a.allRows = rows

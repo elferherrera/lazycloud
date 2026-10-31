@@ -312,16 +312,21 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 
 func (a *app) focusCmd() {
 	if appState.CmdMode == modeFilter {
-		a.exitFilterMode()
-		a.applyFilter()
+		a.savedFilter = a.cmd.GetText()
+		a.filterStashed = true
+		a.statusText("")
 	}
 	appState.CmdMode = modeCmd
+	a.cmd.SetText("")
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(": ")
 	a.tapp.SetFocus(a.cmd)
 }
 
 func (a *app) startFilter() {
+	if a.filterStashed {
+		a.restoreFilter()
+	}
 	if appState.CmdMode == modeFilter && a.tapp.GetFocus() == a.info {
 		a.setFilterBase(a.visibleRows)
 		a.cmd.SetText("")
@@ -692,6 +697,7 @@ func (a *app) escapePressed() {
 	}
 	a.cmd.SetBorder(false)
 	if appState.CmdMode == modeFilter {
+		a.clearFilterStash()
 		a.exitFilterMode()
 		a.cmd.SetText("")
 		a.applyFilter()
@@ -718,39 +724,41 @@ func (a *app) filterEnter() {
 	a.tapp.SetFocus(a.info)
 }
 
+var viewCommands = map[string]func(a *app){
+	"ips":             (*app).showIPs,
+	"networks":        (*app).showNetworks,
+	"vpcs":            (*app).showNetworks,
+	"routes":          showRoutes,
+	"firewalls":       showFirewalls,
+	"accounts":        showAccounts,
+	"sa":              showAccounts,
+	"vms":             showVMs,
+	"buckets":         showBuckets,
+	"lbs":             showLBs,
+	"loadbalancers":   showLBs,
+	"clusters":        showClusters,
+	"gke":             showClusters,
+	"dns":             showDNSZones,
+	"zones":           showDNSZones,
+	"routers":         showCloudRouters,
+	"cloud-routers":   showCloudRouters,
+	"vpns":            showVPNs,
+	"vpn":             showVPNs,
+	"igs":             showInstanceGroups,
+	"instance-groups": showInstanceGroups,
+	"projects":        func(a *app) { a.setView(viewProjects) },
+}
+
 func (a *app) commandEnter() {
 	text := strings.TrimSpace(a.cmd.GetText())
+	fields := strings.Fields(text)
 	switch {
-	case text == "ips" || net.ParseIP(text) != nil:
+	case net.ParseIP(text) != nil:
 		a.showIPs()
-	case text == "networks" || text == "vpcs":
-		a.showNetworks()
-	case text == "routes":
-		showRoutes(a)
-	case text == "firewalls":
-		showFirewalls(a)
-	case text == "accounts" || text == "sa":
-		showAccounts(a)
-	case text == "vms":
-		showVMs(a)
-	case text == "buckets":
-		showBuckets(a)
-	case text == "lbs" || text == "loadbalancers":
-		showLBs(a)
-	case text == "clusters" || text == "gke":
-		showClusters(a)
-	case text == "dns" || text == "zones":
-		showDNSZones(a)
-	case text == "routers" || text == "cloud-routers":
-		showCloudRouters(a)
-	case text == "vpns" || text == "vpn":
-		showVPNs(a)
-	case text == "igs" || text == "instance-groups":
-		showInstanceGroups(a)
-	case text == "projects":
-		a.setView(viewProjects)
+	case len(fields) > 1 || viewCommands[text] == nil:
+		a.runCommand(fields)
 	default:
-		a.cmd.SetText("")
+		viewCommands[text](a)
 	}
 	a.tapp.SetFocus(a.info)
 }

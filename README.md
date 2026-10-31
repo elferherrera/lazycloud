@@ -66,7 +66,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | Key | Action |
 |---|---|
 | `q` / `Ctrl-C` | Quit |
-| `:` | Command mode (e.g. `:vms`, `:dns`, or type an IP address to jump to it) |
+| `:` | Command mode (e.g. `:vms`, `:sort asc name`, or type an IP address to jump to it) |
 | `/` | Filter the current list (see [Filtering](#filtering)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
 | `y` | Copy focused row (JSON) to clipboard |
@@ -109,6 +109,14 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `:routers` / `:cloud-routers` | Cloud routers |
 | `:vpns` / `:vpn` | VPN gateways |
 | `:igs` / `:instance-groups` | Instance groups |
+
+### Commands (command mode)
+
+Anything with arguments or not matching a view name is treated as a command; unknown commands report an error in the status bar.
+
+| Command | Effect |
+|---|---|
+| `:sort asc <column>` / `:sort desc <column>` | Sort the currently visible rows by a column (the active filter, if any, stays active). The column name matches the view headers case-insensitively, spaces allowed (e.g. `:sort asc name`, `:sort desc machine type`) |
 
 ### Context-sensitive
 
