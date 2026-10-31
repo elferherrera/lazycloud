@@ -1,10 +1,16 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/rivo/tview"
+	"gopkg.in/yaml.v3"
 )
 
 func newSortTestApp() *app {
@@ -282,6 +288,171 @@ func TestCommandEnterUnknownCommand(t *testing.T) {
 	}
 	if text := a.cmd.GetText(); text != "" {
 		t.Errorf("input after unknown command = %q, want cleared", text)
+	}
+}
+
+type writeTestResource struct {
+	Name    string
+	Machine string
+}
+
+func registerWriteTestView(t *testing.T, failOn string) {
+	t.Helper()
+	kind := viewKind("write-test")
+	original, existed := views[kind]
+	views[kind] = viewDef{
+		resource: func(a *app, row []string) (any, error) {
+			if row[0] == failOn {
+				return nil, errors.New("resource not found")
+			}
+			return writeTestResource{Name: row[0], Machine: row[1]}, nil
+		},
+	}
+	t.Cleanup(func() {
+		if existed {
+			views[kind] = original
+		} else {
+			delete(views, kind)
+		}
+	})
+	savedView := appState.ViewKind
+	appState.ViewKind = kind
+	t.Cleanup(func() { appState.ViewKind = savedView })
+}
+
+func TestRunWriteCommandCSV(t *testing.T) {
+	a := newSortTestApp()
+	path := filepath.Join(t.TempDir(), "result.csv")
+
+	runWriteCommand(a, []string{path})
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	want := "Name,Machine Type\nweb-2,n1-standard\nweb-10,e2-medium\nWeb-1,n1-standard\n"
+	if string(got) != want {
+		t.Errorf("csv = %q, want %q", got, want)
+	}
+}
+
+func TestRunWriteCommandCSVFiltered(t *testing.T) {
+	a := newSortTestApp()
+	t.Cleanup(func() { appState.CmdMode = modeCmd })
+	path := filepath.Join(t.TempDir(), "result.csv")
+
+	appState.CmdMode = modeFilter
+	a.cmd.SetText("n1")
+
+	runWriteCommand(a, []string{path})
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	want := "Name,Machine Type\nweb-2,n1-standard\nWeb-1,n1-standard\n"
+	if string(got) != want {
+		t.Errorf("csv = %q, want %q", got, want)
+	}
+}
+
+func TestRunWriteCommandJSON(t *testing.T) {
+	a := newSortTestApp()
+	registerWriteTestView(t, "")
+	path := filepath.Join(t.TempDir(), "result.json")
+
+	appState.CmdMode = modeFilter
+	a.cmd.SetText("n1")
+
+	runWriteCommand(a, []string{path})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Contains(data, []byte("\n  {")) {
+		t.Errorf("json not indented: %s", data)
+	}
+	var got []writeTestResource
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	want := []writeTestResource{{Name: "web-2", Machine: "n1-standard"}, {Name: "Web-1", Machine: "n1-standard"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("json resources = %v, want %v", got, want)
+	}
+}
+
+func TestRunWriteCommandYAML(t *testing.T) {
+	a := newSortTestApp()
+	registerWriteTestView(t, "")
+	path := filepath.Join(t.TempDir(), "result.yaml")
+
+	runWriteCommand(a, []string{path})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var got []writeTestResource
+	if err := yaml.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if len(got) != 3 || got[0].Name != "web-2" || got[1].Name != "web-10" || got[2].Name != "Web-1" {
+		t.Errorf("yaml resources = %v, want the 3 view rows", got)
+	}
+}
+
+func TestRunWriteCommandErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantMsg string
+	}{
+		{"missing file", nil, "write: usage: write"},
+		{"too many args", []string{"a.csv", "b"}, "write: usage: write"},
+		{"unsupported extension", []string{"result.txt"}, `write: unsupported extension ".txt"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newSortTestApp()
+			runWriteCommand(a, tc.args)
+			if got := a.status.GetText(false); !strings.Contains(got, tc.wantMsg) {
+				t.Errorf("status = %q, want it to contain %q", got, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestRunWriteCommandNoResourceView(t *testing.T) {
+	a := newSortTestApp()
+	savedView := appState.ViewKind
+	appState.ViewKind = ""
+	t.Cleanup(func() { appState.ViewKind = savedView })
+	path := filepath.Join(t.TempDir(), "result.json")
+
+	runWriteCommand(a, []string{path})
+
+	if got := a.status.GetText(false); !strings.Contains(got, "this view has no resource details") {
+		t.Errorf("status = %q, want no resource details error", got)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file created despite error: %v", err)
+	}
+}
+
+func TestRunWriteCommandResourceError(t *testing.T) {
+	a := newSortTestApp()
+	registerWriteTestView(t, "web-10")
+	path := filepath.Join(t.TempDir(), "result.json")
+
+	runWriteCommand(a, []string{path})
+
+	if got := a.status.GetText(false); !strings.Contains(got, "resource not found") {
+		t.Errorf("status = %q, want resource error", got)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file created despite error: %v", err)
 	}
 }
 

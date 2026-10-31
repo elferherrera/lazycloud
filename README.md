@@ -117,6 +117,7 @@ Anything with arguments or not matching a view name is treated as a command; unk
 | Command | Effect |
 |---|---|
 | `:sort asc <column>` / `:sort desc <column>` | Sort the currently visible rows by a column (the active filter, if any, stays active). The column name matches the view headers case-insensitively, spaces allowed (e.g. `:sort asc name`, `:sort desc machine type`) |
+| `:write <file>` | Write the currently visible rows to a file in the current folder: `*.csv` writes the table (headers + visible columns), `*.json` / `*.yaml` write the full resource details of every visible element |
 
 ### Context-sensitive
 

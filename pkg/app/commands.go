@@ -1,15 +1,24 @@
 package app
 
 import (
+	"bytes"
+	"encoding/csv"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type commandFunc func(a *app, args []string)
 
 var commands = map[string]commandFunc{
-	"sort": runSortCommand,
+	"sort":  runSortCommand,
+	"write": runWriteCommand,
 }
 
 func (a *app) runCommand(fields []string) {
@@ -68,6 +77,85 @@ func (a *app) restoreFilter() {
 func (a *app) clearFilterStash() {
 	a.savedFilter = ""
 	a.filterStashed = false
+}
+
+func runWriteCommand(a *app, args []string) {
+	if len(args) != 1 {
+		a.statusText("[red]write: usage: write <file.(csv|json|yaml)>[-]")
+		return
+	}
+	name := args[0]
+	var data []byte
+	var err error
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".csv":
+		data, err = a.csvBytes()
+	case ".json":
+		data, err = a.resourceBytes(func(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") })
+	case ".yaml", ".yml":
+		data, err = a.resourceBytes(yaml.Marshal)
+	default:
+		a.statusText(fmt.Sprintf("[red]write: unsupported extension %q, want .csv, .json or .yaml[-]", filepath.Ext(name)))
+		return
+	}
+	if err != nil {
+		a.statusText("[red]write: [-]" + err.Error())
+		return
+	}
+	if err := os.WriteFile(name, data, 0o644); err != nil {
+		a.statusText("[red]write: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Wrote %d elements to %s[-]", len(a.visibleRows), name))
+}
+
+func (a *app) csvBytes() ([]byte, error) {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	if err := w.Write(a.viewHeaders); err != nil {
+		return nil, err
+	}
+	for _, row := range a.visibleRows {
+		if err := w.Write(row); err != nil {
+			return nil, err
+		}
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (a *app) resourceBytes(marshal func(any) ([]byte, error)) ([]byte, error) {
+	resources, err := a.viewResources()
+	if err != nil {
+		return nil, err
+	}
+	data, err := marshal(resources)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		data = append(data, '\n')
+	}
+	return data, nil
+}
+
+func (a *app) viewResources() ([]any, error) {
+	def := views[appState.ViewKind]
+	if def.resource == nil {
+		return nil, errors.New("this view has no resource details")
+	}
+	resources := make([]any, 0, len(a.visibleRows))
+	for _, row := range a.visibleRows {
+		res, err := def.resource(a, row)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, res)
+	}
+	return resources, nil
 }
 
 func (a *app) sortRows(desc bool, col int) {
