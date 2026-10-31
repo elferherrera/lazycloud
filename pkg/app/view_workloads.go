@@ -140,6 +140,12 @@ func shellPath() string {
 	return "/bin/sh"
 }
 
+func workloadShellCommand() *exec.Cmd {
+	shell := exec.Command(shellPath())
+	shell.Env = append(os.Environ(), "LAZYCLOUD_CONTEXT=true")
+	return shell
+}
+
 func kubectlSetContextArgs(contextName, namespace string) []string {
 	return []string{"config", "set-context", contextName, "--namespace", namespace}
 }
@@ -221,7 +227,7 @@ func (a *app) openWorkloadShell() {
 	setCtx.Stdin = os.Stdin
 	setCtx.Stdout = os.Stdout
 	setCtx.Stderr = os.Stderr
-	shell := exec.Command(shellPath())
+	shell := workloadShellCommand()
 	shell.Stdin = os.Stdin
 	shell.Stdout = os.Stdout
 	shell.Stderr = os.Stderr

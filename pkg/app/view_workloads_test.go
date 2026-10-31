@@ -46,3 +46,16 @@ func TestShellPath(t *testing.T) {
 		t.Errorf("shellPath() = %q, want /bin/sh", got)
 	}
 }
+
+func TestWorkloadShellCommandEnv(t *testing.T) {
+	cmd := workloadShellCommand()
+	found := false
+	for _, kv := range cmd.Env {
+		if kv == "LAZYCLOUD_CONTEXT=true" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("workloadShellCommand() env = %v, want LAZYCLOUD_CONTEXT=true", cmd.Env)
+	}
+}

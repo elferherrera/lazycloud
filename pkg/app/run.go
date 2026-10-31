@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -9,7 +11,17 @@ import (
 	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
+func checkNestedExecution() error {
+	if os.Getenv("LAZYCLOUD_CONTEXT") != "true" {
+		return nil
+	}
+	return errors.New("Detected nested lazycloud execution. Exit this context to start lazycloud")
+}
+
 func Run() error {
+	if err := checkNestedExecution(); err != nil {
+		return err
+	}
 	tview.Borders.HorizontalFocus = tview.Borders.Horizontal
 	tview.Borders.VerticalFocus = tview.Borders.Vertical
 	tview.Borders.TopLeftFocus = tview.Borders.TopLeft
