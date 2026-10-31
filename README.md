@@ -119,6 +119,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `m` | Show VMs for the focused node pool | node pools view |
 | `m` | Show VMs for the focused instance group | instance groups views |
 | `c` | Fetch cluster credentials (`gcloud container clusters get-credentials`) | clusters views |
+| `c` | Show next-hop chart (rendered mermaid) for focused route; an IP next hop is matched against cached VMs and load balancers, and load balancers continue into their backend services and groups | routes views |
 | `d` | Show DNS records for the focused zone | DNS zones views |
 | `b` | Back to the previous view | workloads / DNS records / node pools views |
 | `e` | Open workload events in GCP Console | workloads view |

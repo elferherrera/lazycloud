@@ -50,6 +50,10 @@ func inInstanceGroupsView() bool {
 	return appState.ViewKind == viewInstanceGroups || appState.ViewKind == viewInstanceGroupsAll
 }
 
+func inRoutesView() bool {
+	return appState.ViewKind == viewRoutes || appState.ViewKind == viewRoutesAll
+}
+
 func inLogsView() bool {
 	return inVMView() || inClustersView() || inNodePoolsView() || appState.ViewKind == viewWorkloads
 }
@@ -146,6 +150,13 @@ func init() {
 			visible: inClustersView,
 			enabled: func(a *app) bool { return inClustersView() },
 			run:     (*app).getClusterCredentials,
+		},
+		{
+			key:     'c',
+			desc:    "show next hop chart for route",
+			visible: inRoutesView,
+			enabled: func(a *app) bool { return inRoutesView() },
+			run:     (*app).showRouteHopChart,
 		},
 		{
 			key:     'r',
@@ -665,7 +676,7 @@ func (a *app) escapePressed() {
 		a.toggleHelp()
 		return
 	}
-	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" {
+	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {
 		a.pages.RemovePage(name)
 		a.tapp.SetFocus(a.info)
 		return

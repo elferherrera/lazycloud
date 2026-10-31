@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -236,6 +237,23 @@ func overlayWidth(screenWidth int) int {
 	return width
 }
 
+func artOverlayWidth(content string, screenWidth int) int {
+	width := 0
+	for _, line := range strings.Split(strings.TrimRight(content, "\n"), "\n") {
+		if n := utf8.RuneCountInString(line); n > width {
+			width = n
+		}
+	}
+	width += 2
+	if screenWidth > 0 && width > screenWidth-2 {
+		width = screenWidth - 2
+	}
+	if width < 10 {
+		width = 10
+	}
+	return width
+}
+
 func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
 	text := tview.NewTextView().SetDynamicColors(true).SetText(content)
 	text.SetBorder(true).SetTitle(title)
@@ -246,6 +264,26 @@ func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
 	}
 	height := overlayHeight(lines, screenHeight)
 	width := overlayWidth(screenWidth)
+	overlay := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(text, height, 1, true).
+			AddItem(nil, 0, 1, false), width, 1, true).
+		AddItem(nil, 0, 1, false)
+	return overlay, text
+}
+
+func (a *app) newArtOverlay(title, content string) (*tview.Flex, *tview.TextView) {
+	text := tview.NewTextView().SetWrap(false).SetText(content)
+	text.SetBorder(true).SetTitle(title)
+	lines := strings.Count(content, "\n")
+	screenWidth, screenHeight := 0, 0
+	if a.screen != nil {
+		screenWidth, screenHeight = a.screen.Size()
+	}
+	height := overlayHeight(lines, screenHeight)
+	width := artOverlayWidth(content, screenWidth)
 	overlay := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).

@@ -14,6 +14,8 @@ cloud.google.com/go/longrunning v1.2.0 h1:WjYH3YHBGCxGJP9M4dWGHBfXr/cFIjMkNgWcJj
 cloud.google.com/go/longrunning v1.2.0/go.mod h1:5KMQALFGOCtFoi2xSOA1u3H7WKlhmckgiyFw7+LGQp0=
 cloud.google.com/go/resourcemanager v1.17.0 h1:XIM2tIYQ/x3BNn0+eWdRSiMLpErl4/WM4aezbHULR10=
 cloud.google.com/go/resourcemanager v1.17.0/go.mod h1:IQT7djVg7KWNzEUt8QVeoHQ3Y8IqizmuscnEswU4MAo=
+github.com/aaronsb/mmaid-go v0.6.1 h1:bV4A/mTSMjzqMbZl6CsmW+sJtmbdwm6KZRLiPF9R08A=
+github.com/aaronsb/mmaid-go v0.6.1/go.mod h1:fXR/Q7aVTDxzV8SzBCrhihuZFC7FNuuuW7LSNj8fvok=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 h1:aBangftG7EVZoUb69Os8IaYg++6uMOdKK83QtkkvJik=

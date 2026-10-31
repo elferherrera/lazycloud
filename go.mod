@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	cloud.google.com/go/compute v1.72.0
 	cloud.google.com/go/resourcemanager v1.17.0
+	github.com/aaronsb/mmaid-go v0.6.1
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/rivo/tview v0.42.0
 	google.golang.org/api v0.288.0
