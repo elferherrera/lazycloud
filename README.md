@@ -2,7 +2,7 @@
 
 A terminal UI (TUI) for browsing Google Cloud Platform resources — think lazygit/lazydocker, but for GCP. It fetches resources on demand via the GCP APIs, caches them in a local SQLite database, and renders them in browsable tables.
 
-Requires Go 1.27+ and an authenticated `gcloud` CLI. The workloads view additionally requires `kubectl` on your PATH.
+Requires Go 1.27+ and an authenticated `gcloud` CLI. The workloads view additionally requires `kubectl` on your PATH, and its `c` shortcut requires the `SHELL` environment variable to be set to open its interactive shell.
 
 ## Installation
 
@@ -120,6 +120,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `m` | Show VMs for the focused instance group | instance groups views |
 | `c` | Fetch cluster credentials (`gcloud container clusters get-credentials`) | clusters views |
 | `c` | Show next-hop chart (rendered mermaid) for focused route; an IP next hop is matched against cached VMs and load balancers, and load balancers continue into their backend services and groups | routes views |
+| `c` | Set the kubectl context to the focused row's cluster and namespace (`kubectl config set-context <cluster> --namespace <namespace>`) and open an interactive shell; exiting the shell returns to lazycloud — requires the `SHELL` environment variable to be set | workloads view |
 | `d` | Show DNS records for the focused zone | DNS zones views |
 | `b` | Back to the previous view | workloads / DNS records / node pools views |
 | `e` | Open workload events in GCP Console | workloads view |

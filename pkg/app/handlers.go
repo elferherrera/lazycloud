@@ -159,6 +159,13 @@ func init() {
 			run:     (*app).showRouteHopChart,
 		},
 		{
+			key:     'c',
+			desc:    "open shell with kubectl context set",
+			visible: func() bool { return appState.ViewKind == viewWorkloads },
+			enabled: func(a *app) bool { return appState.ViewKind == viewWorkloads },
+			run:     (*app).openWorkloadShell,
+		},
+		{
 			key:     'r',
 			desc:    "restore last deleted project",
 			visible: inProjectsView,

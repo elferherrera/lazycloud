@@ -1,7 +1,10 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -128,6 +131,53 @@ func (a *app) openWorkloadEvents() {
 		return
 	}
 	a.statusText(fmt.Sprintf("[green]Opened events for %s in browser[-]", workloadName))
+}
+
+func shellPath() string {
+	if shell := os.Getenv("SHELL"); shell != "" {
+		return shell
+	}
+	return "/bin/sh"
+}
+
+func kubectlSetContextArgs(cluster, namespace string) []string {
+	return []string{"config", "set-context", cluster, "--namespace", namespace}
+}
+
+func (a *app) openWorkloadShell() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	namespace := a.info.GetCell(row, 0).Text
+	if namespace == "" || appState.Cluster == "" {
+		return
+	}
+	setCtx := exec.Command("kubectl", kubectlSetContextArgs(appState.Cluster, namespace)...)
+	setCtx.Stdin = os.Stdin
+	setCtx.Stdout = os.Stdout
+	setCtx.Stderr = os.Stderr
+	shell := exec.Command(shellPath())
+	shell.Stdin = os.Stdin
+	shell.Stdout = os.Stdout
+	shell.Stderr = os.Stderr
+	var setErr, shellErr error
+	a.tapp.Suspend(func() {
+		setErr = setCtx.Run()
+		shellErr = shell.Run()
+	})
+	if setErr != nil {
+		a.logger.Error("workloads", appState.ClusterProject, "set-context failed for "+appState.Cluster+" (namespace "+namespace+"): "+setErr.Error())
+		a.statusText("[red]kubectl set-context failed: [-]" + setErr.Error())
+		return
+	}
+	var exitErr *exec.ExitError
+	if shellErr != nil && !errors.As(shellErr, &exitErr) {
+		a.logger.Error("workloads", appState.ClusterProject, "shell failed for "+appState.Cluster+" (namespace "+namespace+"): "+shellErr.Error())
+		a.statusText("[red]Failed to open shell: [-]" + shellErr.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Shell session for %s/%s ended[-]", appState.Cluster, namespace))
 }
 
 func (a *app) showClusterWorkloads() {
