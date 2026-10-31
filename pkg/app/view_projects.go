@@ -26,10 +26,10 @@ var projectsView = viewDef{
 		return projectRows(projects), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d projects[-]", count)
+		return fmt.Sprintf("%d projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching projects...[-]")
+		a.statusInfo("Fetching projects...")
 		go func() {
 			projects, err := providers.ListGcloudProjects()
 			if err != nil {

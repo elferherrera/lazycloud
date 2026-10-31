@@ -56,14 +56,14 @@ var cloudRoutersView = viewDef{
 		return cloudRouterRows(routers), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d cloud routers for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d cloud routers for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching cloud routers...[-]")
+		a.statusInfo("Fetching cloud routers...")
 		go func() {
 			projectID := appState.ProjectID
 			routers, err := providers.ListProjectCloudRouters(projectID)
@@ -102,10 +102,10 @@ var cloudRoutersAllView = viewDef{
 		return cloudRouterRowsAll(routers), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d cloud routers for all projects[-]", count)
+		return fmt.Sprintf("%d cloud routers for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching cloud routers for all projects...[-]")
+		a.statusInfo("Fetching cloud routers for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -116,7 +116,7 @@ var cloudRoutersAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching cloud routers for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching cloud routers for %s...", p.ProjectID))
 				})
 				routers, err := providers.ListProjectCloudRouters(p.ProjectID)
 				if err != nil {

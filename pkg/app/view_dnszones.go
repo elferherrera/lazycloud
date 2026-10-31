@@ -46,14 +46,14 @@ var dnsZonesView = viewDef{
 		return dnsZoneRows(zones), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d dns zones for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d dns zones for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching dns zones...[-]")
+		a.statusInfo("Fetching dns zones...")
 		go func() {
 			projectID := appState.ProjectID
 			zones, err := providers.ListProjectDNSZones(projectID)
@@ -92,10 +92,10 @@ var dnsZonesAllView = viewDef{
 		return dnsZoneRowsAll(zones), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d dns zones for all projects[-]", count)
+		return fmt.Sprintf("%d dns zones for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching dns zones for all projects...[-]")
+		a.statusInfo("Fetching dns zones for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -106,7 +106,7 @@ var dnsZonesAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching dns zones for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching dns zones for %s...", p.ProjectID))
 				})
 				zones, err := providers.ListProjectDNSZones(p.ProjectID)
 				if err != nil {

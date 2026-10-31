@@ -46,14 +46,14 @@ var ipsView = viewDef{
 		return ipAddressRows(ips), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d IP addresses for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d IP addresses for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching IP addresses...[-]")
+		a.statusInfo("Fetching IP addresses...")
 		go func() {
 			projectID := appState.ProjectID
 			ips, err := providers.ListProjectIPAddresses(projectID)
@@ -83,15 +83,15 @@ var ipsView = viewDef{
 
 func ipDetails(ip *providers.IPAddress) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", ip.ProjectID)
-	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", ip.Name)
-	fmt.Fprintf(&sb, "[yellow]Address: [-]%s\n", ip.Address)
-	fmt.Fprintf(&sb, "[yellow]Type: [-]%s\n", ip.AddressType)
-	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", ip.Status)
-	fmt.Fprintf(&sb, "[yellow]Region: [-]%s\n", ip.Region)
-	fmt.Fprintf(&sb, "[yellow]Network: [-]%s\n", ip.Network)
-	fmt.Fprintf(&sb, "[yellow]Subnetwork: [-]%s\n", ip.Subnetwork)
-	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n", formatUpdatedAt(ip.UpdatedAt))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Project: [-]%s\n", ip.ProjectID)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Name: [-]%s\n", ip.Name)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Address: [-]%s\n", ip.Address)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Type: [-]%s\n", ip.AddressType)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Status: [-]%s\n", ip.Status)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Region: [-]%s\n", ip.Region)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Network: [-]%s\n", ip.Network)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Subnetwork: [-]%s\n", ip.Subnetwork)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Updated: [-]%s\n", formatUpdatedAt(ip.UpdatedAt))
 	return sb.String()
 }
 
@@ -132,10 +132,10 @@ var ipsAllView = viewDef{
 		return ipAddressRowsAll(ips), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d IP addresses for all projects[-]", count)
+		return fmt.Sprintf("%d IP addresses for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching IP addresses for all projects...[-]")
+		a.statusInfo("Fetching IP addresses for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -146,7 +146,7 @@ var ipsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching IPs for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching IPs for %s...", p.ProjectID))
 				})
 				ips, err := providers.ListProjectIPAddresses(p.ProjectID)
 				if err != nil {

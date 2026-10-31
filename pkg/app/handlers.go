@@ -241,9 +241,10 @@ func populateShortcutsPanel(table *tview.Table) int {
 	row := 0
 	for _, s := range visibleShortcuts() {
 		table.SetCell(row, 0, tview.NewTableCell(string(s.key)).
-			SetTextColor(tview.Styles.SecondaryTextColor).
+			SetTextColor(theme.shortcutLabelColor()).
 			SetAttributes(tcell.AttrBold))
-		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1))
+		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1).
+			SetTextColor(theme.shortcutTextColor()))
 		row++
 		for _, c := range s.commands {
 			desc := c.desc
@@ -251,8 +252,9 @@ func populateShortcutsPanel(table *tview.Table) int {
 				desc += " (" + string(c.view) + ")"
 			}
 			table.SetCell(row, 0, tview.NewTableCell(c.cmd).
-				SetTextColor(tview.Styles.SecondaryTextColor))
-			table.SetCell(row, 1, tview.NewTableCell(desc).SetExpansion(1))
+				SetTextColor(theme.shortcutLabelColor()))
+			table.SetCell(row, 1, tview.NewTableCell(desc).SetExpansion(1).
+				SetTextColor(theme.shortcutTextColor()))
 			row++
 		}
 	}
@@ -634,17 +636,17 @@ func appendRowDetails(sb *strings.Builder, data any, indent string) {
 		for _, k := range keys {
 			switch v[k].(type) {
 			case map[string]any, []any:
-				fmt.Fprintf(sb, "%s[yellow]%s:[-]\n", indent, k)
+				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s:[-]\n", indent, k)
 				appendRowDetails(sb, v[k], indent+"  ")
 			default:
-				fmt.Fprintf(sb, "%s[yellow]%s: [-]%v\n", indent, k, v[k])
+				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s: [-]%v\n", indent, k, v[k])
 			}
 		}
 	case []any:
 		for i, item := range v {
 			switch item.(type) {
 			case map[string]any, []any:
-				fmt.Fprintf(sb, "%s[yellow]%d:[-]\n", indent, i)
+				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%d:[-]\n", indent, i)
 				appendRowDetails(sb, item, indent+"  ")
 			default:
 				fmt.Fprintf(sb, "%s%v\n", indent, item)

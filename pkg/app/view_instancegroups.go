@@ -48,14 +48,14 @@ var instanceGroupsView = viewDef{
 		return instanceGroupRows(groups), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d instance groups for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d instance groups for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching instance groups...[-]")
+		a.statusInfo("Fetching instance groups...")
 		go func() {
 			projectID := appState.ProjectID
 			groups, err := providers.ListProjectInstanceGroups(projectID)
@@ -94,10 +94,10 @@ var instanceGroupsAllView = viewDef{
 		return instanceGroupRowsAll(groups), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d instance groups for all projects[-]", count)
+		return fmt.Sprintf("%d instance groups for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching instance groups for all projects...[-]")
+		a.statusInfo("Fetching instance groups for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -108,7 +108,7 @@ var instanceGroupsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching instance groups for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching instance groups for %s...", p.ProjectID))
 				})
 				groups, err := providers.ListProjectInstanceGroups(p.ProjectID)
 				if err != nil {
@@ -188,7 +188,7 @@ func (a *app) showInstanceGroupVMs() {
 		appState.ProjectNumber = p.ProjectNumber
 	}
 	renderSummary(a.summary)
-	a.statusText(fmt.Sprintf("[yellow]Fetching VMs for instance group %s...[-]", group))
+	a.statusInfo(fmt.Sprintf("Fetching VMs for instance group %s...", group))
 	go a.fetchInstanceGroupVMs(location, group)
 }
 
@@ -240,5 +240,5 @@ func (a *app) applyInstanceGroupVMFilter(group string, members []providers.Insta
 		a.statusText(fmt.Sprintf("[red]No cached VMs are members of %s (press u to refresh)[-]", group))
 		return
 	}
-	a.statusText(fmt.Sprintf("[yellow]%d VMs for instance group %s (Esc clears)[-]", len(matched), group))
+	a.statusInfo(fmt.Sprintf("%d VMs for instance group %s (Esc clears)", len(matched), group))
 }

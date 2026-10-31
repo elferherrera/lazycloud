@@ -61,7 +61,7 @@ var nodePoolsView = viewDef{
 		return nodePoolRows(cl.NodePools, nodes), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d node pools for cluster %s (project %s)[-]", count, appState.Cluster, appState.ClusterProject)
+		return fmt.Sprintf("%d node pools for cluster %s (project %s)", count, appState.Cluster, appState.ClusterProject)
 	},
 	refresh: func(a *app) {
 		if appState.ClusterProject == "" || appState.Cluster == "" {
@@ -77,7 +77,7 @@ var nodePoolsView = viewDef{
 			a.statusText("[red]Cluster not found in cache (press u in the clusters view to refresh)[-]")
 			return
 		}
-		a.statusText(fmt.Sprintf("[yellow]Fetching nodes for %s...[-]", appState.Cluster))
+		a.statusInfo(fmt.Sprintf("Fetching nodes for %s...", appState.Cluster))
 		go func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
@@ -143,7 +143,7 @@ func (a *app) applyNodePoolVMFilter(pool string) {
 		a.statusText(fmt.Sprintf("[red]No cached VMs have a label value %q (press u to refresh)[-]", pool))
 		return
 	}
-	a.statusText(fmt.Sprintf("[yellow]%d VMs for node pool %s (Esc clears)[-]", len(matched), pool))
+	a.statusInfo(fmt.Sprintf("%d VMs for node pool %s (Esc clears)", len(matched), pool))
 }
 
 func (a *app) fetchNodePoolVMs(pool string) {
@@ -187,7 +187,7 @@ func (a *app) showNodePoolVMs() {
 	renderSummary(a.summary)
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
-		a.statusText(fmt.Sprintf("[yellow]Fetching VMs for %s...[-]", appState.ProjectID))
+		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
 		go a.fetchNodePoolVMs(pool)
 		return
 	}

@@ -789,13 +789,13 @@ func TestRenderSummaryAllProjects(t *testing.T) {
 	tv := newSummaryPanel()
 	renderSummary(tv)
 	text := tv.GetText(false)
-	if text != "[yellow]Projects: [-]all" {
+	if text != "[yellow]Projects: [white]all" {
 		t.Fatalf("renderSummary() = %q", text)
 	}
 	appState = State{Name: "One", ProjectID: "p1", ProjectNumber: "111"}
 	renderSummary(tv)
 	text = tv.GetText(false)
-	want := "[yellow]Name: [-]One\n[yellow]Project ID: [-]p1\n[yellow]Project Number: [-]111"
+	want := "[yellow]Name: [white]One\n[yellow]Project ID: [white]p1\n[yellow]Project Number: [white]111"
 	if text != want {
 		t.Fatalf("renderSummary() = %q, want %q", text, want)
 	}

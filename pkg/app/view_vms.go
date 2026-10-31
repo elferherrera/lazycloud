@@ -57,14 +57,14 @@ var vmsView = viewDef{
 		return vmRows(vms), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d VMs for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d VMs for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching VMs...[-]")
+		a.statusInfo("Fetching VMs...")
 		go func() {
 			projectID := appState.ProjectID
 			vms, err := providers.ListProjectVMs(projectID)
@@ -111,10 +111,10 @@ var vmsAllView = viewDef{
 		return vmRowsAll(vms), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d VMs for all projects[-]", count)
+		return fmt.Sprintf("%d VMs for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching VMs for all projects...[-]")
+		a.statusInfo("Fetching VMs for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -125,7 +125,7 @@ var vmsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching VMs for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", p.ProjectID))
 				})
 				vms, err := providers.ListProjectVMs(p.ProjectID)
 				if err != nil {
@@ -187,12 +187,12 @@ func (a *app) lookupCachedDisk(vm *providers.VM, d *providers.VMDisk) *providers
 
 func (a *app) vmDetails(vm *providers.VM) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", vm.ProjectID)
-	fmt.Fprintf(&sb, "[yellow]Zone: [-]%s\n", vm.Zone)
-	fmt.Fprintf(&sb, "[yellow]Machine type: [-]%s\n", vm.MachineType)
-	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", vm.Status)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Project: [-]%s\n", vm.ProjectID)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Zone: [-]%s\n", vm.Zone)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Machine type: [-]%s\n", vm.MachineType)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Status: [-]%s\n", vm.Status)
 	if len(vm.NetworkTags) > 0 {
-		fmt.Fprintf(&sb, "[yellow]Network tags: [-]%s\n", strings.Join(vm.NetworkTags, ","))
+		fmt.Fprintf(&sb, theme.detailLabelTag()+"Network tags: [-]%s\n", strings.Join(vm.NetworkTags, ","))
 	}
 	if len(vm.Labels) > 0 {
 		keys := make([]string, 0, len(vm.Labels))
@@ -200,13 +200,13 @@ func (a *app) vmDetails(vm *providers.VM) string {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		fmt.Fprintf(&sb, "[yellow]Labels: [-]\n")
+		sb.WriteString(theme.detailLabelTag() + "Labels: [-]\n")
 		for _, k := range keys {
 			fmt.Fprintf(&sb, "  %s=%s\n", k, vm.Labels[k])
 		}
 	}
 	if len(vm.ServiceAccounts) > 0 {
-		fmt.Fprintf(&sb, "[yellow]Service accounts: [-]\n")
+		sb.WriteString(theme.detailLabelTag() + "Service accounts: [-]\n")
 		for _, sa := range vm.ServiceAccounts {
 			line := "  " + sa.Email
 			if len(sa.Scopes) > 0 {
@@ -216,11 +216,11 @@ func (a *app) vmDetails(vm *providers.VM) string {
 		}
 	}
 	if vm.InstanceTemplate != "" {
-		fmt.Fprintf(&sb, "[yellow]Instance template: [-]%s\n", vm.InstanceTemplate)
+		fmt.Fprintf(&sb, theme.detailLabelTag()+"Instance template: [-]%s\n", vm.InstanceTemplate)
 	}
-	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n\n", formatUpdatedAt(vm.UpdatedAt))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Updated: [-]%s\n\n", formatUpdatedAt(vm.UpdatedAt))
 
-	sb.WriteString("[yellow]Network interfaces:[-]\n")
+	sb.WriteString(theme.detailLabelTag() + "Network interfaces:[-]\n")
 	if len(vm.Interfaces) == 0 {
 		sb.WriteString("  none\n")
 	}
@@ -232,7 +232,7 @@ func (a *app) vmDetails(vm *providers.VM) string {
 		sb.WriteString(line + "\n")
 	}
 
-	sb.WriteString("\n[yellow]Disks:[-]\n")
+	sb.WriteString("\n" + theme.detailLabelTag() + "Disks:[-]\n")
 	if vm.BootDisk == nil && len(vm.DataDisks) == 0 {
 		sb.WriteString("  none\n")
 	}

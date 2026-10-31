@@ -53,6 +53,7 @@ All lazycloud files live under `~/.config/lazycloud/` (created on first run):
 |---|---|
 | `cache.db` | SQLite cache of all fetched GCP resources |
 | `shortcuts.json` | Numeric shortcut (`1`–`0`) to view mapping; created with defaults on first run |
+| `theme.json` | Layout colors — `labels` (yellow accents: info headers), `text` (regular text), `borders` (info panel and overlay borders), `title` (border titles), `shortcutLabels` (shortcut keys; falls back to `labels`), `shortcutText` (shortcut descriptions; falls back to `text`), `statusLabels` (status bar info messages; standard yellow), `statusText` (status bar plain text; falls back to `text`), `summaryLabels` (summary prefixes; falls back to `labels`), `summaryText` (summary values; falls back to `text`), `detailLabels` (details overlay field names; standard yellow), `detailText` (details overlay values; falls back to `text`), `activeRowText` (active row text; standard black), `activeRowBackground` (active row background; falls back to `text`); status errors/successes and summary errors stay red/green. Created with the standard layout on first run, missing keys added in place on load (shortcut/summary selectors, `statusText`, `detailText` and `activeRowBackground` inherit `labels`/`text`). Any tcell color name (e.g. `aqua`, `orange`) or `#rrggbb` hex |
 | `last_project.json` | Last selected project, restored on startup |
 | `lazycloud.log` | Usage / fetch error log |
 

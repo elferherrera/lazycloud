@@ -62,13 +62,13 @@ var appState State
 
 func renderSummary(summary *tview.TextView) {
 	if appState.AllProjects {
-		summary.SetText("[yellow]Projects: [-]all")
+		summary.SetText(theme.summaryLabelTag() + "Projects: " + theme.summaryTextTag() + "all")
 		return
 	}
 	summary.SetText(
-		"[yellow]Name: [-]" + appState.Name +
-			"\n[yellow]Project ID: [-]" + appState.ProjectID +
-			"\n[yellow]Project Number: [-]" + appState.ProjectNumber)
+		theme.summaryLabelTag() + "Name: " + theme.summaryTextTag() + appState.Name +
+			"\n" + theme.summaryLabelTag() + "Project ID: " + theme.summaryTextTag() + appState.ProjectID +
+			"\n" + theme.summaryLabelTag() + "Project Number: " + theme.summaryTextTag() + appState.ProjectNumber)
 }
 
 func ipsViewKind() viewKind {

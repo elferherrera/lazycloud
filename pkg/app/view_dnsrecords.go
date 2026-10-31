@@ -40,14 +40,14 @@ var dnsRecordsView = viewDef{
 		return dnsRecordRows(records), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d dns records for zone %s (project %s)[-]", count, appState.Zone, appState.ZoneProject)
+		return fmt.Sprintf("%d dns records for zone %s (project %s)", count, appState.Zone, appState.ZoneProject)
 	},
 	refresh: func(a *app) {
 		if appState.ZoneProject == "" || appState.Zone == "" {
 			a.statusText("[red]No dns zone selected (press d on a zone row)[-]")
 			return
 		}
-		a.statusText(fmt.Sprintf("[yellow]Fetching dns records for %s...[-]", appState.Zone))
+		a.statusInfo(fmt.Sprintf("Fetching dns records for %s...", appState.Zone))
 		go func() {
 			projectID := appState.ZoneProject
 			zone := appState.Zone
@@ -92,16 +92,16 @@ func (a *app) showZoneDNSRecords() {
 
 func dnsRecordDetails(r *providers.DNSRecord) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", r.ProjectID)
-	fmt.Fprintf(&sb, "[yellow]Zone: [-]%s\n", r.Zone)
-	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", r.Name)
-	fmt.Fprintf(&sb, "[yellow]Type: [-]%s\n", r.Type)
-	fmt.Fprintf(&sb, "[yellow]TTL: [-]%d\n", r.TTL)
-	fmt.Fprintf(&sb, "[yellow]Data: [-]\n")
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Project: [-]%s\n", r.ProjectID)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Zone: [-]%s\n", r.Zone)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Name: [-]%s\n", r.Name)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Type: [-]%s\n", r.Type)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"TTL: [-]%d\n", r.TTL)
+	sb.WriteString(theme.detailLabelTag() + "Data: [-]\n")
 	for _, d := range r.Data {
 		fmt.Fprintf(&sb, "  %s\n", d)
 	}
-	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n", formatUpdatedAt(r.UpdatedAt))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Updated: [-]%s\n", formatUpdatedAt(r.UpdatedAt))
 	return sb.String()
 }
 

@@ -55,14 +55,14 @@ var accountsView = viewDef{
 		return serviceAccountRows(accounts), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d service accounts for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d service accounts for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching service accounts...[-]")
+		a.statusInfo("Fetching service accounts...")
 		go func() {
 			projectID := appState.ProjectID
 			accounts, err := providers.ListProjectServiceAccounts(projectID)
@@ -101,10 +101,10 @@ var accountsAllView = viewDef{
 		return serviceAccountRowsAll(accounts), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d service accounts for all projects[-]", count)
+		return fmt.Sprintf("%d service accounts for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching service accounts for all projects...[-]")
+		a.statusInfo("Fetching service accounts for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -115,7 +115,7 @@ var accountsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching service accounts for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching service accounts for %s...", p.ProjectID))
 				})
 				accounts, err := providers.ListProjectServiceAccounts(p.ProjectID)
 				if err != nil {

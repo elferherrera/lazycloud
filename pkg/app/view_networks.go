@@ -89,14 +89,14 @@ var networksView = viewDef{
 		return networkRows(networks, subnetworks), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d network resources for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d network resources for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching networks...[-]")
+		a.statusInfo("Fetching networks...")
 		go func() {
 			projectID := appState.ProjectID
 			networks, err := providers.ListProjectNetworks(projectID)
@@ -149,10 +149,10 @@ var networksAllView = viewDef{
 		return networkRowsAll(networks, subnetworks), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d network resources for all projects[-]", count)
+		return fmt.Sprintf("%d network resources for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching networks for all projects...[-]")
+		a.statusInfo("Fetching networks for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -163,7 +163,7 @@ var networksAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching networks for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching networks for %s...", p.ProjectID))
 				})
 				networks, err := providers.ListProjectNetworks(p.ProjectID)
 				if err != nil {

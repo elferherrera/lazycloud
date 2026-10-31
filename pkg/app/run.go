@@ -38,6 +38,12 @@ func Run() error {
 	}
 	applyShortcutConfig(shortcutConfig)
 
+	themeConfig, err := providers.LoadTheme(defaultThemeConfig())
+	if err != nil {
+		return fmt.Errorf("loading theme config: %w", err)
+	}
+	applyTheme(themeConfig)
+
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
 		return fmt.Errorf("loading last project: %w", err)
@@ -55,7 +61,7 @@ func Run() error {
 		cmd:     tview.NewInputField(),
 		info:    newInfoPanel(),
 		summary: newSummaryPanel(),
-		status:  tview.NewTextView().SetDynamicColors(true),
+		status:  tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
 		pages:   tview.NewPages(),
 		cache:   cache,
 		logger:  logger,

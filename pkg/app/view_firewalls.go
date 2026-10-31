@@ -48,14 +48,14 @@ var firewallsView = viewDef{
 		return firewallRows(rules), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d firewall rules for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d firewall rules for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching firewall rules...[-]")
+		a.statusInfo("Fetching firewall rules...")
 		go func() {
 			projectID := appState.ProjectID
 			rules, err := providers.ListProjectFirewallRules(projectID)
@@ -94,10 +94,10 @@ var firewallsAllView = viewDef{
 		return firewallRowsAll(rules), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d firewall rules for all projects[-]", count)
+		return fmt.Sprintf("%d firewall rules for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching firewall rules for all projects...[-]")
+		a.statusInfo("Fetching firewall rules for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -108,7 +108,7 @@ var firewallsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching firewall rules for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching firewall rules for %s...", p.ProjectID))
 				})
 				rules, err := providers.ListProjectFirewallRules(p.ProjectID)
 				if err != nil {

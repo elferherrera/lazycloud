@@ -51,14 +51,14 @@ var vpnsView = viewDef{
 		return vpnGatewayRows(gateways), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d VPN gateways for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d VPN gateways for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching VPN gateways...[-]")
+		a.statusInfo("Fetching VPN gateways...")
 		go func() {
 			projectID := appState.ProjectID
 			gateways, err := providers.ListProjectVPNGateways(projectID)
@@ -97,10 +97,10 @@ var vpnsAllView = viewDef{
 		return vpnGatewayRowsAll(gateways), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d VPN gateways for all projects[-]", count)
+		return fmt.Sprintf("%d VPN gateways for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching VPN gateways for all projects...[-]")
+		a.statusInfo("Fetching VPN gateways for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -111,7 +111,7 @@ var vpnsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching VPN gateways for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching VPN gateways for %s...", p.ProjectID))
 				})
 				gateways, err := providers.ListProjectVPNGateways(p.ProjectID)
 				if err != nil {

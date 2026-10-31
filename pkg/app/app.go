@@ -36,7 +36,8 @@ type app struct {
 func newSummaryPanel() *tview.TextView {
 	return tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[yellow]No selection[-]")
+		SetTextColor(theme.summaryTextColor()).
+		SetText(theme.summaryLabelTag() + "No selection")
 }
 
 func newShortcutsSummaryPanel() *tview.Table {
@@ -51,10 +52,11 @@ func newShortcutsSummaryPanel() *tview.Table {
 	for i, s := range numeric {
 		row, col := i%rows, (i/rows)*2
 		table.SetCell(row, col, tview.NewTableCell(string(s.key)).
-			SetTextColor(tview.Styles.SecondaryTextColor).
+			SetTextColor(theme.shortcutLabelColor()).
 			SetAttributes(tcell.AttrBold))
 		table.SetCell(row, col+1, tview.NewTableCell(strings.TrimPrefix(s.desc, "show ")).
-			SetExpansion(1))
+			SetExpansion(1).
+			SetTextColor(theme.shortcutTextColor()))
 	}
 	return table
 }
@@ -62,7 +64,10 @@ func newShortcutsSummaryPanel() *tview.Table {
 func newInfoPanel() *tview.Table {
 	return tview.NewTable().
 		SetBorders(false).
-		SetSelectable(true, false)
+		SetSelectable(true, false).
+		SetSelectedStyle(tcell.StyleDefault.
+			Foreground(theme.activeRowTextColor()).
+			Background(theme.activeRowBackgroundColor()))
 }
 
 func populateInfoPanel(table *tview.Table, headers []string, rows [][]string) {
@@ -84,6 +89,10 @@ func populateInfoPanel(table *tview.Table, headers []string, rows [][]string) {
 
 func (a *app) statusText(text string) {
 	a.status.SetText(text)
+}
+
+func (a *app) statusInfo(text string) {
+	a.statusText(theme.statusLabelTag() + text + "[-]")
 }
 
 func (a *app) reportError(view, projectID, message string, err error) {
@@ -195,12 +204,12 @@ func (a *app) setView(kind viewKind) {
 	a.cmd.SetText("")
 	a.applyFilter()
 	if def.status != nil {
-		a.statusText(def.status(a, len(rows)))
+		a.statusInfo(def.status(a, len(rows)))
 	}
 }
 
 func (a *app) enterFilterMode() {
-	a.statusText("[yellow]filter mode (Tab cycles details, '+ x' requires x, '- x' excludes x)[-]")
+	a.statusInfo("filter mode (Tab cycles details, '+ x' requires x, '- x' excludes x)")
 }
 
 func (a *app) exitFilterMode() {
@@ -255,7 +264,7 @@ func artOverlayWidth(content string, screenWidth int) int {
 }
 
 func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
-	text := tview.NewTextView().SetDynamicColors(true).SetText(content)
+	text := tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.detailTextColor()).SetText(content)
 	text.SetBorder(true).SetTitle(title)
 	lines := strings.Count(text.GetText(true), "\n")
 	screenWidth, screenHeight := 0, 0

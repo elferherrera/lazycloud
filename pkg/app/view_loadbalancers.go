@@ -112,14 +112,14 @@ var lbsView = viewDef{
 		return lbRows(a.cache, appState.ProjectID, rules), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d load balancers for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d load balancers for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching load balancers...[-]")
+		a.statusInfo("Fetching load balancers...")
 		go func() {
 			projectID := appState.ProjectID
 			count, err := refreshProjectLBs(a, projectID)
@@ -153,10 +153,10 @@ var lbsAllView = viewDef{
 		return lbRowsAll(a.cache, rules), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d load balancers for all projects[-]", count)
+		return fmt.Sprintf("%d load balancers for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching load balancers for all projects...[-]")
+		a.statusInfo("Fetching load balancers for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -167,7 +167,7 @@ var lbsAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching load balancers for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching load balancers for %s...", p.ProjectID))
 				})
 				count, err := refreshProjectLBs(a, p.ProjectID)
 				if err != nil {
@@ -200,30 +200,30 @@ var lbsAllView = viewDef{
 func lbDetails(lb *providers.LoadBalancer) string {
 	var sb strings.Builder
 	r := lb.Rule
-	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", r.ProjectID)
-	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", r.Name)
-	fmt.Fprintf(&sb, "[yellow]Region: [-]%s\n", r.Region)
-	fmt.Fprintf(&sb, "[yellow]IP:Port: [-]%s\n", lbAddrPort(r))
-	fmt.Fprintf(&sb, "[yellow]Protocol: [-]%s\n", r.Protocol)
-	fmt.Fprintf(&sb, "[yellow]Scheme: [-]%s\n", r.Scheme)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Project: [-]%s\n", r.ProjectID)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Name: [-]%s\n", r.Name)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Region: [-]%s\n", r.Region)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"IP:Port: [-]%s\n", lbAddrPort(r))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Protocol: [-]%s\n", r.Protocol)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Scheme: [-]%s\n", r.Scheme)
 	if r.Target != "" {
 		if r.TargetKind != "" {
-			fmt.Fprintf(&sb, "[yellow]Target: [-]%s (%s)\n", r.Target, r.TargetKind)
+			fmt.Fprintf(&sb, theme.detailLabelTag()+"Target: [-]%s (%s)\n", r.Target, r.TargetKind)
 		} else {
-			fmt.Fprintf(&sb, "[yellow]Target: [-]%s\n", r.Target)
+			fmt.Fprintf(&sb, theme.detailLabelTag()+"Target: [-]%s\n", r.Target)
 		}
 	}
 	if lb.Proxy != nil {
-		fmt.Fprintf(&sb, "[yellow]Target proxy: [-]%s\n", lb.Proxy.Name)
+		fmt.Fprintf(&sb, theme.detailLabelTag()+"Target proxy: [-]%s\n", lb.Proxy.Name)
 	}
 	if lb.URLMap != nil {
-		fmt.Fprintf(&sb, "[yellow]URL map: [-]%s (default: %s)\n", lb.URLMap.Name, lb.URLMap.DefaultService)
+		fmt.Fprintf(&sb, theme.detailLabelTag()+"URL map: [-]%s (default: %s)\n", lb.URLMap.Name, lb.URLMap.DefaultService)
 		for _, pr := range lb.URLMap.PathRules {
-			fmt.Fprintf(&sb, "[yellow]  %s -> [-]%s\n", strings.Join(pr.Paths, ","), pr.Service)
+			fmt.Fprintf(&sb, theme.detailLabelTag()+"  %s -> [-]%s\n", strings.Join(pr.Paths, ","), pr.Service)
 		}
 	}
 	for _, svc := range lb.BackendServices {
-		fmt.Fprintf(&sb, "[yellow]Backend service: [-]%s (%s, port %s)\n", svc.Name, svc.Protocol, svc.PortName)
+		fmt.Fprintf(&sb, theme.detailLabelTag()+"Backend service: [-]%s (%s, port %s)\n", svc.Name, svc.Protocol, svc.PortName)
 		for _, b := range svc.Backends {
 			if b.BalancingMode != "" {
 				fmt.Fprintf(&sb, "  %s (%s)\n", b.Group, b.BalancingMode)
@@ -232,7 +232,7 @@ func lbDetails(lb *providers.LoadBalancer) string {
 			}
 		}
 		if len(svc.HealthChecks) > 0 {
-			fmt.Fprintf(&sb, "[yellow]  Health checks: [-]%s\n", strings.Join(svc.HealthChecks, ","))
+			fmt.Fprintf(&sb, theme.detailLabelTag()+"  Health checks: [-]%s\n", strings.Join(svc.HealthChecks, ","))
 		}
 	}
 	return sb.String()

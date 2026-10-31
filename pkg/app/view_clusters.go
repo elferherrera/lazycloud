@@ -60,14 +60,14 @@ var clustersView = viewDef{
 		return clusterRows(clusters), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d clusters for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d clusters for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching clusters...[-]")
+		a.statusInfo("Fetching clusters...")
 		go func() {
 			projectID := appState.ProjectID
 			clusters, err := providers.ListProjectClusters(projectID)
@@ -106,10 +106,10 @@ var clustersAllView = viewDef{
 		return clusterRowsAll(clusters), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d clusters for all projects[-]", count)
+		return fmt.Sprintf("%d clusters for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching clusters for all projects...[-]")
+		a.statusInfo("Fetching clusters for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -120,7 +120,7 @@ var clustersAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching clusters for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching clusters for %s...", p.ProjectID))
 				})
 				clusters, err := providers.ListProjectClusters(p.ProjectID)
 				if err != nil {
@@ -218,19 +218,19 @@ func showClusters(a *app) {
 
 func clusterDetails(cl *providers.Cluster) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "[yellow]Project: [-]%s\n", cl.ProjectID)
-	fmt.Fprintf(&sb, "[yellow]Name: [-]%s\n", cl.Name)
-	fmt.Fprintf(&sb, "[yellow]Location: [-]%s\n", cl.Location)
-	fmt.Fprintf(&sb, "[yellow]Status: [-]%s\n", cl.Status)
-	fmt.Fprintf(&sb, "[yellow]Version: [-]%s\n", cl.Version)
-	fmt.Fprintf(&sb, "[yellow]Endpoint: [-]%s\n", cl.Endpoint)
-	fmt.Fprintf(&sb, "[yellow]Description: [-]%s\n", cl.Description)
-	fmt.Fprintf(&sb, "[yellow]Node pools: [-]\n")
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Project: [-]%s\n", cl.ProjectID)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Name: [-]%s\n", cl.Name)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Location: [-]%s\n", cl.Location)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Status: [-]%s\n", cl.Status)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Version: [-]%s\n", cl.Version)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Endpoint: [-]%s\n", cl.Endpoint)
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Description: [-]%s\n", cl.Description)
+	sb.WriteString(theme.detailLabelTag() + "Node pools: [-]\n")
 	for _, np := range cl.NodePools {
 		fmt.Fprintf(&sb, "  %s (v%s, %d nodes)\n", np.Name, np.Version, np.NodeCount)
 	}
-	fmt.Fprintf(&sb, "[yellow]Created: [-]%s\n", formatUpdatedAt(cl.CreatedAt))
-	fmt.Fprintf(&sb, "[yellow]Updated: [-]%s\n", formatUpdatedAt(cl.UpdatedAt))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Created: [-]%s\n", formatUpdatedAt(cl.CreatedAt))
+	fmt.Fprintf(&sb, theme.detailLabelTag()+"Updated: [-]%s\n", formatUpdatedAt(cl.UpdatedAt))
 	return sb.String()
 }
 

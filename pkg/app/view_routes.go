@@ -54,14 +54,14 @@ var routesView = viewDef{
 		return routeRows(routes), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d routes for %s[-]", count, appState.ProjectID)
+		return fmt.Sprintf("%d routes for %s", count, appState.ProjectID)
 	},
 	refresh: func(a *app) {
 		if appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusText("[yellow]Fetching routes...[-]")
+		a.statusInfo("Fetching routes...")
 		go func() {
 			projectID := appState.ProjectID
 			routes, err := providers.ListProjectRoutes(projectID)
@@ -100,10 +100,10 @@ var routesAllView = viewDef{
 		return routeRowsAll(routes), nil
 	},
 	status: func(a *app, count int) string {
-		return fmt.Sprintf("[yellow]%d routes for all projects[-]", count)
+		return fmt.Sprintf("%d routes for all projects", count)
 	},
 	refresh: func(a *app) {
-		a.statusText("[yellow]Fetching routes for all projects...[-]")
+		a.statusInfo("Fetching routes for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -114,7 +114,7 @@ var routesAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusText(fmt.Sprintf("[yellow]Fetching routes for %s...[-]", p.ProjectID))
+					a.statusInfo(fmt.Sprintf("Fetching routes for %s...", p.ProjectID))
 				})
 				routes, err := providers.ListProjectRoutes(p.ProjectID)
 				if err != nil {
