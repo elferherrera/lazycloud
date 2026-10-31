@@ -140,8 +140,57 @@ func shellPath() string {
 	return "/bin/sh"
 }
 
-func kubectlSetContextArgs(cluster, namespace string) []string {
-	return []string{"config", "set-context", cluster, "--namespace", namespace}
+func kubectlSetContextArgs(contextName, namespace string) []string {
+	return []string{"config", "set-context", contextName, "--namespace", namespace}
+}
+
+func findClusterContextName(names []string, projectID, location, cluster string) string {
+	exact := fmt.Sprintf("gke_%s_%s_%s", projectID, location, cluster)
+	var suffixProject, suffixAny, containsProject, containsAny []string
+	for _, name := range names {
+		if name == exact {
+			return name
+		}
+		hasProject := strings.Contains(name, projectID)
+		switch {
+		case strings.HasSuffix(name, "_"+cluster) && hasProject:
+			suffixProject = append(suffixProject, name)
+		case strings.HasSuffix(name, "_"+cluster):
+			suffixAny = append(suffixAny, name)
+		case strings.Contains(name, cluster) && hasProject:
+			containsProject = append(containsProject, name)
+		case strings.Contains(name, cluster):
+			containsAny = append(containsAny, name)
+		}
+	}
+	for _, group := range [][]string{suffixProject, suffixAny, containsProject, containsAny} {
+		if len(group) > 0 {
+			return group[0]
+		}
+	}
+	return ""
+}
+
+func kubectlClusterContext(projectID, location, cluster string) (string, error) {
+	out, err := exec.Command("kubectl", "config", "get-contexts", "-o", "name").Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("kubectl get-contexts: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", err
+	}
+	names := make([]string, 0, 8)
+	for _, line := range strings.Split(string(out), "\n") {
+		if name := strings.TrimSpace(line); name != "" {
+			names = append(names, name)
+		}
+	}
+	name := findClusterContextName(names, projectID, location, cluster)
+	if name == "" {
+		return "", fmt.Errorf("no kubectl context found for cluster %q (press c on the cluster in the clusters view to fetch credentials first)", cluster)
+	}
+	return name, nil
 }
 
 func (a *app) openWorkloadShell() {
@@ -153,7 +202,22 @@ func (a *app) openWorkloadShell() {
 	if namespace == "" || appState.Cluster == "" {
 		return
 	}
-	setCtx := exec.Command("kubectl", kubectlSetContextArgs(appState.Cluster, namespace)...)
+	cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
+	if err != nil {
+		a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+		return
+	}
+	if cl == nil {
+		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+		return
+	}
+	contextName, err := kubectlClusterContext(appState.ClusterProject, cl.Location, appState.Cluster)
+	if err != nil {
+		a.logger.Error("workloads", appState.ClusterProject, "context lookup failed for "+appState.Cluster+" (namespace "+namespace+"): "+err.Error())
+		a.statusText("[red]Failed to find kubectl context: [-]" + err.Error())
+		return
+	}
+	setCtx := exec.Command("kubectl", kubectlSetContextArgs(contextName, namespace)...)
 	setCtx.Stdin = os.Stdin
 	setCtx.Stdout = os.Stdout
 	setCtx.Stderr = os.Stderr
@@ -167,17 +231,17 @@ func (a *app) openWorkloadShell() {
 		shellErr = shell.Run()
 	})
 	if setErr != nil {
-		a.logger.Error("workloads", appState.ClusterProject, "set-context failed for "+appState.Cluster+" (namespace "+namespace+"): "+setErr.Error())
+		a.logger.Error("workloads", appState.ClusterProject, "set-context failed for "+contextName+" (namespace "+namespace+"): "+setErr.Error())
 		a.statusText("[red]kubectl set-context failed: [-]" + setErr.Error())
 		return
 	}
 	var exitErr *exec.ExitError
 	if shellErr != nil && !errors.As(shellErr, &exitErr) {
-		a.logger.Error("workloads", appState.ClusterProject, "shell failed for "+appState.Cluster+" (namespace "+namespace+"): "+shellErr.Error())
+		a.logger.Error("workloads", appState.ClusterProject, "shell failed for "+contextName+" (namespace "+namespace+"): "+shellErr.Error())
 		a.statusText("[red]Failed to open shell: [-]" + shellErr.Error())
 		return
 	}
-	a.statusText(fmt.Sprintf("[green]Shell session for %s/%s ended[-]", appState.Cluster, namespace))
+	a.statusText(fmt.Sprintf("[green]Shell session for %s/%s ended[-]", contextName, namespace))
 }
 
 func (a *app) showClusterWorkloads() {
