@@ -43,6 +43,18 @@ func routeResource(a *app, projectID, name string) (any, error) {
 	return r, nil
 }
 
+func fetchProjectRoutes(a *app, projectID string) (string, error) {
+	routes, err := providers.ListProjectRoutes(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveRoutes(projectID, routes); err != nil {
+		return "", err
+	}
+	a.logger.Update("routes", projectID, len(routes))
+	return fmt.Sprintf("Fetched %d routes", len(routes)), nil
+}
+
 var routesView = viewDef{
 	title:   "Routes",
 	headers: []string{"Name", "Network", "Destination", "Priority", "Next Hop Type", "Next Hop", "Description", "Updated"},
@@ -56,30 +68,8 @@ var routesView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d routes for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching routes...")
-		go func() {
-			projectID := appState.ProjectID
-			routes, err := providers.ListProjectRoutes(projectID)
-			if err != nil {
-				a.reportError("routes", projectID, "Failed to fetch routes", err)
-				return
-			}
-			if err := a.cache.SaveRoutes(projectID, routes); err != nil {
-				a.reportError("routes", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("routes", projectID, len(routes))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewRoutes)
-				a.statusText(fmt.Sprintf("[green]Fetched %d routes[-]", len(routes)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewRoutes, "routes", fetchProjectRoutes),
+	fetch:   fetchProjectRoutes,
 	resource: func(a *app, row []string) (any, error) {
 		return routeResource(a, appState.ProjectID, row[0])
 	},

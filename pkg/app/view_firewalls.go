@@ -37,6 +37,18 @@ func firewallRuleResource(a *app, projectID, name string) (any, error) {
 	return r, nil
 }
 
+func fetchProjectFirewalls(a *app, projectID string) (string, error) {
+	rules, err := providers.ListProjectFirewallRules(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveFirewallRules(projectID, rules); err != nil {
+		return "", err
+	}
+	a.logger.Update("firewalls", projectID, len(rules))
+	return fmt.Sprintf("Fetched %d firewall rules", len(rules)), nil
+}
+
 var firewallsView = viewDef{
 	title:   "Firewall Rules",
 	headers: []string{"Name", "Network", "Direction", "Priority", "Action", "Source", "Targets", "Updated"},
@@ -50,30 +62,8 @@ var firewallsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d firewall rules for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching firewall rules...")
-		go func() {
-			projectID := appState.ProjectID
-			rules, err := providers.ListProjectFirewallRules(projectID)
-			if err != nil {
-				a.reportError("firewalls", projectID, "Failed to fetch firewall rules", err)
-				return
-			}
-			if err := a.cache.SaveFirewallRules(projectID, rules); err != nil {
-				a.reportError("firewalls", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("firewalls", projectID, len(rules))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewFirewalls)
-				a.statusText(fmt.Sprintf("[green]Fetched %d firewall rules[-]", len(rules)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewFirewalls, "firewall rules", fetchProjectFirewalls),
+	fetch:   fetchProjectFirewalls,
 	resource: func(a *app, row []string) (any, error) {
 		return firewallRuleResource(a, appState.ProjectID, row[0])
 	},

@@ -35,6 +35,18 @@ func ipAddressRows(ips []providers.IPAddress) [][]string {
 	return rows
 }
 
+func fetchProjectIPs(a *app, projectID string) (string, error) {
+	ips, err := providers.ListProjectIPAddresses(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveIPAddresses(projectID, ips); err != nil {
+		return "", err
+	}
+	a.logger.Update("ips", projectID, len(ips))
+	return fmt.Sprintf("Fetched %d IP addresses", len(ips)), nil
+}
+
 var ipsView = viewDef{
 	title:   "IP Addresses",
 	headers: []string{"Name", "Address", "Region", "Status", "Updated"},
@@ -48,30 +60,8 @@ var ipsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d IP addresses for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching IP addresses...")
-		go func() {
-			projectID := appState.ProjectID
-			ips, err := providers.ListProjectIPAddresses(projectID)
-			if err != nil {
-				a.reportError("ips", projectID, "Failed to fetch IPs", err)
-				return
-			}
-			if err := a.cache.SaveIPAddresses(projectID, ips); err != nil {
-				a.reportError("ips", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("ips", projectID, len(ips))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewIPs)
-				a.statusText(fmt.Sprintf("[green]Fetched %d IP addresses[-]", len(ips)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewIPs, "IP addresses", fetchProjectIPs),
+	fetch:   fetchProjectIPs,
 	resource: func(a *app, row []string) (any, error) {
 		return ipAddressResource(a, appState.ProjectID, row[0], row[1])
 	},

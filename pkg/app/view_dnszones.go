@@ -35,6 +35,18 @@ func dnsZoneResource(a *app, projectID, name string) (any, error) {
 	return z, nil
 }
 
+func fetchProjectDNSZones(a *app, projectID string) (string, error) {
+	zones, err := providers.ListProjectDNSZones(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveDNSZones(projectID, zones); err != nil {
+		return "", err
+	}
+	a.logger.Update("dns-zones", projectID, len(zones))
+	return fmt.Sprintf("Fetched %d dns zones", len(zones)), nil
+}
+
 var dnsZonesView = viewDef{
 	title:   "DNS Zones",
 	headers: []string{"Name", "DNS Name", "Visibility", "Description", "Updated"},
@@ -48,30 +60,8 @@ var dnsZonesView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d dns zones for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching dns zones...")
-		go func() {
-			projectID := appState.ProjectID
-			zones, err := providers.ListProjectDNSZones(projectID)
-			if err != nil {
-				a.reportError("dns-zones", projectID, "Failed to fetch dns zones", err)
-				return
-			}
-			if err := a.cache.SaveDNSZones(projectID, zones); err != nil {
-				a.reportError("dns-zones", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("dns-zones", projectID, len(zones))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewDNSZones)
-				a.statusText(fmt.Sprintf("[green]Fetched %d dns zones[-]", len(zones)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewDNSZones, "dns zones", fetchProjectDNSZones),
+	fetch:   fetchProjectDNSZones,
 	resource: func(a *app, row []string) (any, error) {
 		return dnsZoneResource(a, appState.ProjectID, row[0])
 	},

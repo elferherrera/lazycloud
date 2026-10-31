@@ -49,6 +49,18 @@ func clusterResource(a *app, projectID, name string) (any, error) {
 	return cl, nil
 }
 
+func fetchProjectClusters(a *app, projectID string) (string, error) {
+	clusters, err := providers.ListProjectClusters(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveClusters(projectID, clusters); err != nil {
+		return "", err
+	}
+	a.logger.Update("clusters", projectID, len(clusters))
+	return fmt.Sprintf("Fetched %d clusters", len(clusters)), nil
+}
+
 var clustersView = viewDef{
 	title:   "Kubernetes Clusters",
 	headers: []string{"Name", "Location", "Status", "Version", "Node Pools", "Created", "Updated"},
@@ -62,30 +74,8 @@ var clustersView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d clusters for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching clusters...")
-		go func() {
-			projectID := appState.ProjectID
-			clusters, err := providers.ListProjectClusters(projectID)
-			if err != nil {
-				a.reportError("clusters", projectID, "Failed to fetch clusters", err)
-				return
-			}
-			if err := a.cache.SaveClusters(projectID, clusters); err != nil {
-				a.reportError("clusters", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("clusters", projectID, len(clusters))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewClusters)
-				a.statusText(fmt.Sprintf("[green]Fetched %d clusters[-]", len(clusters)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewClusters, "clusters", fetchProjectClusters),
+	fetch:   fetchProjectClusters,
 	resource: func(a *app, row []string) (any, error) {
 		return clusterResource(a, appState.ProjectID, row[0])
 	},

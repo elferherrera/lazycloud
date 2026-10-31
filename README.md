@@ -69,6 +69,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `:` | Command mode (e.g. `:vms`, `:sort asc name`, or type an IP address to jump to it) |
 | `/` | Filter the current list (see [Filtering](#filtering)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
+| `U` | Refresh every view of the current project, one after another (the status bar shows the view being fetched) |
 | `y` | Copy focused row (JSON) to clipboard |
 | `v` | Show focused row details |
 | `g` | Open focused resource in GCP Console |

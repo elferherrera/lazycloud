@@ -101,6 +101,14 @@ func refreshProjectLBs(a *app, projectID string) (int, error) {
 	return len(rules), nil
 }
 
+func fetchProjectLBs(a *app, projectID string) (string, error) {
+	count, err := refreshProjectLBs(a, projectID)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Fetched %d load balancers", count), nil
+}
+
 var lbsView = viewDef{
 	title:   "Load Balancers",
 	headers: []string{"Name", "IP:Port", "Region", "Protocol", "Scheme", "Backends", "Updated"},
@@ -114,25 +122,8 @@ var lbsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d load balancers for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching load balancers...")
-		go func() {
-			projectID := appState.ProjectID
-			count, err := refreshProjectLBs(a, projectID)
-			if err != nil {
-				a.reportError("lbs", projectID, "Failed to fetch load balancers", err)
-				return
-			}
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewLBs)
-				a.statusText(fmt.Sprintf("[green]Fetched %d load balancers[-]", count))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewLBs, "load balancers", fetchProjectLBs),
+	fetch:   fetchProjectLBs,
 	resource: func(a *app, row []string) (any, error) {
 		return resolveLB(a, appState.ProjectID, row[2], row[0])
 	},

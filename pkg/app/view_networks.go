@@ -74,6 +74,22 @@ func networkResource(a *app, projectID, kind, region, name string) (any, error) 
 	}
 }
 
+func fetchProjectNetworks(a *app, projectID string) (string, error) {
+	networks, err := providers.ListProjectNetworks(projectID)
+	if err != nil {
+		return "", err
+	}
+	subnetworks, err := providers.ListProjectSubnetworks(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveNetworks(projectID, networks, subnetworks); err != nil {
+		return "", err
+	}
+	a.logger.Update("networks", projectID, len(networks)+len(subnetworks))
+	return fmt.Sprintf("Fetched %d networks and %d subnetworks", len(networks), len(subnetworks)), nil
+}
+
 var networksView = viewDef{
 	title:   "Networks",
 	headers: []string{"Type", "Name", "Region", "Network", "IP Range", "Routing", "Status", "Updated"},
@@ -91,35 +107,8 @@ var networksView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d network resources for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching networks...")
-		go func() {
-			projectID := appState.ProjectID
-			networks, err := providers.ListProjectNetworks(projectID)
-			if err != nil {
-				a.reportError("networks", projectID, "Failed to fetch networks", err)
-				return
-			}
-			subnetworks, err := providers.ListProjectSubnetworks(projectID)
-			if err != nil {
-				a.reportError("networks", projectID, "Failed to fetch subnetworks", err)
-				return
-			}
-			if err := a.cache.SaveNetworks(projectID, networks, subnetworks); err != nil {
-				a.reportError("networks", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("networks", projectID, len(networks)+len(subnetworks))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewNetworks)
-				a.statusText(fmt.Sprintf("[green]Fetched %d networks and %d subnetworks[-]", len(networks), len(subnetworks)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewNetworks, "networks", fetchProjectNetworks),
+	fetch:   fetchProjectNetworks,
 	resource: func(a *app, row []string) (any, error) {
 		return networkResource(a, appState.ProjectID, row[0], row[2], row[1])
 	},

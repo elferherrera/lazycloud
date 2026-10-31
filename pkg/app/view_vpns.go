@@ -40,6 +40,18 @@ func vpnGatewayResource(a *app, projectID, region, name string) (any, error) {
 	return g, nil
 }
 
+func fetchProjectVPNs(a *app, projectID string) (string, error) {
+	gateways, err := providers.ListProjectVPNGateways(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveVPNGateways(projectID, gateways); err != nil {
+		return "", err
+	}
+	a.logger.Update("vpns", projectID, len(gateways))
+	return fmt.Sprintf("Fetched %d VPN gateways", len(gateways)), nil
+}
+
 var vpnsView = viewDef{
 	title:   "VPNs",
 	headers: []string{"Type", "Name", "Region", "Network", "IPs", "Tunnels", "Description", "Updated"},
@@ -53,30 +65,8 @@ var vpnsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d VPN gateways for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching VPN gateways...")
-		go func() {
-			projectID := appState.ProjectID
-			gateways, err := providers.ListProjectVPNGateways(projectID)
-			if err != nil {
-				a.reportError("vpns", projectID, "Failed to fetch VPN gateways", err)
-				return
-			}
-			if err := a.cache.SaveVPNGateways(projectID, gateways); err != nil {
-				a.reportError("vpns", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("vpns", projectID, len(gateways))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewVPNs)
-				a.statusText(fmt.Sprintf("[green]Fetched %d VPN gateways[-]", len(gateways)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewVPNs, "VPN gateways", fetchProjectVPNs),
+	fetch:   fetchProjectVPNs,
 	resource: func(a *app, row []string) (any, error) {
 		return vpnGatewayResource(a, appState.ProjectID, row[2], row[1])
 	},

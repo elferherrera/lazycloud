@@ -37,6 +37,18 @@ func instanceGroupResource(a *app, projectID, zone, name string) (any, error) {
 	return g, nil
 }
 
+func fetchProjectInstanceGroups(a *app, projectID string) (string, error) {
+	groups, err := providers.ListProjectInstanceGroups(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveInstanceGroups(projectID, groups); err != nil {
+		return "", err
+	}
+	a.logger.Update("instance-groups", projectID, len(groups))
+	return fmt.Sprintf("Fetched %d instance groups", len(groups)), nil
+}
+
 var instanceGroupsView = viewDef{
 	title:   "Instance Groups",
 	headers: []string{"Name", "Location", "Type", "Size", "Network", "Subnetwork", "Description", "Updated"},
@@ -50,30 +62,8 @@ var instanceGroupsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d instance groups for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching instance groups...")
-		go func() {
-			projectID := appState.ProjectID
-			groups, err := providers.ListProjectInstanceGroups(projectID)
-			if err != nil {
-				a.reportError("instance-groups", projectID, "Failed to fetch instance groups", err)
-				return
-			}
-			if err := a.cache.SaveInstanceGroups(projectID, groups); err != nil {
-				a.reportError("instance-groups", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("instance-groups", projectID, len(groups))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewInstanceGroups)
-				a.statusText(fmt.Sprintf("[green]Fetched %d instance groups[-]", len(groups)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewInstanceGroups, "instance groups", fetchProjectInstanceGroups),
+	fetch:   fetchProjectInstanceGroups,
 	resource: func(a *app, row []string) (any, error) {
 		return instanceGroupResource(a, appState.ProjectID, row[1], row[0])
 	},

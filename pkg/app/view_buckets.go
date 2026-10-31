@@ -35,6 +35,18 @@ func bucketResource(a *app, projectID, name string) (any, error) {
 	return b, nil
 }
 
+func fetchProjectBuckets(a *app, projectID string) (string, error) {
+	buckets, err := providers.ListProjectBuckets(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveBuckets(projectID, buckets); err != nil {
+		return "", err
+	}
+	a.logger.Update("buckets", projectID, len(buckets))
+	return fmt.Sprintf("Fetched %d buckets", len(buckets)), nil
+}
+
 var bucketsView = viewDef{
 	title:   "Buckets",
 	headers: []string{"Name", "Location", "Storage Class", "Versioning", "Created", "Updated"},
@@ -48,30 +60,8 @@ var bucketsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d buckets for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching buckets...")
-		go func() {
-			projectID := appState.ProjectID
-			buckets, err := providers.ListProjectBuckets(projectID)
-			if err != nil {
-				a.reportError("buckets", projectID, "Failed to fetch buckets", err)
-				return
-			}
-			if err := a.cache.SaveBuckets(projectID, buckets); err != nil {
-				a.reportError("buckets", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("buckets", projectID, len(buckets))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewBuckets)
-				a.statusText(fmt.Sprintf("[green]Fetched %d buckets[-]", len(buckets)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewBuckets, "buckets", fetchProjectBuckets),
+	fetch:   fetchProjectBuckets,
 	resource: func(a *app, row []string) (any, error) {
 		return bucketResource(a, appState.ProjectID, row[0])
 	},

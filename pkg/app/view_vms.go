@@ -46,6 +46,26 @@ func vmResource(a *app, projectID, zone, name string) (any, error) {
 	return vm, nil
 }
 
+func fetchProjectVMs(a *app, projectID string) (string, error) {
+	vms, err := providers.ListProjectVMs(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveVMs(projectID, vms); err != nil {
+		return "", err
+	}
+	a.logger.Update("vms", projectID, len(vms))
+	disks, err := providers.ListProjectDisks(projectID)
+	if err != nil {
+		a.reportError("disks", projectID, "Failed to fetch disks", err)
+	} else if err := a.cache.SaveDisks(projectID, disks); err != nil {
+		a.reportError("disks", projectID, "Failed to update cache", err)
+	} else {
+		a.logger.Update("disks", projectID, len(disks))
+	}
+	return fmt.Sprintf("Fetched %d VMs", len(vms)), nil
+}
+
 var vmsView = viewDef{
 	title:   "VMs",
 	headers: []string{"Name", "Zone", "Machine Type", "Status", "Internal IPs", "Updated"},
@@ -59,38 +79,8 @@ var vmsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d VMs for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching VMs...")
-		go func() {
-			projectID := appState.ProjectID
-			vms, err := providers.ListProjectVMs(projectID)
-			if err != nil {
-				a.reportError("vms", projectID, "Failed to fetch VMs", err)
-				return
-			}
-			if err := a.cache.SaveVMs(projectID, vms); err != nil {
-				a.reportError("vms", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("vms", projectID, len(vms))
-			disks, err := providers.ListProjectDisks(projectID)
-			if err != nil {
-				a.reportError("disks", projectID, "Failed to fetch disks", err)
-			} else if err := a.cache.SaveDisks(projectID, disks); err != nil {
-				a.reportError("disks", projectID, "Failed to update cache", err)
-			} else {
-				a.logger.Update("disks", projectID, len(disks))
-			}
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewVMs)
-				a.statusText(fmt.Sprintf("[green]Fetched %d VMs[-]", len(vms)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewVMs, "VMs", fetchProjectVMs),
+	fetch:   fetchProjectVMs,
 	resource: func(a *app, row []string) (any, error) {
 		return vmResource(a, appState.ProjectID, row[1], row[0])
 	},

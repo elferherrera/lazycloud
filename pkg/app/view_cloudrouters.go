@@ -45,6 +45,18 @@ func cloudRouterResource(a *app, projectID, region, name string) (any, error) {
 	return r, nil
 }
 
+func fetchProjectCloudRouters(a *app, projectID string) (string, error) {
+	routers, err := providers.ListProjectCloudRouters(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveCloudRouters(projectID, routers); err != nil {
+		return "", err
+	}
+	a.logger.Update("cloud-routers", projectID, len(routers))
+	return fmt.Sprintf("Fetched %d cloud routers", len(routers)), nil
+}
+
 var cloudRoutersView = viewDef{
 	title:   "Cloud Routers",
 	headers: []string{"Name", "Region", "Network", "ASN", "Peers", "NATs", "Description", "Updated"},
@@ -58,30 +70,8 @@ var cloudRoutersView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d cloud routers for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching cloud routers...")
-		go func() {
-			projectID := appState.ProjectID
-			routers, err := providers.ListProjectCloudRouters(projectID)
-			if err != nil {
-				a.reportError("cloud-routers", projectID, "Failed to fetch cloud routers", err)
-				return
-			}
-			if err := a.cache.SaveCloudRouters(projectID, routers); err != nil {
-				a.reportError("cloud-routers", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("cloud-routers", projectID, len(routers))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewCloudRouters)
-				a.statusText(fmt.Sprintf("[green]Fetched %d cloud routers[-]", len(routers)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewCloudRouters, "cloud routers", fetchProjectCloudRouters),
+	fetch:   fetchProjectCloudRouters,
 	resource: func(a *app, row []string) (any, error) {
 		return cloudRouterResource(a, appState.ProjectID, row[1], row[0])
 	},

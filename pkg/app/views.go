@@ -10,6 +10,7 @@ type viewDef struct {
 	load       func(a *app) ([][]string, error)
 	status     func(a *app, count int) string
 	refresh    func(a *app)
+	fetch      func(a *app, projectID string) (string, error)
 	selectRow  func(a *app, row, col int)
 	resource   func(a *app, row []string) (any, error)
 	samples    []any
@@ -53,5 +54,47 @@ func init() {
 		viewVPNsAll:           vpnsAllView,
 		viewInstanceGroups:    instanceGroupsView,
 		viewInstanceGroupsAll: instanceGroupsAllView,
+	}
+}
+
+// projectViewKinds lists the per-project views the U shortcut refreshes, in fetch order.
+var projectViewKinds = []viewKind{
+	viewVMs,
+	viewIPs,
+	viewNetworks,
+	viewAccounts,
+	viewBuckets,
+	viewLBs,
+	viewClusters,
+	viewRoutes,
+	viewFirewalls,
+	viewDNSZones,
+	viewCloudRouters,
+	viewVPNs,
+	viewInstanceGroups,
+}
+
+// projectRefresh builds the refresh action shared by the per-project views:
+// it fetches and caches the view's resources in the background, then reloads
+// the view and reports the status text returned by fetch.
+func projectRefresh(kind viewKind, label string, fetch func(a *app, projectID string) (string, error)) func(a *app) {
+	return func(a *app) {
+		if appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+			return
+		}
+		a.statusInfo("Fetching " + label + "...")
+		go func() {
+			projectID := appState.ProjectID
+			msg, err := fetch(a, projectID)
+			if err != nil {
+				a.reportError(string(kind), projectID, "Failed to fetch "+label, err)
+				return
+			}
+			a.tapp.QueueUpdateDraw(func() {
+				a.setView(kind)
+				a.statusText("[green]" + msg + "[-]")
+			})
+		}()
 	}
 }

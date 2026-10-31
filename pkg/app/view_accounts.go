@@ -44,6 +44,18 @@ func serviceAccountResource(a *app, projectID, email string) (any, error) {
 	return sa, nil
 }
 
+func fetchProjectAccounts(a *app, projectID string) (string, error) {
+	accounts, err := providers.ListProjectServiceAccounts(projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.cache.SaveServiceAccounts(projectID, accounts); err != nil {
+		return "", err
+	}
+	a.logger.Update("accounts", projectID, len(accounts))
+	return fmt.Sprintf("Fetched %d service accounts", len(accounts)), nil
+}
+
 var accountsView = viewDef{
 	title:   "Service Accounts",
 	headers: []string{"Email", "Display Name", "Unique ID", "Disabled", "Updated"},
@@ -57,30 +69,8 @@ var accountsView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d service accounts for %s", count, appState.ProjectID)
 	},
-	refresh: func(a *app) {
-		if appState.ProjectID == "" {
-			a.statusText("[red]No project selected[-]")
-			return
-		}
-		a.statusInfo("Fetching service accounts...")
-		go func() {
-			projectID := appState.ProjectID
-			accounts, err := providers.ListProjectServiceAccounts(projectID)
-			if err != nil {
-				a.reportError("accounts", projectID, "Failed to fetch service accounts", err)
-				return
-			}
-			if err := a.cache.SaveServiceAccounts(projectID, accounts); err != nil {
-				a.reportError("accounts", projectID, "Failed to update cache", err)
-				return
-			}
-			a.logger.Update("accounts", projectID, len(accounts))
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewAccounts)
-				a.statusText(fmt.Sprintf("[green]Fetched %d service accounts[-]", len(accounts)))
-			})
-		}()
-	},
+	refresh: projectRefresh(viewAccounts, "service accounts", fetchProjectAccounts),
+	fetch:   fetchProjectAccounts,
 	resource: func(a *app, row []string) (any, error) {
 		return serviceAccountResource(a, appState.ProjectID, row[0])
 	},

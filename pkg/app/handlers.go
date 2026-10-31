@@ -180,6 +180,7 @@ func init() {
 			run:     (*app).deleteProject,
 		},
 		{key: 'u', desc: "update cache", run: (*app).refreshView},
+		{key: 'U', desc: "update cache for all views", run: (*app).refreshProjectViews},
 		{key: 'y', desc: "copy row to clipboard", run: (*app).copyRow},
 		{key: 'v', desc: "show row details", run: (*app).showRowDetails},
 		{key: 'g', desc: "open in GCP console", run: (*app).openConsole},
@@ -562,6 +563,38 @@ func (a *app) deleteProject() {
 
 func (a *app) refreshView() {
 	views[appState.ViewKind].refresh(a)
+}
+
+// refreshProjectViews updates the cache of every per-project view for the
+// current project, one after another, showing the view being fetched.
+func (a *app) refreshProjectViews() {
+	if appState.ProjectID == "" {
+		a.statusText("[red]No project selected[-]")
+		return
+	}
+	projectID := appState.ProjectID
+	a.statusInfo(fmt.Sprintf("Updating all views for %s...", projectID))
+	go func() {
+		failed := 0
+		for i, kind := range projectViewKinds {
+			def := views[kind]
+			a.tapp.QueueUpdateDraw(func() {
+				a.statusInfo(fmt.Sprintf("Fetching %s (%d/%d)...", def.title, i+1, len(projectViewKinds)))
+			})
+			if _, err := def.fetch(a, projectID); err != nil {
+				a.reportError(string(kind), projectID, "Failed to fetch "+def.title, err)
+				failed++
+			}
+		}
+		a.tapp.QueueUpdateDraw(func() {
+			a.setView(appState.ViewKind)
+			status := fmt.Sprintf("[green]Updated %d views for %s[-]", len(projectViewKinds)-failed, projectID)
+			if failed > 0 {
+				status += fmt.Sprintf(" [red](%d views failed, see log)[-]", failed)
+			}
+			a.statusText(status)
+		})
+	}()
 }
 
 func (a *app) tableRowCells(row int) []string {
