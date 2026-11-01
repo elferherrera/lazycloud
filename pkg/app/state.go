@@ -10,6 +10,8 @@ const (
 	viewIPsAll            viewKind = "ips-all"
 	viewNetworks          viewKind = "networks"
 	viewNetworksAll       viewKind = "networks-all"
+	viewPeerings          viewKind = "peerings"
+	viewPeeringsAll       viewKind = "peerings-all"
 	viewRoutes            viewKind = "routes"
 	viewRoutesAll         viewKind = "routes-all"
 	viewFirewalls         viewKind = "firewalls"
@@ -83,6 +85,13 @@ func networksViewKind() viewKind {
 		return viewNetworksAll
 	}
 	return viewNetworks
+}
+
+func peeringsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewPeeringsAll
+	}
+	return viewPeerings
 }
 
 func routesViewKind() viewKind {

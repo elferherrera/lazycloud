@@ -11,6 +11,11 @@ func GCPNetworkURL(projectID, name string) string {
 		url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
 }
 
+func GCPNetworkPeeringURL(projectID, network, peering string) string {
+	return "https://console.cloud.google.com/networking/peering/details/" +
+		url.PathEscape(network) + "/" + url.PathEscape(peering) + "?project=" + url.QueryEscape(projectID)
+}
+
 func GCPSubnetworkURL(projectID, region, name string) string {
 	return "https://console.cloud.google.com/networking/subnetworks/details/" +
 		url.PathEscape(region) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)

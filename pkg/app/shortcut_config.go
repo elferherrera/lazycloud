@@ -35,6 +35,8 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		return (*app).showIPs
 	case viewNetworks:
 		return (*app).showNetworks
+	case viewPeerings:
+		return showPeerings
 	case viewLBs:
 		return showLBs
 	case viewClusters:
@@ -75,7 +77,7 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 			}
 			a.setView(viewDNSRecords)
 		}
-	case viewIPsAll, viewNetworksAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
+	case viewIPsAll, viewNetworksAll, viewPeeringsAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
 		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
 		viewVPNsAll, viewInstanceGroupsAll:
 		return func(a *app) { a.setView(kind) }

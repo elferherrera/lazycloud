@@ -100,6 +100,28 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS network_peerings (
+		project_id TEXT NOT NULL,
+		network TEXT NOT NULL,
+		name TEXT NOT NULL,
+		peer_network TEXT NOT NULL DEFAULT '',
+		peer_project TEXT NOT NULL DEFAULT '',
+		state TEXT NOT NULL DEFAULT '',
+		state_details TEXT NOT NULL DEFAULT '',
+		auto_create_routes INTEGER NOT NULL DEFAULT 0,
+		exchange_subnet_routes INTEGER NOT NULL DEFAULT 0,
+		export_custom_routes INTEGER NOT NULL DEFAULT 0,
+		import_custom_routes INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, network, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "network_peerings", "peer_project", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS routes (
 		project_id TEXT NOT NULL,
 		name TEXT NOT NULL,
@@ -736,6 +758,73 @@ func (c *Cache) GetSubnetwork(projectID, region, name string) (*Subnetwork, erro
 		s.SecondaryRanges = strings.Split(secondary, ",")
 	}
 	return &s, nil
+}
+
+func (c *Cache) SaveNetworkPeerings(projectID string, peerings []NetworkPeering) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM network_peerings WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, p := range peerings {
+		if _, err := tx.Exec(`INSERT INTO network_peerings
+			(project_id, network, name, peer_network, peer_project, state, state_details, auto_create_routes, exchange_subnet_routes, export_custom_routes, import_custom_routes, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, p.Network, p.Name, p.PeerNetwork, p.PeerProject, p.State, p.StateDetails,
+			p.AutoCreateRoutes, p.ExchangeSubnetRoutes, p.ExportCustomRoutes, p.ImportCustomRoutes, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (c *Cache) listNetworkPeerings(query string, args ...any) ([]NetworkPeering, error) {
+	rows, err := c.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var peerings []NetworkPeering
+	for rows.Next() {
+		var p NetworkPeering
+		var autoCreate, exchange, export, imPort int
+		if err := rows.Scan(&p.ProjectID, &p.Network, &p.Name, &p.PeerNetwork, &p.PeerProject, &p.State, &p.StateDetails,
+			&autoCreate, &exchange, &export, &imPort, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		p.AutoCreateRoutes = autoCreate != 0
+		p.ExchangeSubnetRoutes = exchange != 0
+		p.ExportCustomRoutes = export != 0
+		p.ImportCustomRoutes = imPort != 0
+		peerings = append(peerings, p)
+	}
+	return peerings, rows.Err()
+}
+
+func (c *Cache) ListNetworkPeerings(projectID string) ([]NetworkPeering, error) {
+	return c.listNetworkPeerings(`SELECT project_id, network, name, peer_network, peer_project, state, state_details, auto_create_routes, exchange_subnet_routes, export_custom_routes, import_custom_routes, updated_at
+		FROM network_peerings WHERE project_id = ? ORDER BY network, name`, projectID)
+}
+
+func (c *Cache) ListAllNetworkPeerings() ([]NetworkPeering, error) {
+	return c.listNetworkPeerings(`SELECT project_id, network, name, peer_network, peer_project, state, state_details, auto_create_routes, exchange_subnet_routes, export_custom_routes, import_custom_routes, updated_at
+		FROM network_peerings ORDER BY project_id, network, name`)
+}
+
+func (c *Cache) GetNetworkPeering(projectID, network, name string) (*NetworkPeering, error) {
+	rows, err := c.listNetworkPeerings(`SELECT project_id, network, name, peer_network, peer_project, state, state_details, auto_create_routes, exchange_subnet_routes, export_custom_routes, import_custom_routes, updated_at
+		FROM network_peerings WHERE project_id = ? AND network = ? AND name = ?`, projectID, network, name)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
 }
 
 func (c *Cache) SaveRoutes(projectID string, routes []Route) error {

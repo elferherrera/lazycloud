@@ -38,6 +38,21 @@ type Network struct {
 	UpdatedAt             string
 }
 
+type NetworkPeering struct {
+	ProjectID            string
+	Network              string
+	Name                 string
+	PeerNetwork          string
+	PeerProject          string
+	State                string
+	StateDetails         string
+	AutoCreateRoutes     bool
+	ExchangeSubnetRoutes bool
+	ExportCustomRoutes   bool
+	ImportCustomRoutes   bool
+	UpdatedAt            string
+}
+
 type Subnetwork struct {
 	ProjectID             string
 	Name                  string
@@ -154,6 +169,16 @@ func resourceShortName(resourceURL, fallback string) string {
 	return resourceURL
 }
 
+func resourceProjectName(resourceURL string) string {
+	parts := strings.Split(resourceURL, "/")
+	for i, part := range parts {
+		if part == "projects" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
 func ListProjectNetworks(projectID string) ([]Network, error) {
 	ctx := context.Background()
 
@@ -183,6 +208,44 @@ func ListProjectNetworks(projectID string) ([]Network, error) {
 		})
 	}
 	return networks, nil
+}
+
+func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewNetworksRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var peerings []NetworkPeering
+	it := client.List(ctx, &computepb.ListNetworksRequest{Project: projectID})
+	for {
+		n, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range n.GetPeerings() {
+			peerings = append(peerings, NetworkPeering{
+				ProjectID:            projectID,
+				Network:              n.GetName(),
+				Name:                 p.GetName(),
+				PeerNetwork:          resourceShortName(p.GetNetwork(), ""),
+				PeerProject:          resourceProjectName(p.GetNetwork()),
+				State:                p.GetState(),
+				StateDetails:         p.GetStateDetails(),
+				AutoCreateRoutes:     p.GetAutoCreateRoutes(),
+				ExchangeSubnetRoutes: p.GetExchangeSubnetRoutes(),
+				ExportCustomRoutes:   p.GetExportCustomRoutes(),
+				ImportCustomRoutes:   p.GetImportCustomRoutes(),
+			})
+		}
+	}
+	return peerings, nil
 }
 
 func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {

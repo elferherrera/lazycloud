@@ -13,16 +13,23 @@ type Logger struct {
 	file *os.File
 }
 
-func NewLogger() (*Logger, error) {
+func LogFilePath() (string, error) {
 	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "lazycloud", "lazycloud.log"), nil
+}
+
+func NewLogger() (*Logger, error) {
+	path, err := LogFilePath()
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(home, ".config", "lazycloud")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(filepath.Join(dir, "lazycloud.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}

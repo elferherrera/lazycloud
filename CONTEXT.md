@@ -51,12 +51,20 @@ Cache DB lives at `~/.config/lazycloud/cache.db`.
 
 Each view is a `viewDef` struct (views.go) registered by view kind in `views` map (state.go). Fields: `title`, `headers`, `load` (read from cache), `refresh` (fetch from GCP API + save to cache), `fetch` (sync fetch+save+log core of the per-project views' `refresh`, wrapped into `refresh` by `projectRefresh` and run per view by `U`), `selectRow` (Enter on a row), `resource` (row cells → underlying cached resource, used by `y` copy JSON, `v` row details and detail filtering), `samples` (zero-value resource structs used to validate detail filter paths), `consoleURL` (open GCP Console in browser).
 
+**Review when adding a new view** — a view is wired into several per-view registries beyond the `views` map, and each one silently degrades if missed:
+
+- view-kind constants and the `xViewKind()` AllProjects helper (state.go), the `views` map entry, and — for per-project views — the `projectViewKinds` list so `U` refreshes it (views.go)
+- a `:command` entry in `viewCommands` (handlers.go)
+- `viewShortcutAction` (shortcut_config.go): the base kind's show function and, for `…All` kinds, the generic case — without it a numeric shortcut configured for the view is rejected as unknown
+- the `a` all-projects toggle: `toggleAllProjects` (handlers.go) switches on the view's kind(s). A dual (per-project/all) view must have a case re-entering it via its `xViewKind()` helper; a scoped view with no all variant (projects, workloads, dns-records, nodepools) must join the explicit no-op case. A missing case leaves `AllProjects` flipped but the view unchanged — the per-project variant keeps rendering (no Project column) and `u` keeps fetching only the current project.
+
 | View kind | File | Table columns |
 |---|---|---|
 | `viewProjects` | view_projects.go | Project ID, Number, Updated |
 | `viewVMs` / `viewVMsAll` | view_vms.go | Name, Zone, Machine Type, Status, Internal IPs, Updated (+ Project in All) |
 | `viewIPs` / `viewIPsAll` | view_ips.go, view_ips_all.go | Name, Address, Region, Status, Updated (+ Project in All) |
 | `viewNetworks` | view_networks.go | — also defines `formatUpdatedAt` helper |
+| `viewPeerings` / `viewPeeringsAll` | view_peerings.go | VPC peerings: Network, Peering, Peer Network, Peer Project (parsed from the peering's network URL), State, Route Exchange (subnets, export-custom, import-custom), Updated (+ Project in All) |
 | `viewRoutes` / `viewRoutesAll` | view_routes.go | Routes: Name, Network, Destination, Priority, Next Hop Type, Next Hop, Description, Updated (+ Project in All) |
 | `viewFirewalls` / `viewFirewallsAll` | view_firewalls.go | Firewall rules: Name, Network, Direction, Priority, Action (allow/deny proto:ports), Source, Targets, Updated (+ Project in All) |
 | `viewBuckets` | view_buckets.go | Storage buckets |

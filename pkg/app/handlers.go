@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
 	"sort"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 type shortcut struct {
@@ -130,6 +134,13 @@ func init() {
 			visible: inDNSZonesView,
 			enabled: func(a *app) bool { return inDNSZonesView() },
 			run:     (*app).showZoneDNSRecords,
+		},
+		{
+			key:     'd',
+			desc:    "open log file in editor",
+			visible: func() bool { return !inDNSZonesView() },
+			enabled: func(a *app) bool { return !inDNSZonesView() },
+			run:     (*app).openLogFile,
 		},
 		{
 			key:     'b',
@@ -409,7 +420,7 @@ func (a *app) toggleAllProjects() {
 	appState.AllProjects = !appState.AllProjects
 	renderSummary(a.summary)
 	switch appState.ViewKind {
-	case viewProjects, viewWorkloads, viewDNSRecords:
+	case viewProjects, viewWorkloads, viewDNSRecords, viewNodePools:
 	case viewIPs, viewIPsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -421,6 +432,12 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(networksViewKind())
+		}
+	case viewPeerings, viewPeeringsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(peeringsViewKind())
 		}
 	case viewRoutes, viewRoutesAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
@@ -706,6 +723,32 @@ func (a *app) openConsole() {
 	a.statusText("[green]Opened GCP console in browser[-]")
 }
 
+func (a *app) openLogFile() {
+	path, err := providers.LogFilePath()
+	if err != nil {
+		a.statusText("[red]Failed to locate log file: [-]" + err.Error())
+		return
+	}
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	args := append(strings.Fields(editor), path)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	var runErr error
+	a.tapp.Suspend(func() {
+		runErr = cmd.Run()
+	})
+	if runErr != nil {
+		a.statusText("[red]Editor exited with error: [-]" + runErr.Error())
+		return
+	}
+	a.statusText("[green]Log file closed[-]")
+}
+
 func (a *app) toggleHelp() {
 	if name, _ := a.pages.GetFrontPage(); name == "help" {
 		a.pages.HidePage("help")
@@ -761,6 +804,8 @@ var viewCommands = map[string]func(a *app){
 	"ips":             (*app).showIPs,
 	"networks":        (*app).showNetworks,
 	"vpcs":            (*app).showNetworks,
+	"peerings":        showPeerings,
+	"peering":         showPeerings,
 	"routes":          showRoutes,
 	"firewalls":       showFirewalls,
 	"accounts":        showAccounts,
