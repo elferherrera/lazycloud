@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/rivo/tview"
+
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 func newCmdCompletionTestApp(t *testing.T) *app {
@@ -49,7 +51,7 @@ func TestCompleteCommand(t *testing.T) {
 	assertCmdText(t, a, "peerings")
 
 	a.completeCommand(true)
-	assertCmdText(t, a, "projects")
+	assertCmdText(t, a, "private-service-connect")
 
 	a.completeCommand(false)
 	assertCmdText(t, a, "peerings")
@@ -73,4 +75,41 @@ func TestCompleteCommand(t *testing.T) {
 	a.cmd.SetText("s")
 	a.completeCommand(true)
 	assertCmdText(t, a, "sa")
+}
+
+func TestRowCopyPayloadIncludesColumns(t *testing.T) {
+	payload, err := rowCopyPayload(
+		[]string{"Network", "Peering", "Route Exchange"},
+		[]string{"app-net", "peer-1", "subnets, export-custom"},
+		providers.NetworkPeering{ProjectID: "p1", Network: "app-net", Name: "peer-1", ExchangeSubnetRoutes: true, ExportCustomRoutes: true},
+	)
+	if err != nil {
+		t.Fatalf("rowCopyPayload() error = %v", err)
+	}
+	if payload["ProjectID"] != "p1" || payload["ExchangeSubnetRoutes"] != true {
+		t.Fatalf("rowCopyPayload() resource fields missing: %#v", payload)
+	}
+	cols, ok := payload["Columns"].(map[string]string)
+	if !ok {
+		t.Fatalf("rowCopyPayload() Columns missing: %#v", payload)
+	}
+	if cols["Network"] != "app-net" || cols["Peering"] != "peer-1" {
+		t.Fatalf("rowCopyPayload() Columns wrong: %#v", cols)
+	}
+	if cols["Route Exchange"] != "subnets, export-custom" {
+		t.Fatalf("rowCopyPayload() derived column missing: %#v", cols)
+	}
+}
+
+func TestRowCopyPayloadNonObjectResource(t *testing.T) {
+	payload, err := rowCopyPayload([]string{"Name"}, []string{"a"}, []string{"not", "an", "object"})
+	if err != nil {
+		t.Fatalf("rowCopyPayload() error = %v", err)
+	}
+	if res, ok := payload["Resource"].([]string); !ok || len(res) != 3 {
+		t.Fatalf("rowCopyPayload() Resource fallback missing: %#v", payload)
+	}
+	if cols, ok := payload["Columns"].(map[string]string); !ok || cols["Name"] != "a" {
+		t.Fatalf("rowCopyPayload() Columns missing: %#v", payload)
+	}
 }

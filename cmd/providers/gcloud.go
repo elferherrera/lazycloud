@@ -169,7 +169,7 @@ func resourceShortName(resourceURL, fallback string) string {
 	return resourceURL
 }
 
-func resourceProjectName(resourceURL string) string {
+func ResourceProjectName(resourceURL string) string {
 	parts := strings.Split(resourceURL, "/")
 	for i, part := range parts {
 		if part == "projects" && i+1 < len(parts) {
@@ -235,7 +235,7 @@ func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
 				Network:              n.GetName(),
 				Name:                 p.GetName(),
 				PeerNetwork:          resourceShortName(p.GetNetwork(), ""),
-				PeerProject:          resourceProjectName(p.GetNetwork()),
+				PeerProject:          ResourceProjectName(p.GetNetwork()),
 				State:                p.GetState(),
 				StateDetails:         p.GetStateDetails(),
 				AutoCreateRoutes:     p.GetAutoCreateRoutes(),
@@ -646,6 +646,7 @@ type ForwardingRule struct {
 	Scheme     string
 	TargetKind string
 	Target     string
+	TargetURL  string
 	UpdatedAt  string
 }
 
@@ -687,6 +688,24 @@ type BackendService struct {
 	UpdatedAt    string
 }
 
+type PSCConnection struct {
+	Endpoint string
+	Project  string
+	Network  string
+	Status   string
+}
+
+type ServiceAttachment struct {
+	ProjectID     string
+	Name          string
+	Region        string
+	TargetService string
+	Preference    string
+	Description   string
+	Connections   []PSCConnection
+	UpdatedAt     string
+}
+
 func targetRef(targetURL string) (string, string) {
 	if targetURL == "" {
 		return "", ""
@@ -694,13 +713,20 @@ func targetRef(targetURL string) (string, string) {
 	parts := strings.Split(targetURL, "/")
 	for i, p := range parts {
 		switch p {
-		case "targetHttpProxies", "targetHttpsProxies", "targetTcpProxies", "targetSslProxies", "targetGrpcProxies", "backendServices":
+		case "targetHttpProxies", "targetHttpsProxies", "targetTcpProxies", "targetSslProxies", "targetGrpcProxies", "backendServices", "serviceAttachments":
 			if i+1 < len(parts) {
 				return p, parts[i+1]
 			}
 		}
 	}
 	return "", parts[len(parts)-1]
+}
+
+func ResourcePath(resourceURL string) string {
+	if i := strings.Index(resourceURL, "projects/"); i >= 0 {
+		return resourceURL[i:]
+	}
+	return resourceURL
 }
 
 func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) ForwardingRule {
@@ -719,6 +745,7 @@ func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) F
 		Scheme:     r.GetLoadBalancingScheme(),
 		TargetKind: kind,
 		Target:     target,
+		TargetURL:  targetURL,
 	}
 }
 
@@ -1437,6 +1464,52 @@ type VPNGateway struct {
 	Tunnels     []VPNTunnel
 	CreatedAt   string
 	UpdatedAt   string
+}
+
+func ListProjectServiceAttachments(projectID string) ([]ServiceAttachment, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewServiceAttachmentsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var attachments []ServiceAttachment
+	it := client.AggregatedList(ctx, &computepb.AggregatedListServiceAttachmentsRequest{Project: projectID})
+	for {
+		entry, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, sa := range entry.Value.GetServiceAttachments() {
+			if sa.GetRegion() == "" {
+				continue
+			}
+			conns := make([]PSCConnection, 0, len(sa.GetConnectedEndpoints()))
+			for _, e := range sa.GetConnectedEndpoints() {
+				conns = append(conns, PSCConnection{
+					Endpoint: resourceShortName(e.GetEndpoint(), ""),
+					Project:  ResourceProjectName(e.GetEndpoint()),
+					Network:  resourceShortName(e.GetConsumerNetwork(), ""),
+					Status:   e.GetStatus(),
+				})
+			}
+			attachments = append(attachments, ServiceAttachment{
+				ProjectID:     projectID,
+				Name:          sa.GetName(),
+				Region:        resourceShortName(sa.GetRegion(), ""),
+				TargetService: resourceShortName(sa.GetTargetService(), ""),
+				Preference:    sa.GetConnectionPreference(),
+				Description:   sa.GetDescription(),
+				Connections:   conns,
+			})
+		}
+	}
+	return attachments, nil
 }
 
 func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {

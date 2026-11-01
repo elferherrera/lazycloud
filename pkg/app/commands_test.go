@@ -381,6 +381,14 @@ func TestRunWriteCommandJSON(t *testing.T) {
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("json resources = %v, want %v", got, want)
 	}
+	var payloads []map[string]any
+	if err := json.Unmarshal(data, &payloads); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	cols, ok := payloads[0]["Columns"].(map[string]any)
+	if !ok || cols["Name"] != "web-2" || cols["Machine Type"] != "n1-standard" {
+		t.Errorf("json payload Columns = %#v, want rendered cells", payloads[0]["Columns"])
+	}
 }
 
 func TestRunWriteCommandYAML(t *testing.T) {
@@ -394,12 +402,16 @@ func TestRunWriteCommandYAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	var got []writeTestResource
-	if err := yaml.Unmarshal(data, &got); err != nil {
+	var payloads []map[string]any
+	if err := yaml.Unmarshal(data, &payloads); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if len(got) != 3 || got[0].Name != "web-2" || got[1].Name != "web-10" || got[2].Name != "Web-1" {
-		t.Errorf("yaml resources = %v, want the 3 view rows", got)
+	if len(payloads) != 3 || payloads[0]["Name"] != "web-2" || payloads[1]["Name"] != "web-10" || payloads[2]["Name"] != "Web-1" {
+		t.Errorf("yaml payloads = %#v, want the 3 view rows", payloads)
+	}
+	cols, ok := payloads[0]["Columns"].(map[string]any)
+	if !ok || cols["Name"] != "web-2" || cols["Machine Type"] != "n1-standard" {
+		t.Errorf("yaml payload Columns = %#v, want rendered cells", payloads[0]["Columns"])
 	}
 }
 

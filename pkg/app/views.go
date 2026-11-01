@@ -54,6 +54,8 @@ func init() {
 		viewCloudRoutersAll:   cloudRoutersAllView,
 		viewVPNs:              vpnsView,
 		viewVPNsAll:           vpnsAllView,
+		viewPSC:               pscView,
+		viewPSCAll:            pscAllView,
 		viewInstanceGroups:    instanceGroupsView,
 		viewInstanceGroupsAll: instanceGroupsAllView,
 	}
@@ -74,6 +76,7 @@ var projectViewKinds = []viewKind{
 	viewDNSZones,
 	viewCloudRouters,
 	viewVPNs,
+	viewPSC,
 	viewInstanceGroups,
 }
 

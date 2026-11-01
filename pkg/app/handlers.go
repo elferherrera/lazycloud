@@ -563,6 +563,12 @@ func (a *app) toggleAllProjects() {
 		} else {
 			a.setView(vpnsViewKind())
 		}
+	case viewPSC, viewPSCAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(pscViewKind())
+		}
 	case viewInstanceGroups, viewInstanceGroupsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -686,6 +692,29 @@ func (a *app) tableRowCells(row int) []string {
 	return cells
 }
 
+func rowCellsMap(headers, cells []string) map[string]string {
+	m := make(map[string]string, len(headers))
+	for i, h := range headers {
+		if i < len(cells) {
+			m[h] = cells[i]
+		}
+	}
+	return m
+}
+
+func rowCopyPayload(headers, cells []string, res any) (map[string]any, error) {
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(jsonBytes, &payload); err != nil || payload == nil {
+		payload = map[string]any{"Resource": res}
+	}
+	payload["Columns"] = rowCellsMap(headers, cells)
+	return payload, nil
+}
+
 func (a *app) copyRow() {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {
@@ -700,7 +729,12 @@ func (a *app) copyRow() {
 		a.statusText("[red]Failed to copy: [-]" + err.Error())
 		return
 	}
-	jsonBytes, err := json.MarshalIndent(res, "", "  ")
+	payload, err := rowCopyPayload(a.viewHeaders, a.tableRowCells(row), res)
+	if err != nil {
+		a.statusText("[red]Failed to copy: [-]" + err.Error())
+		return
+	}
+	jsonBytes, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		a.statusText("[red]Failed to copy: [-]" + err.Error())
 		return
@@ -865,30 +899,32 @@ func (a *app) filterEnter() {
 }
 
 var viewCommands = map[string]func(a *app){
-	"ips":             (*app).showIPs,
-	"networks":        (*app).showNetworks,
-	"vpcs":            (*app).showNetworks,
-	"peerings":        showPeerings,
-	"peering":         showPeerings,
-	"routes":          showRoutes,
-	"firewalls":       showFirewalls,
-	"accounts":        showAccounts,
-	"sa":              showAccounts,
-	"vms":             showVMs,
-	"buckets":         showBuckets,
-	"lbs":             showLBs,
-	"loadbalancers":   showLBs,
-	"clusters":        showClusters,
-	"gke":             showClusters,
-	"dns":             showDNSZones,
-	"zones":           showDNSZones,
-	"routers":         showCloudRouters,
-	"cloud-routers":   showCloudRouters,
-	"vpns":            showVPNs,
-	"vpn":             showVPNs,
-	"igs":             showInstanceGroups,
-	"instance-groups": showInstanceGroups,
-	"projects":        func(a *app) { a.setView(viewProjects) },
+	"ips":                     (*app).showIPs,
+	"networks":                (*app).showNetworks,
+	"vpcs":                    (*app).showNetworks,
+	"peerings":                showPeerings,
+	"peering":                 showPeerings,
+	"routes":                  showRoutes,
+	"firewalls":               showFirewalls,
+	"accounts":                showAccounts,
+	"sa":                      showAccounts,
+	"vms":                     showVMs,
+	"buckets":                 showBuckets,
+	"lbs":                     showLBs,
+	"loadbalancers":           showLBs,
+	"clusters":                showClusters,
+	"gke":                     showClusters,
+	"dns":                     showDNSZones,
+	"zones":                   showDNSZones,
+	"routers":                 showCloudRouters,
+	"cloud-routers":           showCloudRouters,
+	"vpns":                    showVPNs,
+	"vpn":                     showVPNs,
+	"psc":                     showPSC,
+	"private-service-connect": showPSC,
+	"igs":                     showInstanceGroups,
+	"instance-groups":         showInstanceGroups,
+	"projects":                func(a *app) { a.setView(viewProjects) },
 }
 
 func (a *app) commandEnter() {

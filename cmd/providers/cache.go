@@ -246,9 +246,14 @@ func NewCacheAt(path string) (*Cache, error) {
 		scheme TEXT NOT NULL DEFAULT '',
 		target_kind TEXT NOT NULL DEFAULT '',
 		target TEXT NOT NULL DEFAULT '',
+		target_url TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (project_id, region, name)
 	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "forwarding_rules", "target_url", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -401,6 +406,20 @@ func NewCacheAt(path string) (*Cache, error) {
 		description TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (project_id, zone, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS service_attachments (
+		project_id TEXT NOT NULL,
+		region TEXT NOT NULL,
+		name TEXT NOT NULL,
+		target_service TEXT NOT NULL DEFAULT '',
+		preference TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		connections TEXT NOT NULL DEFAULT '[]',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, region, name)
 	)`); err != nil {
 		db.Close()
 		return nil, err
@@ -1391,9 +1410,9 @@ func (c *Cache) SaveForwardingRules(projectID string, rules []ForwardingRule) er
 	}
 	for _, r := range rules {
 		if _, err := tx.Exec(`INSERT INTO forwarding_rules
-			(project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			projectID, r.Region, r.Name, r.IPAddress, r.PortRange, r.Protocol, r.Scheme, r.TargetKind, r.Target, updatedAt); err != nil {
+			(project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, target_url, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Region, r.Name, r.IPAddress, r.PortRange, r.Protocol, r.Scheme, r.TargetKind, r.Target, r.TargetURL, updatedAt); err != nil {
 			return err
 		}
 	}
@@ -1404,7 +1423,7 @@ func scanForwardingRules(rows *sql.Rows) ([]ForwardingRule, error) {
 	var rules []ForwardingRule
 	for rows.Next() {
 		var r ForwardingRule
-		if err := rows.Scan(&r.ProjectID, &r.Region, &r.Name, &r.IPAddress, &r.PortRange, &r.Protocol, &r.Scheme, &r.TargetKind, &r.Target, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ProjectID, &r.Region, &r.Name, &r.IPAddress, &r.PortRange, &r.Protocol, &r.Scheme, &r.TargetKind, &r.Target, &r.TargetURL, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
@@ -1413,7 +1432,7 @@ func scanForwardingRules(rows *sql.Rows) ([]ForwardingRule, error) {
 }
 
 func (c *Cache) ListForwardingRules(projectID string) ([]ForwardingRule, error) {
-	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, target_url, updated_at
 		FROM forwarding_rules WHERE project_id = ? ORDER BY region, name`, projectID)
 	if err != nil {
 		return nil, err
@@ -1423,7 +1442,7 @@ func (c *Cache) ListForwardingRules(projectID string) ([]ForwardingRule, error) 
 }
 
 func (c *Cache) ListAllForwardingRules() ([]ForwardingRule, error) {
-	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, target_url, updated_at
 		FROM forwarding_rules ORDER BY project_id, region, name`)
 	if err != nil {
 		return nil, err
@@ -1433,7 +1452,7 @@ func (c *Cache) ListAllForwardingRules() ([]ForwardingRule, error) {
 }
 
 func (c *Cache) GetForwardingRule(projectID, region, name string) (*ForwardingRule, error) {
-	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, updated_at
+	rows, err := c.db.Query(`SELECT project_id, region, name, ip_address, port_range, protocol, scheme, target_kind, target, target_url, updated_at
 		FROM forwarding_rules WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
 	if err != nil {
 		return nil, err
@@ -2160,6 +2179,82 @@ func (c *Cache) GetCloudRouter(projectID, region, name string) (*CloudRouter, er
 		return nil, nil
 	}
 	return &routers[0], nil
+}
+
+func (c *Cache) SaveServiceAttachments(projectID string, attachments []ServiceAttachment) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM service_attachments WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, sa := range attachments {
+		conns, err := json.Marshal(sa.Connections)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO service_attachments
+			(project_id, region, name, target_service, preference, description, connections, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, sa.Region, sa.Name, sa.TargetService, sa.Preference, sa.Description, string(conns), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanServiceAttachments(rows *sql.Rows) ([]ServiceAttachment, error) {
+	defer rows.Close()
+	var attachments []ServiceAttachment
+	for rows.Next() {
+		var sa ServiceAttachment
+		var conns string
+		if err := rows.Scan(&sa.ProjectID, &sa.Region, &sa.Name, &sa.TargetService, &sa.Preference, &sa.Description, &conns, &sa.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(conns), &sa.Connections); err != nil {
+			return nil, err
+		}
+		attachments = append(attachments, sa)
+	}
+	return attachments, rows.Err()
+}
+
+func (c *Cache) ListServiceAttachments(projectID string) ([]ServiceAttachment, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, target_service, preference, description, connections, updated_at
+		FROM service_attachments WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanServiceAttachments(rows)
+}
+
+func (c *Cache) ListAllServiceAttachments() ([]ServiceAttachment, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, target_service, preference, description, connections, updated_at
+		FROM service_attachments ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanServiceAttachments(rows)
+}
+
+func (c *Cache) GetServiceAttachment(projectID, region, name string) (*ServiceAttachment, error) {
+	rows, err := c.db.Query(`SELECT project_id, region, name, target_service, preference, description, connections, updated_at
+		FROM service_attachments WHERE project_id = ? AND region = ? AND name = ?`, projectID, region, name)
+	if err != nil {
+		return nil, err
+	}
+	attachments, err := scanServiceAttachments(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(attachments) == 0 {
+		return nil, nil
+	}
+	return &attachments[0], nil
 }
 
 func (c *Cache) SaveVPNGateways(projectID string, gateways []VPNGateway) error {

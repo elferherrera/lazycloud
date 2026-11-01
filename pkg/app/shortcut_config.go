@@ -51,6 +51,8 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		return showCloudRouters
 	case viewVPNs:
 		return showVPNs
+	case viewPSC:
+		return showPSC
 	case viewInstanceGroups:
 		return showInstanceGroups
 	case viewWorkloads:
@@ -79,7 +81,7 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		}
 	case viewIPsAll, viewNetworksAll, viewPeeringsAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
 		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
-		viewVPNsAll, viewInstanceGroupsAll:
+		viewVPNsAll, viewPSCAll, viewInstanceGroupsAll:
 		return func(a *app) { a.setView(kind) }
 	}
 	return nil

@@ -197,3 +197,13 @@ func GCPInstanceGroupURL(projectID, location, name string) string {
 	return "https://console.cloud.google.com/compute/instanceGroups/details/" +
 		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
 }
+
+func GCPPSCEndpointURL(projectID, region, name string) string {
+	return "https://console.cloud.google.com/net-services/psc/details/" +
+		url.PathEscape(region) + "/" + url.PathEscape(name) + "/overview?project=" + url.QueryEscape(projectID)
+}
+
+func GCPPSCAttachmentURL(projectID, region, name string) string {
+	return "https://console.cloud.google.com/net-services/psc/producers/details/" +
+		url.PathEscape(region) + "/" + url.PathEscape(name) + "/overview?project=" + url.QueryEscape(projectID)
+}

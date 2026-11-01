@@ -153,7 +153,11 @@ func (a *app) viewResources() ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		resources = append(resources, res)
+		payload, err := rowCopyPayload(a.viewHeaders, row, res)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, payload)
 	}
 	return resources, nil
 }

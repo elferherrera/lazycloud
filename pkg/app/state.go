@@ -35,6 +35,8 @@ const (
 	viewCloudRoutersAll   viewKind = "cloud-routers-all"
 	viewVPNs              viewKind = "vpns"
 	viewVPNsAll           viewKind = "vpns-all"
+	viewPSC               viewKind = "psc"
+	viewPSCAll            viewKind = "psc-all"
 	viewInstanceGroups    viewKind = "instance-groups"
 	viewInstanceGroupsAll viewKind = "instance-groups-all"
 )
@@ -162,6 +164,13 @@ func vpnsViewKind() viewKind {
 		return viewVPNsAll
 	}
 	return viewVPNs
+}
+
+func pscViewKind() viewKind {
+	if appState.AllProjects {
+		return viewPSCAll
+	}
+	return viewPSC
 }
 
 func instanceGroupsViewKind() viewKind {
