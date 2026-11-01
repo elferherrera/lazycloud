@@ -301,6 +301,10 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 			a.completeFilterDetail(event.Key() == tcell.KeyTab)
 			return nil
 		}
+		if appState.CmdMode == modeCmd && a.tapp.GetFocus() == a.cmd {
+			a.completeCommand(event.Key() == tcell.KeyTab)
+			return nil
+		}
 	}
 	if a.tapp.GetFocus() == a.cmd {
 		return event
@@ -414,6 +418,66 @@ func detailPathPrefixIndex(paths []string, head string, forward bool) int {
 
 func detailPathHasPrefix(p, head string) bool {
 	return len(head) <= len(p) && strings.EqualFold(p[:len(head)], head)
+}
+
+func commandNames() []string {
+	seen := make(map[string]bool)
+	names := make([]string, 0, len(viewCommands)+len(commands))
+	for name := range viewCommands {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	for name := range commands {
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (a *app) completeCommand(forward bool) {
+	candidates := commandNames()
+	if len(candidates) == 0 {
+		return
+	}
+	text := strings.TrimSpace(a.cmd.GetText())
+	if strings.Contains(text, " ") {
+		return
+	}
+	for i, c := range candidates {
+		if !strings.EqualFold(c, text) {
+			continue
+		}
+		switch {
+		case forward && i == len(candidates)-1:
+			a.cmd.SetText(candidates[0])
+		case !forward && i == 0:
+			a.cmd.SetText(candidates[len(candidates)-1])
+		case forward:
+			a.cmd.SetText(candidates[i+1])
+		default:
+			a.cmd.SetText(candidates[i-1])
+		}
+		return
+	}
+	matches := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if strings.HasPrefix(strings.ToLower(c), strings.ToLower(text)) {
+			matches = append(matches, c)
+		}
+	}
+	if len(matches) == 0 {
+		return
+	}
+	if forward {
+		a.cmd.SetText(matches[0])
+	} else {
+		a.cmd.SetText(matches[len(matches)-1])
+	}
 }
 
 func (a *app) toggleAllProjects() {
