@@ -1794,3 +1794,326 @@ func TestSaveAndListInstanceGroups(t *testing.T) {
 		t.Fatalf("GetInstanceGroup() missing = %+v, want nil", single)
 	}
 }
+
+func TestSaveAndListReservations(t *testing.T) {
+	cache := newTestCache(t)
+	reservations := []Reservation{
+		{Name: "res-b", Zone: "europe-west2-b", MachineType: "n2-standard-2", Count: 10, InUseCount: 4, ShareType: "SPECIFIC_PROJECTS", Required: true, Status: "READY", Description: "second", Commitment: "commit-1"},
+		{Name: "res-a", Zone: "europe-west1-b", MachineType: "c3-standard-4", Count: 2, Status: "READY", Description: "first"},
+	}
+	if err := cache.SaveReservations("p1", reservations); err != nil {
+		t.Fatalf("SaveReservations() error = %v", err)
+	}
+	if err := cache.SaveReservations("p2", reservations[:1]); err != nil {
+		t.Fatalf("SaveReservations() other project error = %v", err)
+	}
+
+	got, err := cache.ListReservations("p1")
+	if err != nil {
+		t.Fatalf("ListReservations() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListReservations() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "res-a" || got[1].Name != "res-b" {
+		t.Fatalf("ListReservations() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].MachineType != "c3-standard-4" || got[0].Count != 2 || got[0].InUseCount != 0 {
+		t.Fatalf("ListReservations()[0] = %+v", got[0])
+	}
+	if got[1].ShareType != "SPECIFIC_PROJECTS" || !got[1].Required || got[1].Commitment != "commit-1" {
+		t.Fatalf("ListReservations()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListReservations()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllReservations()
+	if err != nil {
+		t.Fatalf("ListAllReservations() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllReservations() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[1].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllReservations() not ordered by project then name: %+v", all)
+	}
+
+	if err := cache.SaveReservations("p1", reservations[:1]); err != nil {
+		t.Fatalf("SaveReservations() replace error = %v", err)
+	}
+	got, err = cache.ListReservations("p1")
+	if err != nil {
+		t.Fatalf("ListReservations() replace error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListReservations() len = %d, want 1 after replace", len(got))
+	}
+	got, err = cache.ListReservations("p2")
+	if err != nil {
+		t.Fatalf("ListReservations(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListReservations(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+
+	single, err := cache.GetReservation("p1", "europe-west2-b", "res-b")
+	if err != nil {
+		t.Fatalf("GetReservation() error = %v", err)
+	}
+	if single == nil || single.MachineType != "n2-standard-2" || single.Count != 10 {
+		t.Fatalf("GetReservation() = %+v", single)
+	}
+	single, err = cache.GetReservation("p1", "europe-west1-b", "res-missing")
+	if err != nil {
+		t.Fatalf("GetReservation() missing error = %v", err)
+	}
+	if single != nil {
+		t.Fatalf("GetReservation() missing = %+v, want nil", single)
+	}
+}
+
+func TestSaveAndListImages(t *testing.T) {
+	cache := newTestCache(t)
+	images := []Image{
+		{Name: "img-b", Family: "fam-a", Status: "READY", SizeGB: 20, StorageLocation: "eu", Source: "disk-b", CreatedAt: "2026-01-02T03:04:05Z", Description: "second", Deprecated: "DEPRECATED"},
+		{Name: "img-a", Family: "fam-a", Status: "READY", SizeGB: 10, StorageLocation: "us", Source: "disk-a", CreatedAt: "2026-01-01T03:04:05Z"},
+	}
+	if err := cache.SaveImages("p1", images); err != nil {
+		t.Fatalf("SaveImages() error = %v", err)
+	}
+	if err := cache.SaveImages("p2", images[:1]); err != nil {
+		t.Fatalf("SaveImages() other project error = %v", err)
+	}
+
+	got, err := cache.ListImages("p1")
+	if err != nil {
+		t.Fatalf("ListImages() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListImages() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "img-a" || got[1].Name != "img-b" {
+		t.Fatalf("ListImages() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].Family != "fam-a" || got[0].SizeGB != 10 || got[0].StorageLocation != "us" {
+		t.Fatalf("ListImages()[0] = %+v", got[0])
+	}
+	if got[1].Deprecated != "DEPRECATED" || got[1].Description != "second" || got[1].CreatedAt != "2026-01-02T03:04:05Z" {
+		t.Fatalf("ListImages()[1] = %+v", got[1])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListImages()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllImages()
+	if err != nil {
+		t.Fatalf("ListAllImages() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllImages() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[1].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllImages() not ordered by project then name: %+v", all)
+	}
+
+	if err := cache.SaveImages("p1", images[:1]); err != nil {
+		t.Fatalf("SaveImages() replace error = %v", err)
+	}
+	got, err = cache.ListImages("p1")
+	if err != nil {
+		t.Fatalf("ListImages() replace error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "img-b" {
+		t.Fatalf("ListImages() = %+v, want 1 image after replace", got)
+	}
+	got, err = cache.ListImages("p2")
+	if err != nil {
+		t.Fatalf("ListImages(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListImages(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+
+	single, err := cache.GetImage("p1", "img-b")
+	if err != nil {
+		t.Fatalf("GetImage() error = %v", err)
+	}
+	if single == nil || single.Family != "fam-a" || single.SizeGB != 20 {
+		t.Fatalf("GetImage() = %+v", single)
+	}
+	single, err = cache.GetImage("p1", "img-missing")
+	if err != nil {
+		t.Fatalf("GetImage() missing error = %v", err)
+	}
+	if single != nil {
+		t.Fatalf("GetImage() missing = %+v, want nil", single)
+	}
+}
+
+func TestSaveAndListPublicImages(t *testing.T) {
+	cache := newTestCache(t)
+	public := []Image{
+		{Name: "debian-12-bookworm-v1", Family: "debian-12", Status: "READY", SizeGB: 10, StorageLocation: "eu"},
+		{Name: "debian-13-v1", Family: "debian-13", Status: "READY", SizeGB: 15, StorageLocation: "eu"},
+	}
+	suse := []Image{{Name: "sles-15-sp6-v1", Family: "sles-15-sp6", Status: "READY", StorageLocation: "eu,us"}}
+	user := []Image{{Name: "img-a", Family: "fam-a", Status: "READY"}}
+
+	if err := cache.SaveImages("p1", user); err != nil {
+		t.Fatalf("SaveImages(user) error = %v", err)
+	}
+	if err := cache.SaveImages("debian-cloud", public); err != nil {
+		t.Fatalf("SaveImages(debian-cloud) error = %v", err)
+	}
+	if err := cache.SaveImages("suse-cloud", suse); err != nil {
+		t.Fatalf("SaveImages(suse-cloud) error = %v", err)
+	}
+
+	got, err := cache.ListPublicImages()
+	if err != nil {
+		t.Fatalf("ListPublicImages() error = %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("ListPublicImages() len = %d, want 3", len(got))
+	}
+	if got[0].ProjectID != "debian-cloud" || got[0].Name != "debian-12-bookworm-v1" {
+		t.Fatalf("ListPublicImages()[0] = %+v, want debian-cloud/debian-12-bookworm-v1", got[0])
+	}
+	if got[1].ProjectID != "debian-cloud" || got[1].Name != "debian-13-v1" {
+		t.Fatalf("ListPublicImages()[1] = %+v, want debian-cloud/debian-13-v1", got[1])
+	}
+	if got[2].ProjectID != "suse-cloud" || got[2].Name != "sles-15-sp6-v1" {
+		t.Fatalf("ListPublicImages()[2] = %+v, want suse-cloud/sles-15-sp6-v1", got[2])
+	}
+
+	all, err := cache.ListAllImages()
+	if err != nil {
+		t.Fatalf("ListAllImages() error = %v", err)
+	}
+	if len(all) != 1 || all[0].ProjectID != "p1" || all[0].Name != "img-a" {
+		t.Fatalf("ListAllImages() = %+v, want only p1/img-a", all)
+	}
+
+	gotProject, err := cache.ListImages("debian-cloud")
+	if err != nil {
+		t.Fatalf("ListImages(debian-cloud) error = %v", err)
+	}
+	if len(gotProject) != 2 {
+		t.Fatalf("ListImages(debian-cloud) len = %d, want 2", len(gotProject))
+	}
+
+	single, err := cache.GetImage("suse-cloud", "sles-15-sp6-v1")
+	if err != nil {
+		t.Fatalf("GetImage(suse-cloud) error = %v", err)
+	}
+	if single == nil || single.StorageLocation != "eu,us" {
+		t.Fatalf("GetImage(suse-cloud) = %+v", single)
+	}
+
+	if err := cache.SaveImages("debian-cloud", public[:1]); err != nil {
+		t.Fatalf("SaveImages(debian-cloud) replace error = %v", err)
+	}
+	got, err = cache.ListPublicImages()
+	if err != nil {
+		t.Fatalf("ListPublicImages() replace error = %v", err)
+	}
+	if len(got) != 2 || got[0].Name != "debian-12-bookworm-v1" {
+		t.Fatalf("ListPublicImages() after replace = %+v, want debian-cloud replaced and suse-cloud kept", got)
+	}
+}
+
+func TestSaveAndListInstanceTemplates(t *testing.T) {
+	cache := newTestCache(t)
+	templates := []InstanceTemplate{
+		{
+			ProjectID: "p1", Name: "tpl-b", Location: "europe-west2", MachineType: "e2-small",
+			Disks:       []InstanceTemplateDisk{{DeviceName: "boot", SourceImage: "img-a", DiskSizeGB: 20, DiskType: "pd-balanced", Boot: true}},
+			Interfaces:  []InstanceTemplateInterface{{Network: "vpc-a", Subnetwork: "sn-a", NetworkIP: "10.0.0.10", ExternalIP: "34.0.0.1"}},
+			Labels:      map[string]string{"env": "prod"},
+			Description: "second", CreatedAt: "2026-01-02T03:04:05Z",
+		},
+		{
+			ProjectID: "p1", Name: "tpl-a", Location: "global", MachineType: "n2-standard-2",
+		},
+	}
+	if err := cache.SaveInstanceTemplates("p1", templates); err != nil {
+		t.Fatalf("SaveInstanceTemplates() error = %v", err)
+	}
+	if err := cache.SaveInstanceTemplates("p2", templates[:1]); err != nil {
+		t.Fatalf("SaveInstanceTemplates() other project error = %v", err)
+	}
+
+	got, err := cache.ListInstanceTemplates("p1")
+	if err != nil {
+		t.Fatalf("ListInstanceTemplates() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListInstanceTemplates() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "tpl-b" || got[0].Location != "europe-west2" || got[1].Name != "tpl-a" || got[1].Location != "global" {
+		t.Fatalf("ListInstanceTemplates() not ordered by location then name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].MachineType != "e2-small" {
+		t.Fatalf("ListInstanceTemplates()[0] = %+v", got[0])
+	}
+	if len(got[0].Disks) != 1 || got[0].Disks[0].SourceImage != "img-a" || got[0].Disks[0].DiskSizeGB != 20 || !got[0].Disks[0].Boot {
+		t.Fatalf("ListInstanceTemplates()[0] disks = %+v", got[0].Disks)
+	}
+	if len(got[0].Interfaces) != 1 || got[0].Interfaces[0].Network != "vpc-a" || got[0].Interfaces[0].ExternalIP != "34.0.0.1" {
+		t.Fatalf("ListInstanceTemplates()[0] interfaces = %+v", got[0].Interfaces)
+	}
+	if got[0].Labels["env"] != "prod" || got[0].Description != "second" || got[0].CreatedAt != "2026-01-02T03:04:05Z" {
+		t.Fatalf("ListInstanceTemplates()[0] = %+v", got[0])
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListInstanceTemplates()[0] missing updated at: %+v", got[0])
+	}
+	if len(got[1].Disks) != 0 || len(got[1].Interfaces) != 0 {
+		t.Fatalf("ListInstanceTemplates()[1] empty json lists not round-tripped: %+v", got[1])
+	}
+
+	all, err := cache.ListAllInstanceTemplates()
+	if err != nil {
+		t.Fatalf("ListAllInstanceTemplates() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllInstanceTemplates() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[1].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllInstanceTemplates() not ordered by project, location, name: %+v", all)
+	}
+
+	single, err := cache.GetInstanceTemplate("p1", "global", "tpl-a")
+	if err != nil {
+		t.Fatalf("GetInstanceTemplate() error = %v", err)
+	}
+	if single == nil || single.MachineType != "n2-standard-2" {
+		t.Fatalf("GetInstanceTemplate() = %+v", single)
+	}
+	single, err = cache.GetInstanceTemplate("p1", "global", "tpl-missing")
+	if err != nil {
+		t.Fatalf("GetInstanceTemplate() missing error = %v", err)
+	}
+	if single != nil {
+		t.Fatalf("GetInstanceTemplate() = %+v, want nil for unknown template", single)
+	}
+
+	if err := cache.SaveInstanceTemplates("p1", templates[:1]); err != nil {
+		t.Fatalf("SaveInstanceTemplates() replace error = %v", err)
+	}
+	got, err = cache.ListInstanceTemplates("p1")
+	if err != nil {
+		t.Fatalf("ListInstanceTemplates() replace error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "tpl-b" {
+		t.Fatalf("ListInstanceTemplates() = %+v, want 1 template after replace", got)
+	}
+	got, err = cache.ListInstanceTemplates("p2")
+	if err != nil {
+		t.Fatalf("ListInstanceTemplates(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListInstanceTemplates(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+}

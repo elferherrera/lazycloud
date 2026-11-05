@@ -72,7 +72,7 @@ var dnsRecordsView = viewDef{
 	},
 	samples: []any{providers.DNSRecord{}},
 	consoleURL: func(a *app, row int) string {
-		return providers.GCPDNSZoneURL(appState.ZoneProject, appState.Zone)
+		return providers.GCPDNSRecordURL(appState.ZoneProject, appState.Zone, a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text)
 	},
 }
 

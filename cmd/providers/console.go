@@ -175,7 +175,13 @@ func GCPFirewallsURL(projectID, name string) string {
 
 func GCPDNSZoneURL(projectID, zone string) string {
 	return "https://console.cloud.google.com/net-services/dns/zones/" +
-		url.PathEscape(zone) + "/records?project=" + url.QueryEscape(projectID)
+		url.PathEscape(zone) + "/details?project=" + url.QueryEscape(projectID)
+}
+
+func GCPDNSRecordURL(projectID, zone, name, recordType string) string {
+	return "https://console.cloud.google.com/net-services/dns/zones/" +
+		url.PathEscape(zone) + "/rrsets/" + url.PathEscape(name) + "/" +
+		url.PathEscape(recordType) + "/view?project=" + url.QueryEscape(projectID)
 }
 
 func GCPCloudRouterURL(projectID, region, name string) string {
@@ -196,6 +202,32 @@ func GCPVPNGatewayURL(projectID, region, name string, isHA bool) string {
 func GCPInstanceGroupURL(projectID, location, name string) string {
 	return "https://console.cloud.google.com/compute/instanceGroups/details/" +
 		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
+}
+
+func GCPReservationsURL(projectID string) string {
+	return "https://console.cloud.google.com/compute/reservations?project=" +
+		url.QueryEscape(projectID)
+}
+
+func GCPDiskURL(projectID, zone, name string) string {
+	return "https://console.cloud.google.com/compute/disksDetail/zones/" +
+		url.PathEscape(zone) + "/disks/" + url.PathEscape(name) +
+		";duration=PT1H?project=" + url.QueryEscape(projectID)
+}
+
+func GCPImageURL(projectID, name string) string {
+	return "https://console.cloud.google.com/compute/imagesDetail/projects/" +
+		url.PathEscape(projectID) + "/global/images/" + url.PathEscape(name) +
+		"?project=" + url.QueryEscape(projectID)
+}
+
+func GCPInstanceTemplateURL(projectID, location, name string) string {
+	path := url.PathEscape(name)
+	if location != "" && location != "global" {
+		path = "regions/" + url.PathEscape(location) + "/" + path
+	}
+	return "https://console.cloud.google.com/compute/instanceTemplates/details/" +
+		path + "?project=" + url.QueryEscape(projectID)
 }
 
 func GCPPSCEndpointURL(projectID, region, name string) string {

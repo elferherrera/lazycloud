@@ -165,3 +165,63 @@ func TestGCPInstanceGroupURL(t *testing.T) {
 		t.Fatalf("GCPInstanceGroupURL() regional =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPReservationsURL(t *testing.T) {
+	got := GCPReservationsURL("revolut-labs")
+	want := "https://console.cloud.google.com/compute/reservations?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPReservationsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPImageURL(t *testing.T) {
+	got := GCPImageURL("revolut-labs", "img-a")
+	want := "https://console.cloud.google.com/compute/imagesDetail/projects/revolut-labs/global/images/img-a?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPImageURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPInstanceTemplateURL(t *testing.T) {
+	got := GCPInstanceTemplateURL("revolut-dev-apps", "global", "briefcase-4e6635ae16b879a0031c73799bf1f23e")
+	want := "https://console.cloud.google.com/compute/instanceTemplates/details/briefcase-4e6635ae16b879a0031c73799bf1f23e?project=revolut-dev-apps"
+	if got != want {
+		t.Fatalf("global template: GCPInstanceTemplateURL() =\n%s\nwant\n%s", got, want)
+	}
+
+	got = GCPInstanceTemplateURL("revolut-dev-apps", "asia-south1", "gke-apps-dev-asia-so-default-stateful-bcb2d834")
+	want = "https://console.cloud.google.com/compute/instanceTemplates/details/regions/asia-south1/gke-apps-dev-asia-so-default-stateful-bcb2d834?project=revolut-dev-apps"
+	if got != want {
+		t.Fatalf("regional template: GCPInstanceTemplateURL() =\n%s\nwant\n%s", got, want)
+	}
+
+	got = GCPInstanceTemplateURL("revolut-labs", "", "tpl-a")
+	want = "https://console.cloud.google.com/compute/instanceTemplates/details/tpl-a?project=revolut-labs"
+	if got != want {
+		t.Fatalf("empty location: GCPInstanceTemplateURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPDNSZoneURL(t *testing.T) {
+	got := GCPDNSZoneURL("revolut-prod-apps", "revolut-com")
+	want := "https://console.cloud.google.com/net-services/dns/zones/revolut-com/details?project=revolut-prod-apps"
+	if got != want {
+		t.Fatalf("GCPDNSZoneURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPDNSRecordURL(t *testing.T) {
+	got := GCPDNSRecordURL("revolut-prod-apps", "revolut-com", "2fhheq4tmjc6.growth-performance.revolut.com.", "CNAME")
+	want := "https://console.cloud.google.com/net-services/dns/zones/revolut-com/rrsets/2fhheq4tmjc6.growth-performance.revolut.com./CNAME/view?project=revolut-prod-apps"
+	if got != want {
+		t.Fatalf("GCPDNSRecordURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPDiskURL(t *testing.T) {
+	got := GCPDiskURL("revolut-labs", "europe-west1-b", "apt-cacher-b-303h")
+	want := "https://console.cloud.google.com/compute/disksDetail/zones/europe-west1-b/disks/apt-cacher-b-303h;duration=PT1H?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPDiskURL() =\n%s\nwant\n%s", got, want)
+	}
+}

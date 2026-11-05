@@ -424,6 +424,57 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS reservations (
+		project_id TEXT NOT NULL,
+		zone TEXT NOT NULL,
+		name TEXT NOT NULL,
+		machine_type TEXT NOT NULL DEFAULT '',
+		count INTEGER NOT NULL DEFAULT 0,
+		in_use_count INTEGER NOT NULL DEFAULT 0,
+		share_type TEXT NOT NULL DEFAULT '',
+		required INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		commitment TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, zone, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS images (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		family TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT '',
+		size_gb INTEGER NOT NULL DEFAULT 0,
+		storage_location TEXT NOT NULL DEFAULT '',
+		source TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		deprecated TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS instance_templates (
+		project_id TEXT NOT NULL,
+		location TEXT NOT NULL,
+		name TEXT NOT NULL,
+		machine_type TEXT NOT NULL DEFAULT '',
+		disks TEXT NOT NULL DEFAULT '[]',
+		interfaces TEXT NOT NULL DEFAULT '[]',
+		labels TEXT NOT NULL DEFAULT '{}',
+		description TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, location, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -999,7 +1050,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -2406,4 +2457,252 @@ func (c *Cache) GetInstanceGroup(projectID, zone, name string) (*InstanceGroup, 
 		return nil, nil
 	}
 	return &groups[0], nil
+}
+
+func (c *Cache) SaveReservations(projectID string, reservations []Reservation) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM reservations WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range reservations {
+		if _, err := tx.Exec(`INSERT INTO reservations
+			(project_id, zone, name, machine_type, count, in_use_count, share_type, required, status, description, commitment, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Zone, r.Name, r.MachineType, r.Count, r.InUseCount, r.ShareType, r.Required, r.Status, r.Description, r.Commitment, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanReservations(rows *sql.Rows) ([]Reservation, error) {
+	defer rows.Close()
+	var reservations []Reservation
+	for rows.Next() {
+		var r Reservation
+		if err := rows.Scan(&r.ProjectID, &r.Zone, &r.Name, &r.MachineType, &r.Count, &r.InUseCount, &r.ShareType, &r.Required, &r.Status, &r.Description, &r.Commitment, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		reservations = append(reservations, r)
+	}
+	return reservations, rows.Err()
+}
+
+func (c *Cache) ListReservations(projectID string) ([]Reservation, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, machine_type, count, in_use_count, share_type, required, status, description, commitment, updated_at
+		FROM reservations WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanReservations(rows)
+}
+
+func (c *Cache) ListAllReservations() ([]Reservation, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, machine_type, count, in_use_count, share_type, required, status, description, commitment, updated_at
+		FROM reservations ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanReservations(rows)
+}
+
+func (c *Cache) GetReservation(projectID, zone, name string) (*Reservation, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, machine_type, count, in_use_count, share_type, required, status, description, commitment, updated_at
+		FROM reservations WHERE project_id = ? AND zone = ? AND name = ?`, projectID, zone, name)
+	if err != nil {
+		return nil, err
+	}
+	reservations, err := scanReservations(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(reservations) == 0 {
+		return nil, nil
+	}
+	return &reservations[0], nil
+}
+
+func (c *Cache) SaveImages(projectID string, images []Image) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM images WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, i := range images {
+		if _, err := tx.Exec(`INSERT INTO images
+			(project_id, name, family, status, size_gb, storage_location, source, created_at, description, deprecated, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, i.Name, i.Family, i.Status, i.SizeGB, i.StorageLocation, i.Source, i.CreatedAt, i.Description, i.Deprecated, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanImages(rows *sql.Rows) ([]Image, error) {
+	defer rows.Close()
+	var images []Image
+	for rows.Next() {
+		var i Image
+		if err := rows.Scan(&i.ProjectID, &i.Name, &i.Family, &i.Status, &i.SizeGB, &i.StorageLocation, &i.Source, &i.CreatedAt, &i.Description, &i.Deprecated, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		images = append(images, i)
+	}
+	return images, rows.Err()
+}
+
+func (c *Cache) ListImages(projectID string) ([]Image, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, family, status, size_gb, storage_location, source, created_at, description, deprecated, updated_at
+		FROM images WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanImages(rows)
+}
+
+func publicImageProjectsClause() (string, []any) {
+	placeholders := make([]string, 0, len(PublicImageProjects))
+	args := make([]any, 0, len(PublicImageProjects))
+	for _, p := range PublicImageProjects {
+		placeholders = append(placeholders, "?")
+		args = append(args, p)
+	}
+	return strings.Join(placeholders, ","), args
+}
+
+func (c *Cache) ListAllImages() ([]Image, error) {
+	clause, args := publicImageProjectsClause()
+	rows, err := c.db.Query(`SELECT project_id, name, family, status, size_gb, storage_location, source, created_at, description, deprecated, updated_at
+		FROM images WHERE project_id NOT IN (`+clause+`) ORDER BY project_id, name`, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanImages(rows)
+}
+
+func (c *Cache) ListPublicImages() ([]Image, error) {
+	clause, args := publicImageProjectsClause()
+	rows, err := c.db.Query(`SELECT project_id, name, family, status, size_gb, storage_location, source, created_at, description, deprecated, updated_at
+		FROM images WHERE project_id IN (`+clause+`) ORDER BY project_id, name`, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanImages(rows)
+}
+
+func (c *Cache) GetImage(projectID, name string) (*Image, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, family, status, size_gb, storage_location, source, created_at, description, deprecated, updated_at
+		FROM images WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	images, err := scanImages(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(images) == 0 {
+		return nil, nil
+	}
+	return &images[0], nil
+}
+
+func (c *Cache) SaveInstanceTemplates(projectID string, templates []InstanceTemplate) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM instance_templates WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, t := range templates {
+		disks, err := json.Marshal(t.Disks)
+		if err != nil {
+			return err
+		}
+		interfaces, err := json.Marshal(t.Interfaces)
+		if err != nil {
+			return err
+		}
+		labels, err := json.Marshal(t.Labels)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO instance_templates
+			(project_id, location, name, machine_type, disks, interfaces, labels, description, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, t.Location, t.Name, t.MachineType, string(disks), string(interfaces), string(labels), t.Description, t.CreatedAt, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanInstanceTemplates(rows *sql.Rows) ([]InstanceTemplate, error) {
+	defer rows.Close()
+	var templates []InstanceTemplate
+	for rows.Next() {
+		var t InstanceTemplate
+		var disks, interfaces, labels string
+		if err := rows.Scan(&t.ProjectID, &t.Location, &t.Name, &t.MachineType,
+			&disks, &interfaces, &labels, &t.Description, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(disks), &t.Disks); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(interfaces), &t.Interfaces); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(labels), &t.Labels); err != nil {
+			return nil, err
+		}
+		templates = append(templates, t)
+	}
+	return templates, rows.Err()
+}
+
+func (c *Cache) ListInstanceTemplates(projectID string) ([]InstanceTemplate, error) {
+	rows, err := c.db.Query(`SELECT project_id, location, name, machine_type, disks, interfaces, labels, description, created_at, updated_at
+		FROM instance_templates WHERE project_id = ? ORDER BY location, name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanInstanceTemplates(rows)
+}
+
+func (c *Cache) ListAllInstanceTemplates() ([]InstanceTemplate, error) {
+	rows, err := c.db.Query(`SELECT project_id, location, name, machine_type, disks, interfaces, labels, description, created_at, updated_at
+		FROM instance_templates ORDER BY project_id, location, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanInstanceTemplates(rows)
+}
+
+func (c *Cache) GetInstanceTemplate(projectID, location, name string) (*InstanceTemplate, error) {
+	rows, err := c.db.Query(`SELECT project_id, location, name, machine_type, disks, interfaces, labels, description, created_at, updated_at
+		FROM instance_templates WHERE project_id = ? AND location = ? AND name = ?`, projectID, location, name)
+	if err != nil {
+		return nil, err
+	}
+	templates, err := scanInstanceTemplates(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(templates) == 0 {
+		return nil, nil
+	}
+	return &templates[0], nil
 }

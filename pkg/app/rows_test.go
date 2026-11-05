@@ -756,6 +756,103 @@ func TestVPNGatewayRows(t *testing.T) {
 	}
 }
 
+func TestReservationRows(t *testing.T) {
+	reservations := []providers.Reservation{
+		{
+			ProjectID: "p1", Name: "res-a", Zone: "europe-west2-b", MachineType: "n2-standard-2",
+			Count: 10, InUseCount: 4, ShareType: "SPECIFIC_PROJECTS", Required: true,
+			Status: "READY", Description: "primary", Commitment: "commit-1", UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{
+			ProjectID: "p1", Name: "res-b", Zone: "us-central1-a", MachineType: "c3-standard-4",
+			Count: 2, InUseCount: 0, Status: "READY", UpdatedAt: "not-a-date",
+		},
+	}
+	rows := reservationRows(reservations)
+	if len(rows) != 2 {
+		t.Fatalf("reservationRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"res-a", "europe-west2-b", "n2-standard-2", "10", "4", "SPECIFIC_PROJECTS", "READY", "primary"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("reservationRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if len(rows[0]) != 9 {
+		t.Fatalf("reservationRows()[0] len = %d, want 9", len(rows[0]))
+	}
+	if rows[0][8] == "" {
+		t.Fatalf("reservationRows()[0][8] formatted UpdatedAt missing, got %q", rows[0][8])
+	}
+	if rows[1][5] != "" {
+		t.Fatalf("reservationRows()[1][5] = %q, want empty share type", rows[1][5])
+	}
+	if rows[1][8] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][8])
+	}
+
+	rowsAll := reservationRowsAll(reservations)
+	if len(rowsAll) != 2 {
+		t.Fatalf("reservationRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 10 {
+		t.Fatalf("reservationRowsAll()[0] len = %d, want 10", len(rowsAll[0]))
+	}
+	if rowsAll[0][9] != "p1" {
+		t.Fatalf("reservationRowsAll()[0][9] = %q, want project id", rowsAll[0][9])
+	}
+}
+
+func TestImageRows(t *testing.T) {
+	images := []providers.Image{
+		{
+			ProjectID: "p1", Name: "img-a", Family: "fam-a", Status: "READY", SizeGB: 10,
+			StorageLocation: "eu", Source: "disk-a", CreatedAt: "2026-10-12T18:23:12Z",
+			Description: "base", Deprecated: "DEPRECATED", UpdatedAt: "2026-10-13T10:00:00Z",
+		},
+		{
+			ProjectID: "p1", Name: "img-b", Status: "FAILED", SizeGB: 0,
+			CreatedAt: "not-a-date", UpdatedAt: "not-a-date",
+		},
+	}
+	rows := imageRows(images)
+	if len(rows) != 2 {
+		t.Fatalf("imageRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"img-a", "fam-a", "READY", "10", "eu", "disk-a"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("imageRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][6] == "" || rows[0][8] == "" {
+		t.Fatalf("imageRows()[0] formatted dates missing: %v", rows[0])
+	}
+	if rows[0][7] != "base" {
+		t.Fatalf("imageRows()[0][7] = %q, want %q", rows[0][7], "base")
+	}
+	if len(rows[0]) != 9 {
+		t.Fatalf("imageRows()[0] len = %d, want 9", len(rows[0]))
+	}
+	if rows[1][1] != "" || rows[1][4] != "" || rows[1][5] != "" {
+		t.Fatalf("imageRows()[1] empty fields not empty: %v", rows[1])
+	}
+	if rows[1][6] != "not-a-date" {
+		t.Fatalf("unparseable CreatedAt should be kept as-is, got %q", rows[1][6])
+	}
+
+	rowsAll := imageRowsAll(images)
+	if len(rowsAll) != 2 {
+		t.Fatalf("imageRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 10 {
+		t.Fatalf("imageRowsAll()[0] len = %d, want 10", len(rowsAll[0]))
+	}
+	if rowsAll[0][9] != "p1" {
+		t.Fatalf("imageRowsAll()[0][9] = %q, want project id", rowsAll[0][9])
+	}
+}
+
 func TestShortcutsSummaryPanel(t *testing.T) {
 	table := newShortcutsSummaryPanel()
 	var found int
@@ -855,5 +952,119 @@ func TestInstanceGroupRows(t *testing.T) {
 	}
 	if len(rowsAll[0]) != 9 {
 		t.Fatalf("instanceGroupRowsAll()[0] len = %d, want 9", len(rowsAll[0]))
+	}
+}
+
+func TestInstanceTemplateRows(t *testing.T) {
+	templates := []providers.InstanceTemplate{
+		{
+			ProjectID: "p1", Name: "tpl-a", Location: "global", MachineType: "e2-small",
+			Disks: []providers.InstanceTemplateDisk{
+				{DeviceName: "boot", SourceImage: "img-a", DiskSizeGB: 20, DiskType: "pd-balanced", Boot: true},
+				{DeviceName: "data", SourceImage: "img-b", DiskSizeGB: 100, DiskType: "pd-ssd"},
+			},
+			Interfaces: []providers.InstanceTemplateInterface{
+				{Network: "vpc-a", Subnetwork: "sn-a", NetworkIP: "10.0.0.10", ExternalIP: "34.0.0.1"},
+			},
+			Description: "web base", UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{Name: "tpl-b", UpdatedAt: "not-a-date"},
+		{
+			ProjectID: "p1", Name: "tpl-c", Location: "europe-west2", MachineType: "n2-standard-2",
+			Disks: []providers.InstanceTemplateDisk{{DeviceName: "data", DiskSizeGB: 50, DiskType: "pd-ssd"}},
+		},
+	}
+	rows := instanceTemplateRows(templates)
+	if len(rows) != 3 {
+		t.Fatalf("instanceTemplateRows() len = %d, want 3", len(rows))
+	}
+	want := []string{"tpl-a", "global", "e2-small", "img-a", "20", "pd-balanced", "vpc-a", "sn-a", "web base"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("instanceTemplateRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][9] == "" {
+		t.Fatalf("instanceTemplateRows()[0] formatted date missing: %v", rows[0])
+	}
+	if len(rows[0]) != 10 {
+		t.Fatalf("instanceTemplateRows()[0] len = %d, want 10", len(rows[0]))
+	}
+	if rows[1][1] != "" || rows[1][3] != "" || rows[1][4] != "" || rows[1][5] != "" || rows[1][6] != "" || rows[1][7] != "" {
+		t.Fatalf("instanceTemplateRows()[1] empty fields not empty: %v", rows[1])
+	}
+	if rows[1][9] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][9])
+	}
+	if rows[2][1] != "europe-west2" || rows[2][3] != "" || rows[2][4] != "50" || rows[2][5] != "pd-ssd" {
+		t.Fatalf("instanceTemplateRows()[2] = %v, want boot fallback to first disk", rows[2])
+	}
+
+	rowsAll := instanceTemplateRowsAll(templates)
+	if len(rowsAll) != 3 {
+		t.Fatalf("instanceTemplateRowsAll() len = %d, want 3", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 11 {
+		t.Fatalf("instanceTemplateRowsAll()[0] len = %d, want 11", len(rowsAll[0]))
+	}
+	if rowsAll[0][10] != "p1" {
+		t.Fatalf("instanceTemplateRowsAll()[0][10] = %q, want %q", rowsAll[0][10], "p1")
+	}
+}
+
+func TestVMsFromTemplate(t *testing.T) {
+	vms := []providers.VM{
+		{Name: "vm-a", InstanceTemplate: "tpl-a"},
+		{Name: "vm-b", InstanceTemplate: "tpl-b"},
+		{Name: "vm-c"},
+	}
+	matched := vmsFromTemplate(vms, "tpl-a")
+	if len(matched) != 1 || matched[0].Name != "vm-a" {
+		t.Fatalf("vmsFromTemplate() = %+v, want only vm-a", matched)
+	}
+	matched = vmsFromTemplate(vms, "tpl-missing")
+	if len(matched) != 0 {
+		t.Fatalf("vmsFromTemplate() len = %d, want 0 for unknown template", len(matched))
+	}
+}
+
+func TestDiskRows(t *testing.T) {
+	disks := []providers.Disk{
+		{
+			ProjectID: "p1", Name: "web-boot", Zone: "europe-west2-b", SizeGB: 100,
+			Type: "pd-balanced", Status: "READY", SourceImage: "img-a",
+			Users: []string{"vm-a", "vm-b"}, UpdatedAt: "2026-10-12T18:23:12Z",
+		},
+		{Name: "pv-b", UpdatedAt: "not-a-date"},
+	}
+	rows := diskRows(disks)
+	if len(rows) != 2 {
+		t.Fatalf("diskRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"web-boot", "europe-west2-b", "100", "pd-balanced", "READY", "vm-a,vm-b", "img-a"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("diskRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][7] == "" {
+		t.Fatalf("diskRows()[0] formatted date missing: %v", rows[0])
+	}
+	if len(rows[0]) != 8 {
+		t.Fatalf("diskRows()[0] len = %d, want 8", len(rows[0]))
+	}
+	if rows[1][1] != "" || rows[1][2] != "0" || rows[1][5] != "" || rows[1][6] != "" {
+		t.Fatalf("diskRows()[1] empty fields not empty: %v", rows[1])
+	}
+	if rows[1][7] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][7])
+	}
+
+	rowsAll := diskRowsAll(disks)
+	if len(rowsAll[0]) != 9 || rowsAll[0][8] != "p1" {
+		t.Fatalf("diskRowsAll()[0] = %v, want Project appended", rowsAll[0])
+	}
+	if rowsAll[1][8] != "" {
+		t.Fatalf("diskRowsAll()[1] project = %q, want empty", rowsAll[1][8])
 	}
 }

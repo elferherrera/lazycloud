@@ -78,12 +78,13 @@ func TestRefreshViewMarksAutoFetch(t *testing.T) {
 func TestAutoFetchScope(t *testing.T) {
 	appState = State{ProjectID: "p1", Cluster: "cl-1", ClusterProject: "pc", Zone: "z-1", ZoneProject: "pz"}
 	cases := map[viewKind]string{
-		viewVMs:        "p1",
-		viewVMsAll:     "",
-		viewProjects:   "",
-		viewWorkloads:  "pc/cl-1",
-		viewNodePools:  "pc/cl-1",
-		viewDNSRecords: "pz/z-1",
+		viewVMs:          "p1",
+		viewVMsAll:       "",
+		viewProjects:     "",
+		viewPublicImages: "",
+		viewWorkloads:    "pc/cl-1",
+		viewNodePools:    "pc/cl-1",
+		viewDNSRecords:   "pz/z-1",
 	}
 	for kind, want := range cases {
 		if got := autoFetchScope(kind); got != want {

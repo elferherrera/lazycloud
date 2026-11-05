@@ -5,40 +5,49 @@ import "github.com/rivo/tview"
 type viewKind string
 
 const (
-	viewProjects          viewKind = "projects"
-	viewIPs               viewKind = "ips"
-	viewIPsAll            viewKind = "ips-all"
-	viewNetworks          viewKind = "networks"
-	viewNetworksAll       viewKind = "networks-all"
-	viewPeerings          viewKind = "peerings"
-	viewPeeringsAll       viewKind = "peerings-all"
-	viewRoutes            viewKind = "routes"
-	viewRoutesAll         viewKind = "routes-all"
-	viewFirewalls         viewKind = "firewalls"
-	viewFirewallsAll      viewKind = "firewalls-all"
-	viewAccounts          viewKind = "accounts"
-	viewAccountsAll       viewKind = "accounts-all"
-	viewVMs               viewKind = "vms"
-	viewVMsAll            viewKind = "vms-all"
-	viewBuckets           viewKind = "buckets"
-	viewBucketsAll        viewKind = "buckets-all"
-	viewLBs               viewKind = "lbs"
-	viewLBsAll            viewKind = "lbs-all"
-	viewClusters          viewKind = "clusters"
-	viewClustersAll       viewKind = "clusters-all"
-	viewWorkloads         viewKind = "workloads"
-	viewNodePools         viewKind = "nodepools"
-	viewDNSZones          viewKind = "dns-zones"
-	viewDNSZonesAll       viewKind = "dns-zones-all"
-	viewDNSRecords        viewKind = "dns-records"
-	viewCloudRouters      viewKind = "cloud-routers"
-	viewCloudRoutersAll   viewKind = "cloud-routers-all"
-	viewVPNs              viewKind = "vpns"
-	viewVPNsAll           viewKind = "vpns-all"
-	viewPSC               viewKind = "psc"
-	viewPSCAll            viewKind = "psc-all"
-	viewInstanceGroups    viewKind = "instance-groups"
-	viewInstanceGroupsAll viewKind = "instance-groups-all"
+	viewProjects             viewKind = "projects"
+	viewIPs                  viewKind = "ips"
+	viewIPsAll               viewKind = "ips-all"
+	viewNetworks             viewKind = "networks"
+	viewNetworksAll          viewKind = "networks-all"
+	viewPeerings             viewKind = "peerings"
+	viewPeeringsAll          viewKind = "peerings-all"
+	viewRoutes               viewKind = "routes"
+	viewRoutesAll            viewKind = "routes-all"
+	viewFirewalls            viewKind = "firewalls"
+	viewFirewallsAll         viewKind = "firewalls-all"
+	viewAccounts             viewKind = "accounts"
+	viewAccountsAll          viewKind = "accounts-all"
+	viewVMs                  viewKind = "vms"
+	viewVMsAll               viewKind = "vms-all"
+	viewBuckets              viewKind = "buckets"
+	viewBucketsAll           viewKind = "buckets-all"
+	viewLBs                  viewKind = "lbs"
+	viewLBsAll               viewKind = "lbs-all"
+	viewClusters             viewKind = "clusters"
+	viewClustersAll          viewKind = "clusters-all"
+	viewWorkloads            viewKind = "workloads"
+	viewNodePools            viewKind = "nodepools"
+	viewDNSZones             viewKind = "dns-zones"
+	viewDNSZonesAll          viewKind = "dns-zones-all"
+	viewDNSRecords           viewKind = "dns-records"
+	viewCloudRouters         viewKind = "cloud-routers"
+	viewCloudRoutersAll      viewKind = "cloud-routers-all"
+	viewVPNs                 viewKind = "vpns"
+	viewVPNsAll              viewKind = "vpns-all"
+	viewPSC                  viewKind = "psc"
+	viewPSCAll               viewKind = "psc-all"
+	viewInstanceGroups       viewKind = "instance-groups"
+	viewInstanceGroupsAll    viewKind = "instance-groups-all"
+	viewReservations         viewKind = "reservations"
+	viewReservationsAll      viewKind = "reservations-all"
+	viewImages               viewKind = "images"
+	viewImagesAll            viewKind = "images-all"
+	viewPublicImages         viewKind = "public-images"
+	viewInstanceTemplates    viewKind = "instance-templates"
+	viewInstanceTemplatesAll viewKind = "instance-templates-all"
+	viewDisks                viewKind = "disks"
+	viewDisksAll             viewKind = "disks-all"
 )
 
 type cmdMode string
@@ -178,4 +187,32 @@ func instanceGroupsViewKind() viewKind {
 		return viewInstanceGroupsAll
 	}
 	return viewInstanceGroups
+}
+
+func reservationsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewReservationsAll
+	}
+	return viewReservations
+}
+
+func imagesViewKind() viewKind {
+	if appState.AllProjects {
+		return viewImagesAll
+	}
+	return viewImages
+}
+
+func instanceTemplatesViewKind() viewKind {
+	if appState.AllProjects {
+		return viewInstanceTemplatesAll
+	}
+	return viewInstanceTemplates
+}
+
+func disksViewKind() viewKind {
+	if appState.AllProjects {
+		return viewDisksAll
+	}
+	return viewDisks
 }

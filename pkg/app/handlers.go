@@ -54,6 +54,10 @@ func inInstanceGroupsView() bool {
 	return appState.ViewKind == viewInstanceGroups || appState.ViewKind == viewInstanceGroupsAll
 }
 
+func inInstanceTemplatesView() bool {
+	return appState.ViewKind == viewInstanceTemplates || appState.ViewKind == viewInstanceTemplatesAll
+}
+
 func inRoutesView() bool {
 	return appState.ViewKind == viewRoutes || appState.ViewKind == viewRoutesAll
 }
@@ -87,6 +91,11 @@ func init() {
 			{":routers", "show cloud routers", viewCloudRouters},
 			{":vpns", "show VPN gateways", viewVPNs},
 			{":igs", "show instance groups", viewInstanceGroups},
+			{":reservations", "show reservations", viewReservations},
+			{":images", "show images", viewImages},
+			{":public-images", "show public images", viewPublicImages},
+			{":templates", "show instance templates", viewInstanceTemplates},
+			{":disks", "show disks", viewDisks},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -128,6 +137,13 @@ func init() {
 			visible: inInstanceGroupsView,
 			enabled: func(a *app) bool { return inInstanceGroupsView() },
 			run:     (*app).showInstanceGroupVMs,
+		},
+		{
+			key:     'm',
+			desc:    "show VMs for instance template",
+			visible: inInstanceTemplatesView,
+			enabled: func(a *app) bool { return inInstanceTemplatesView() },
+			run:     (*app).showTemplateVMs,
 		},
 		{
 			key:     'd',
@@ -492,7 +508,7 @@ func (a *app) toggleAllProjects() {
 	appState.AllProjects = !appState.AllProjects
 	renderSummary(a.summary)
 	switch appState.ViewKind {
-	case viewProjects, viewWorkloads, viewDNSRecords, viewNodePools:
+	case viewProjects, viewWorkloads, viewDNSRecords, viewNodePools, viewPublicImages:
 	case viewIPs, viewIPsAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
 			a.statusText("[red]No project selected[-]")
@@ -582,6 +598,30 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(instanceGroupsViewKind())
+		}
+	case viewReservations, viewReservationsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(reservationsViewKind())
+		}
+	case viewImages, viewImagesAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(imagesViewKind())
+		}
+	case viewInstanceTemplates, viewInstanceTemplatesAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(instanceTemplatesViewKind())
+		}
+	case viewDisks, viewDisksAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(disksViewKind())
 		}
 	}
 }
@@ -937,6 +977,16 @@ var viewCommands = map[string]func(a *app){
 	"private-service-connect": showPSC,
 	"igs":                     showInstanceGroups,
 	"instance-groups":         showInstanceGroups,
+	"reservations":            showReservations,
+	"res":                     showReservations,
+	"images":                  showImages,
+	"image":                   showImages,
+	"public-images":           showPublicImages,
+	"pub-images":              showPublicImages,
+	"instance-templates":      showInstanceTemplates,
+	"templates":               showInstanceTemplates,
+	"disks":                   showDisks,
+	"disk":                    showDisks,
 	"projects":                func(a *app) { a.setView(viewProjects) },
 }
 

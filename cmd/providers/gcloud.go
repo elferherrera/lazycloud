@@ -1787,3 +1787,225 @@ func ListInstanceGroupVMs(projectID, location, name string) ([]InstanceGroupMemb
 		InstanceGroup: name,
 	}))
 }
+
+type Reservation struct {
+	ProjectID   string
+	Name        string
+	Zone        string
+	MachineType string
+	Count       int64
+	InUseCount  int64
+	ShareType   string
+	Required    bool
+	Status      string
+	Description string
+	Commitment  string
+	UpdatedAt   string
+}
+
+func ListProjectReservations(projectID string) ([]Reservation, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewReservationsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var reservations []Reservation
+	it := client.AggregatedList(ctx, &computepb.AggregatedListReservationsRequest{Project: projectID})
+	for {
+		entry, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range entry.Value.GetReservations() {
+			if r.GetZone() == "" {
+				continue
+			}
+			reservations = append(reservations, Reservation{
+				ProjectID:   projectID,
+				Name:        r.GetName(),
+				Zone:        resourceShortName(r.GetZone(), ""),
+				MachineType: resourceShortName(r.GetSpecificReservation().GetInstanceProperties().GetMachineType(), ""),
+				Count:       r.GetSpecificReservation().GetCount(),
+				InUseCount:  r.GetSpecificReservation().GetInUseCount(),
+				ShareType:   r.GetShareSettings().GetShareType(),
+				Required:    r.GetSpecificReservationRequired(),
+				Status:      r.GetStatus(),
+				Description: r.GetDescription(),
+				Commitment:  resourceShortName(r.GetCommitment(), ""),
+			})
+		}
+	}
+	return reservations, nil
+}
+
+type Image struct {
+	ProjectID       string
+	Name            string
+	Family          string
+	Status          string
+	SizeGB          int64
+	StorageLocation string
+	Source          string
+	CreatedAt       string
+	Description     string
+	Deprecated      string
+	UpdatedAt       string
+}
+
+func imageSource(img *computepb.Image) string {
+	for _, source := range []string{img.GetSourceDisk(), img.GetSourceImage(), img.GetSourceSnapshot()} {
+		if source != "" {
+			return resourceShortName(source, "")
+		}
+	}
+	return ""
+}
+
+func ListProjectImages(projectID string) ([]Image, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewImagesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var images []Image
+	it := client.List(ctx, &computepb.ListImagesRequest{Project: projectID})
+	for {
+		img, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, Image{
+			ProjectID:       projectID,
+			Name:            img.GetName(),
+			Family:          img.GetFamily(),
+			Status:          img.GetStatus(),
+			SizeGB:          img.GetDiskSizeGb(),
+			StorageLocation: strings.Join(img.GetStorageLocations(), ","),
+			Source:          imageSource(img),
+			CreatedAt:       img.GetCreationTimestamp(),
+			Description:     img.GetDescription(),
+			Deprecated:      img.GetDeprecated().GetState(),
+		})
+	}
+	return images, nil
+}
+
+var PublicImageProjects = []string{
+	"almalinux-cloud",
+	"centos-cloud",
+	"cos-cloud",
+	"debian-cloud",
+	"opensuse-cloud",
+	"oracle-linux-cloud",
+	"rhel-cloud",
+	"rocky-linux-cloud",
+	"suse-cloud",
+	"suse-sap-cloud",
+	"ubuntu-os-cloud",
+	"windows-cloud",
+	"windows-sql-cloud",
+}
+
+type InstanceTemplateDisk struct {
+	DeviceName  string
+	SourceImage string
+	DiskSizeGB  int64
+	DiskType    string
+	AutoDelete  bool
+	Boot        bool
+}
+
+type InstanceTemplateInterface struct {
+	Network    string
+	Subnetwork string
+	NetworkIP  string
+	ExternalIP string
+}
+
+type InstanceTemplate struct {
+	ProjectID   string
+	Name        string
+	Location    string
+	MachineType string
+	Disks       []InstanceTemplateDisk
+	Interfaces  []InstanceTemplateInterface
+	Labels      map[string]string
+	Description string
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewInstanceTemplatesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var templates []InstanceTemplate
+	it := client.AggregatedList(ctx, &computepb.AggregatedListInstanceTemplatesRequest{Project: projectID})
+	for {
+		entry, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range entry.Value.GetInstanceTemplates() {
+			location := resourceShortName(t.GetRegion(), "")
+			if location == "" {
+				location = "global"
+			}
+			template := InstanceTemplate{
+				ProjectID:   projectID,
+				Name:        t.GetName(),
+				Location:    location,
+				MachineType: resourceShortName(t.GetProperties().GetMachineType(), ""),
+				Labels:      t.GetProperties().GetLabels(),
+				Description: t.GetDescription(),
+				CreatedAt:   t.GetCreationTimestamp(),
+			}
+			for _, d := range t.GetProperties().GetDisks() {
+				template.Disks = append(template.Disks, InstanceTemplateDisk{
+					DeviceName:  d.GetDeviceName(),
+					SourceImage: resourceShortName(d.GetInitializeParams().GetSourceImage(), ""),
+					DiskSizeGB:  d.GetInitializeParams().GetDiskSizeGb(),
+					DiskType:    resourceShortName(d.GetInitializeParams().GetDiskType(), ""),
+					AutoDelete:  d.GetAutoDelete(),
+					Boot:        d.GetBoot(),
+				})
+			}
+			for _, iface := range t.GetProperties().GetNetworkInterfaces() {
+				ti := InstanceTemplateInterface{
+					Network:    resourceShortName(iface.GetNetwork(), ""),
+					Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
+					NetworkIP:  iface.GetNetworkIP(),
+				}
+				for _, ac := range iface.GetAccessConfigs() {
+					if natIP := ac.GetNatIP(); natIP != "" {
+						ti.ExternalIP = natIP
+						break
+					}
+				}
+				template.Interfaces = append(template.Interfaces, ti)
+			}
+			templates = append(templates, template)
+		}
+	}
+	return templates, nil
+}
