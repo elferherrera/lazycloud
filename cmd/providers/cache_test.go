@@ -883,6 +883,7 @@ func TestSaveAndListClusters(t *testing.T) {
 			Status:      "RUNNING",
 			Version:     "1.31.1-gke.1",
 			Endpoint:    "34.1.1.1",
+			Labels:      map[string]string{"env": "prod", "team": "apps"},
 			NodePools:   []ClusterNodePool{{Name: "pool-a", Version: "1.31.1-gke.1", NodeCount: 3}, {Name: "pool-b", Version: "1.31.1-gke.1", NodeCount: 2}},
 			CreatedAt:   "2026-01-01T00:00:00Z",
 			Description: "second",
@@ -911,6 +912,12 @@ func TestSaveAndListClusters(t *testing.T) {
 	}
 	if got[1].Endpoint != "34.1.1.1" || got[1].CreatedAt != "2026-01-01T00:00:00Z" || got[1].UpdatedAt == "" {
 		t.Fatalf("ListClusters()[1] = %+v", got[1])
+	}
+	if got[1].Labels["env"] != "prod" || got[1].Labels["team"] != "apps" {
+		t.Fatalf("ListClusters()[1].Labels = %+v", got[1].Labels)
+	}
+	if len(got[0].Labels) != 0 {
+		t.Fatalf("ListClusters()[0].Labels = %+v, want empty", got[0].Labels)
 	}
 	if len(got[0].NodePools) != 0 {
 		t.Fatalf("ListClusters()[0].NodePools = %+v, want nils", got[0].NodePools)

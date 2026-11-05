@@ -302,11 +302,16 @@ func NewCacheAt(path string) (*Cache, error) {
 		status TEXT NOT NULL DEFAULT '',
 		version TEXT NOT NULL DEFAULT '',
 		endpoint TEXT NOT NULL DEFAULT '',
+		labels TEXT NOT NULL DEFAULT '{}',
 		node_pools TEXT NOT NULL DEFAULT '[]',
 		created_at TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (project_id, name)
 	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "clusters", "labels", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -1865,10 +1870,14 @@ func (c *Cache) SaveClusters(projectID string, clusters []Cluster) error {
 		if err != nil {
 			return err
 		}
+		labels, err := json.Marshal(cl.Labels)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`INSERT INTO clusters
-			(project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			projectID, cl.Name, cl.Location, cl.Description, cl.Status, cl.Version, cl.Endpoint, string(nodePools), cl.CreatedAt, updatedAt); err != nil {
+			(project_id, name, location, description, status, version, endpoint, labels, node_pools, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, cl.Name, cl.Location, cl.Description, cl.Status, cl.Version, cl.Endpoint, string(labels), string(nodePools), cl.CreatedAt, updatedAt); err != nil {
 			return err
 		}
 	}
@@ -1879,11 +1888,14 @@ func scanClusters(rows *sql.Rows) ([]Cluster, error) {
 	var clusters []Cluster
 	for rows.Next() {
 		var cl Cluster
-		var nodePools string
-		if err := rows.Scan(&cl.ProjectID, &cl.Name, &cl.Location, &cl.Description, &cl.Status, &cl.Version, &cl.Endpoint, &nodePools, &cl.CreatedAt, &cl.UpdatedAt); err != nil {
+		var nodePools, labels string
+		if err := rows.Scan(&cl.ProjectID, &cl.Name, &cl.Location, &cl.Description, &cl.Status, &cl.Version, &cl.Endpoint, &labels, &nodePools, &cl.CreatedAt, &cl.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(nodePools), &cl.NodePools); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(labels), &cl.Labels); err != nil {
 			return nil, err
 		}
 		clusters = append(clusters, cl)
@@ -1892,7 +1904,7 @@ func scanClusters(rows *sql.Rows) ([]Cluster, error) {
 }
 
 func (c *Cache) ListClusters(projectID string) ([]Cluster, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, labels, node_pools, created_at, updated_at
 		FROM clusters WHERE project_id = ? ORDER BY name`, projectID)
 	if err != nil {
 		return nil, err
@@ -1902,7 +1914,7 @@ func (c *Cache) ListClusters(projectID string) ([]Cluster, error) {
 }
 
 func (c *Cache) ListAllClusters() ([]Cluster, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, labels, node_pools, created_at, updated_at
 		FROM clusters ORDER BY project_id, name`)
 	if err != nil {
 		return nil, err
@@ -1912,7 +1924,7 @@ func (c *Cache) ListAllClusters() ([]Cluster, error) {
 }
 
 func (c *Cache) GetCluster(projectID, name string) (*Cluster, error) {
-	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, node_pools, created_at, updated_at
+	rows, err := c.db.Query(`SELECT project_id, name, location, description, status, version, endpoint, labels, node_pools, created_at, updated_at
 		FROM clusters WHERE project_id = ? AND name = ?`, projectID, name)
 	if err != nil {
 		return nil, err

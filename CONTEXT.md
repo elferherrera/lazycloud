@@ -70,7 +70,7 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewBuckets` | view_buckets.go | Storage buckets |
 | `viewAccounts` | view_accounts.go | Service accounts |
 | `viewLBs` / `viewLBsAll` | view_loadbalancers.go | Load balancers: Name, IP:Port, Region, Protocol, Scheme, Backends (+ Project in All) |
-| `viewClusters` / `viewClustersAll` | view_clusters.go | Kubernetes clusters: Name, Location, Status, Version, Node Pools, Created, Updated (+ Project in All) |
+| `viewClusters` / `viewClustersAll` | view_clusters.go | Kubernetes clusters: Name, Location, Status, Version, Node Pools, Created, Updated (+ Project in All). Cluster `Labels` (GKE resource labels) are cached as JSON like VM labels — not a table column, but exposed by `y`/`:write`/detail filters |
 | `viewWorkloads` | view_workloads.go | Workloads of the cluster focused via `w` in the clusters views: Namespace, Kind, Name, Replicas, Images, Updated |
 | `viewDNSZones` / `viewDNSZonesAll` | view_dnszones.go | DNS zones: Name, DNS Name, Visibility, Description, Updated (+ Project in All) |
 | `viewDNSRecords` | view_dnsrecords.go | DNS records of the zone focused via `d` in the DNS zones views: Name, Type, TTL, Data, Updated |

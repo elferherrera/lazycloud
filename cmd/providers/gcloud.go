@@ -995,6 +995,7 @@ type Cluster struct {
 	Status      string
 	Version     string
 	Endpoint    string
+	Labels      map[string]string
 	NodePools   []ClusterNodePool
 	CreatedAt   string
 	UpdatedAt   string
@@ -1023,6 +1024,7 @@ func ListProjectClusters(projectID string) ([]Cluster, error) {
 			Status:      c.Status,
 			Version:     c.CurrentMasterVersion,
 			Endpoint:    c.Endpoint,
+			Labels:      c.ResourceLabels,
 			CreatedAt:   c.CreateTime,
 		}
 		for _, np := range c.NodePools {
