@@ -77,6 +77,38 @@ func TestCompleteCommand(t *testing.T) {
 	assertCmdText(t, a, "sa")
 }
 
+func TestSpaceShortcutShowsProjects(t *testing.T) {
+	var space *shortcut
+	for i := range shortcuts {
+		if shortcuts[i].key == ' ' {
+			space = &shortcuts[i]
+			break
+		}
+	}
+	if space == nil {
+		t.Fatal("no space shortcut registered")
+	}
+	if space.desc != "show projects" {
+		t.Fatalf("space shortcut desc = %q, want %q", space.desc, "show projects")
+	}
+	a := newFilterTestApp(t)
+	appState.ProjectID = "p1"
+	a.setView(viewVMs)
+	space.run(a)
+	if appState.ViewKind != viewProjects {
+		t.Fatalf("space shortcut left view %q, want %q", appState.ViewKind, viewProjects)
+	}
+}
+
+func TestShortcutKeyLabel(t *testing.T) {
+	if got := shortcutKeyLabel(' '); got != "space" {
+		t.Fatalf("shortcutKeyLabel(' ') = %q, want %q", got, "space")
+	}
+	if got := shortcutKeyLabel('u'); got != "u" {
+		t.Fatalf("shortcutKeyLabel('u') = %q, want %q", got, "u")
+	}
+}
+
 func TestRowCopyPayloadIncludesColumns(t *testing.T) {
 	payload, err := rowCopyPayload(
 		[]string{"Network", "Peering", "Route Exchange"},

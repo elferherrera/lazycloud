@@ -69,14 +69,15 @@ func Run() error {
 	tapp := tview.NewApplication()
 
 	a := &app{
-		tapp:    tapp,
-		cmd:     tview.NewInputField(),
-		info:    newInfoPanel(),
-		summary: newSummaryPanel(),
-		status:  tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
-		pages:   tview.NewPages(),
-		cache:   cache,
-		logger:  logger,
+		tapp:        tapp,
+		cmd:         tview.NewInputField(),
+		info:        newInfoPanel(),
+		summary:     newSummaryPanel(),
+		status:      tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
+		pages:       tview.NewPages(),
+		cache:       cache,
+		logger:      logger,
+		autoFetched: map[string]bool{},
 	}
 
 	a.info.SetBorder(true)

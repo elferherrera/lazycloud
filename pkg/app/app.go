@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -33,6 +34,7 @@ type app struct {
 	rowResources  []any
 	savedFilter   string
 	filterStashed bool
+	autoFetched   map[string]bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -209,6 +211,45 @@ func (a *app) setView(kind viewKind) {
 	if def.status != nil {
 		a.statusInfo(def.status(a, len(rows)))
 	}
+	a.autoFetchIfEmpty(kind, def, rows)
+}
+
+func autoFetchKey(kind viewKind, scope string) string {
+	return string(kind) + "/" + scope
+}
+
+func autoFetchScope(kind viewKind) string {
+	switch {
+	case kind == viewWorkloads || kind == viewNodePools:
+		return appState.ClusterProject + "/" + appState.Cluster
+	case kind == viewDNSRecords:
+		return appState.ZoneProject + "/" + appState.Zone
+	case slices.Contains(projectViewKinds, kind):
+		return appState.ProjectID
+	}
+	return ""
+}
+
+func (a *app) markAutoFetched(key string) {
+	if a.autoFetched != nil {
+		a.autoFetched[key] = true
+	}
+}
+
+func (a *app) markViewAutoFetched(kind viewKind) {
+	a.markAutoFetched(autoFetchKey(kind, autoFetchScope(kind)))
+}
+
+func (a *app) autoFetchIfEmpty(kind viewKind, def viewDef, rows [][]string) {
+	if a.autoFetched == nil || len(rows) > 0 || def.refresh == nil {
+		return
+	}
+	key := autoFetchKey(kind, autoFetchScope(kind))
+	if a.autoFetched[key] {
+		return
+	}
+	a.autoFetched[key] = true
+	def.refresh(a)
 }
 
 func (a *app) enterFilterMode() {

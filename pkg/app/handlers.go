@@ -90,6 +90,7 @@ func init() {
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
+		{key: ' ', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
 		{key: '3', desc: "show buckets", run: func(a *app) { showBuckets(a) }},
@@ -248,11 +249,18 @@ func shortcutsRowCount() int {
 	return count
 }
 
+func shortcutKeyLabel(key rune) string {
+	if key == ' ' {
+		return "space"
+	}
+	return string(key)
+}
+
 func populateShortcutsPanel(table *tview.Table) int {
 	table.Clear()
 	row := 0
 	for _, s := range visibleShortcuts() {
-		table.SetCell(row, 0, tview.NewTableCell(string(s.key)).
+		table.SetCell(row, 0, tview.NewTableCell(shortcutKeyLabel(s.key)).
 			SetTextColor(theme.shortcutLabelColor()).
 			SetAttributes(tcell.AttrBold))
 		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1).
@@ -644,11 +652,13 @@ func (a *app) deleteProject() {
 		appState.ProjectNumber = ""
 		renderSummary(a.summary)
 	}
+	a.markViewAutoFetched(viewProjects)
 	a.setView(viewProjects)
 	a.statusText(fmt.Sprintf("[green]Removed %s from cache[-]", p.ProjectID))
 }
 
 func (a *app) refreshView() {
+	a.markViewAutoFetched(appState.ViewKind)
 	views[appState.ViewKind].refresh(a)
 }
 
@@ -661,6 +671,9 @@ func (a *app) refreshProjectViews() {
 	}
 	projectID := appState.ProjectID
 	a.statusInfo(fmt.Sprintf("Updating all views for %s...", projectID))
+	for _, kind := range projectViewKinds {
+		a.markAutoFetched(autoFetchKey(kind, projectID))
+	}
 	go func() {
 		failed := 0
 		for i, kind := range projectViewKinds {
