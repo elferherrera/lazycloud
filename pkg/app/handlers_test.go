@@ -51,7 +51,7 @@ func TestCompleteCommand(t *testing.T) {
 	assertCmdText(t, a, "peerings")
 
 	a.completeCommand(true)
-	assertCmdText(t, a, "private-service-connect")
+	assertCmdText(t, a, "policies")
 
 	a.completeCommand(false)
 	assertCmdText(t, a, "peerings")

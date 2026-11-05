@@ -1068,3 +1068,41 @@ func TestDiskRows(t *testing.T) {
 		t.Fatalf("diskRowsAll()[1] project = %q, want empty", rowsAll[1][8])
 	}
 }
+
+func TestIAMBindingRows(t *testing.T) {
+	bindings := []providers.IAMBinding{
+		{ProjectID: "p1", Member: "user:alice@example.com", Role: "roles/editor", UpdatedAt: "2026-10-12T18:23:12Z"},
+		{ProjectID: "p1", Member: "serviceAccount:bot@p1.iam.gserviceaccount.com", Role: "roles/monitoring.viewer", Condition: "prod only", UpdatedAt: "not-a-date"},
+		{ProjectID: "p1", Member: "allUsers", Role: "roles/iam.roleViewer"},
+	}
+	rows := iamBindingRows(bindings)
+	if len(rows) != 3 {
+		t.Fatalf("iamBindingRows() len = %d, want 3", len(rows))
+	}
+	want := []string{"user:alice@example.com", "user", "roles/editor"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("iamBindingRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][4] == "" {
+		t.Fatalf("iamBindingRows()[0] formatted date missing: %v", rows[0])
+	}
+	if len(rows[0]) != 5 {
+		t.Fatalf("iamBindingRows()[0] len = %d, want 5", len(rows[0]))
+	}
+	if rows[1][1] != "serviceAccount" || rows[1][3] != "prod only" {
+		t.Fatalf("iamBindingRows()[1] = %v", rows[1])
+	}
+	if rows[1][4] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][4])
+	}
+	if rows[2][1] != "allUsers" {
+		t.Fatalf("member without colon should type as itself, got %q", rows[2][1])
+	}
+
+	rowsAll := iamBindingRowsAll(bindings)
+	if len(rowsAll[0]) != 6 || rowsAll[0][5] != "p1" {
+		t.Fatalf("iamBindingRowsAll()[0] = %v, want Project appended", rowsAll[0])
+	}
+}

@@ -225,3 +225,11 @@ func TestGCPDiskURL(t *testing.T) {
 		t.Fatalf("GCPDiskURL() =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPIAMURL(t *testing.T) {
+	got := GCPIAMURL("revolut-labs")
+	want := "https://console.cloud.google.com/iam-admin/iam?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPIAMURL() =\n%s\nwant\n%s", got, want)
+	}
+}

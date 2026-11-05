@@ -96,6 +96,7 @@ func init() {
 			{":public-images", "show public images", viewPublicImages},
 			{":templates", "show instance templates", viewInstanceTemplates},
 			{":disks", "show disks", viewDisks},
+			{":iam", "show iam policy", viewIAM},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -623,6 +624,12 @@ func (a *app) toggleAllProjects() {
 		} else {
 			a.setView(disksViewKind())
 		}
+	case viewIAM, viewIAMAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(iamViewKind())
+		}
 	}
 }
 
@@ -987,6 +994,8 @@ var viewCommands = map[string]func(a *app){
 	"templates":               showInstanceTemplates,
 	"disks":                   showDisks,
 	"disk":                    showDisks,
+	"iam":                     showIAM,
+	"policies":                showIAM,
 	"projects":                func(a *app) { a.setView(viewProjects) },
 }
 

@@ -48,6 +48,8 @@ const (
 	viewInstanceTemplatesAll viewKind = "instance-templates-all"
 	viewDisks                viewKind = "disks"
 	viewDisksAll             viewKind = "disks-all"
+	viewIAM                  viewKind = "iam"
+	viewIAMAll               viewKind = "iam-all"
 )
 
 type cmdMode string
@@ -215,4 +217,11 @@ func disksViewKind() viewKind {
 		return viewDisksAll
 	}
 	return viewDisks
+}
+
+func iamViewKind() viewKind {
+	if appState.AllProjects {
+		return viewIAMAll
+	}
+	return viewIAM
 }

@@ -215,6 +215,10 @@ func GCPDiskURL(projectID, zone, name string) string {
 		";duration=PT1H?project=" + url.QueryEscape(projectID)
 }
 
+func GCPIAMURL(projectID string) string {
+	return "https://console.cloud.google.com/iam-admin/iam?project=" + url.QueryEscape(projectID)
+}
+
 func GCPImageURL(projectID, name string) string {
 	return "https://console.cloud.google.com/compute/imagesDetail/projects/" +
 		url.PathEscape(projectID) + "/global/images/" + url.PathEscape(name) +

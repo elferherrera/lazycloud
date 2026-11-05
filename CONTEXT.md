@@ -83,6 +83,7 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 | `viewPublicImages` | view_publicimages.go | Public images: Name, Family, Status, Size GB, Location, Source, Created, Description, Updated, Project |
 | `viewInstanceTemplates` / `viewInstanceTemplatesAll` | view_instancetemplates.go | Compute instance templates: Name, Location, Machine Type, Boot Image, Disk GB, Disk Type, Network, Subnetwork, Description, Updated (+ Project in All) |
 | `viewDisks` / `viewDisksAll` | view_disks.go | Compute disks: Name, Zone, Size GB, Type, Status, In Use By, Source Image, Updated (+ Project in All) |
+| `viewIAM` / `viewIAMAll` | view_iam.go | IAM policy bindings: Member, Type, Role, Condition, Updated (+ Project in All) |
 
 ### Workload fetching
 
@@ -127,6 +128,10 @@ Instance templates can be global or regional, so `ListProjectInstanceTemplates` 
 ### Disks
 
 Rows are Compute Engine persistent disks. The fetcher (`ListProjectDisks`, Disks aggregated list), cache table (`disks`, keyed by `(project, zone, name)`) and readers (`ListDisks`/`ListAllDisks`/`GetDisk`) predate the view — the VMs views' refresh still fetches both VMs and disks in one pass, and the disks view adds its own fetch core so `u`/`U` refresh it independently (auto-fetch on empty works the same as other per-project views). Regional disks have no zone and are skipped by the fetcher, so the view is zonal-only. `Users` holds the attached VMs as instance short names (comma-joined in the In Use By column); zone/type/source image are short names like the other compute views. The view is reached via `:disks` (`disk` alias works too; no numeric shortcut). `y`/`v` expose the cached `Disk` JSON, and `g` opens the disk details page (`GCPDiskURL`, `/compute/disksDetail/zones/<zone>/disks/<name>;duration=PT1H` — the zonal `<resource>Detail` console route family as `GCPVMURL`; the `;duration=PT1H` matrix param is what the live console appends, it only sets the details page's monitoring chart window).
+
+### IAM policy
+
+Rows are the project's IAM policy bindings, flattened to one row per (member, role) pair: `ListProjectIAMPolicy` calls the Resource Manager v3 `GetIamPolicy` on the project (requested policy version 3, for conditions) and expands each returned `Binding` — `Member` is the principal string as returned (`user:…`, `serviceAccount:…`, `group:…`, `domain:…`, `allUsers`…), `Role` the granted role, `Condition` the binding condition Title falling back to the CEL Expression when untitled (conditional bindings legitimately duplicate a member+role pair with different conditions). The `Type` column is derived at render time from the member's `:` prefix (`iamMemberType`; colon-less members like `allUsers` type as themselves). Everything is cached in `iam_bindings` keyed by `(project, member, role, condition)`, with `SaveIAMBindings`/`ListIAMBindings` (ORDER BY member, role)/`ListAllIAMBindings`/`GetIAMBinding` (first row — a member+role pair with multiple conditions resolves to one binding, like `GetIPAddresses`). The view is reached via `:iam` (`policies` alias works too; no numeric shortcut). `y`/`v` expose the cached `IAMBinding` JSON, and `g` opens the IAM & Admin Permissions page (`GCPIAMURL`, `/iam-admin/iam` — there is no per-binding console deep link, so every row opens the project's page, like reservations).
 
 ### Routes next-hop chart
 

@@ -67,6 +67,8 @@ func init() {
 		viewInstanceTemplatesAll: instanceTemplatesAllView,
 		viewDisks:                disksView,
 		viewDisksAll:             disksAllView,
+		viewIAM:                  iamView,
+		viewIAMAll:               iamAllView,
 	}
 }
 
@@ -91,6 +93,7 @@ var projectViewKinds = []viewKind{
 	viewImages,
 	viewInstanceTemplates,
 	viewDisks,
+	viewIAM,
 }
 
 // projectRefresh builds the refresh action shared by the per-project views:

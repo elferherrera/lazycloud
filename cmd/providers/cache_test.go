@@ -2117,3 +2117,48 @@ func TestSaveAndListInstanceTemplates(t *testing.T) {
 		t.Fatalf("ListInstanceTemplates(p2) len = %d, want 1 (other project untouched)", len(got))
 	}
 }
+
+func TestSaveAndListIAMBindings(t *testing.T) {
+	cache := newTestCache(t)
+	bindings := []IAMBinding{
+		{ProjectID: "p1", Member: "user:alice@example.com", Role: "roles/editor"},
+		{ProjectID: "p1", Member: "user:bob@example.com", Role: "roles/viewer"},
+		{ProjectID: "p1", Member: "user:bob@example.com", Role: "roles/viewer", Condition: "off hours"},
+	}
+	if err := cache.SaveIAMBindings("p1", bindings); err != nil {
+		t.Fatalf("SaveIAMBindings() error = %v", err)
+	}
+	if err := cache.SaveIAMBindings("p2", bindings[:1]); err != nil {
+		t.Fatalf("SaveIAMBindings() other project error = %v", err)
+	}
+
+	got, err := cache.ListIAMBindings("p1")
+	if err != nil {
+		t.Fatalf("ListIAMBindings() error = %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("ListIAMBindings() len = %d, want 3 (same member+role with different conditions)", len(got))
+	}
+	if got[0].Member != "user:alice@example.com" || got[0].Role != "roles/editor" {
+		t.Fatalf("ListIAMBindings() not ordered by member, role: %+v", got)
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatal("ListIAMBindings()[0].UpdatedAt empty, want timestamp")
+	}
+
+	binding, err := cache.GetIAMBinding("p1", "user:bob@example.com", "roles/viewer")
+	if err != nil || binding == nil {
+		t.Fatalf("GetIAMBinding() = %v, %v, want a binding", binding, err)
+	}
+	if missing, err := cache.GetIAMBinding("p1", "user:nobody@example.com", "roles/viewer"); err != nil || missing != nil {
+		t.Fatalf("GetIAMBinding() for missing binding = %v, %v, want nil", missing, err)
+	}
+
+	all, err := cache.ListAllIAMBindings()
+	if err != nil {
+		t.Fatalf("ListAllIAMBindings() error = %v", err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("ListAllIAMBindings() len = %d, want 4", len(all))
+	}
+}

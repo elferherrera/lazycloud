@@ -13,6 +13,7 @@ import (
 
 	computev1 "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
+	iampb "cloud.google.com/go/iam/apiv1/iampb"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	"google.golang.org/api/container/v1"
@@ -2008,4 +2009,47 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 		}
 	}
 	return templates, nil
+}
+
+type IAMBinding struct {
+	ProjectID string
+	Member    string
+	Role      string
+	Condition string
+	UpdatedAt string
+}
+
+func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
+	ctx := context.Background()
+
+	client, err := resourcemanager.NewProjectsClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	policy, err := client.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
+		Resource: "projects/" + projectID,
+		Options:  &iampb.GetPolicyOptions{RequestedPolicyVersion: 3},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var bindings []IAMBinding
+	for _, b := range policy.GetBindings() {
+		condition := b.GetCondition().GetTitle()
+		if condition == "" {
+			condition = b.GetCondition().GetExpression()
+		}
+		for _, member := range b.GetMembers() {
+			bindings = append(bindings, IAMBinding{
+				ProjectID: projectID,
+				Member:    member,
+				Role:      b.GetRole(),
+				Condition: condition,
+			})
+		}
+	}
+	return bindings, nil
 }
