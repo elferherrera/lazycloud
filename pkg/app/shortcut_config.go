@@ -91,6 +91,14 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 			}
 			a.setView(viewDNSRecords)
 		}
+	case viewBucketIAM:
+		return func(a *app) {
+			if appState.Bucket == "" {
+				a.statusText("[red]No bucket selected[-]")
+				return
+			}
+			a.setView(viewBucketIAM)
+		}
 	case viewIPsAll, viewNetworksAll, viewPeeringsAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
 		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
 		viewVPNsAll, viewPSCAll, viewInstanceGroupsAll, viewReservationsAll, viewImagesAll,

@@ -1106,3 +1106,20 @@ func TestIAMBindingRows(t *testing.T) {
 		t.Fatalf("iamBindingRowsAll()[0] = %v, want Project appended", rowsAll[0])
 	}
 }
+
+func TestBucketIAMRows(t *testing.T) {
+	bindings := []providers.BucketIAMBinding{
+		{ProjectID: "p1", Bucket: "bkt-a", Member: "user:alice@example.com", Role: "roles/storage.objectViewer", UpdatedAt: "2026-10-12T18:23:12Z"},
+		{ProjectID: "p1", Bucket: "bkt-a", Member: "allUsers", Role: "roles/storage.objectViewer"},
+	}
+	rows := bucketIAMRows(bindings)
+	if len(rows) != 2 {
+		t.Fatalf("bucketIAMRows() len = %d, want 2", len(rows))
+	}
+	if rows[0][0] != "user:alice@example.com" || rows[0][1] != "user" || rows[0][2] != "roles/storage.objectViewer" {
+		t.Fatalf("bucketIAMRows()[0] = %v", rows[0])
+	}
+	if rows[1][1] != "allUsers" {
+		t.Fatalf("member without colon should type as itself, got %q", rows[1][1])
+	}
+}

@@ -486,6 +486,18 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS bucket_iam_bindings (
+		project_id TEXT NOT NULL,
+		bucket TEXT NOT NULL,
+		member TEXT NOT NULL,
+		role TEXT NOT NULL,
+		condition TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, bucket, member, role, condition)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
 }
 
@@ -1061,7 +1073,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings", "bucket_iam_bindings"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -2777,6 +2789,66 @@ func (c *Cache) GetIAMBinding(projectID, member, role string) (*IAMBinding, erro
 		return nil, err
 	}
 	bindings, err := scanIAMBindings(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(bindings) == 0 {
+		return nil, nil
+	}
+	return &bindings[0], nil
+}
+
+func (c *Cache) SaveBucketIAMBindings(projectID, bucket string, bindings []BucketIAMBinding) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM bucket_iam_bindings WHERE project_id = ? AND bucket = ?", projectID, bucket); err != nil {
+		return err
+	}
+	for _, b := range bindings {
+		if _, err := tx.Exec(`INSERT INTO bucket_iam_bindings
+			(project_id, bucket, member, role, condition, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			projectID, bucket, b.Member, b.Role, b.Condition, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanBucketIAMBindings(rows *sql.Rows) ([]BucketIAMBinding, error) {
+	defer rows.Close()
+	var bindings []BucketIAMBinding
+	for rows.Next() {
+		var b BucketIAMBinding
+		if err := rows.Scan(&b.ProjectID, &b.Bucket, &b.Member, &b.Role, &b.Condition, &b.UpdatedAt); err != nil {
+			return nil, err
+		}
+		bindings = append(bindings, b)
+	}
+	return bindings, rows.Err()
+}
+
+func (c *Cache) ListBucketIAMBindings(projectID, bucket string) ([]BucketIAMBinding, error) {
+	rows, err := c.db.Query(`SELECT project_id, bucket, member, role, condition, updated_at
+		FROM bucket_iam_bindings WHERE project_id = ? AND bucket = ? ORDER BY member, role`, projectID, bucket)
+	if err != nil {
+		return nil, err
+	}
+	return scanBucketIAMBindings(rows)
+}
+
+func (c *Cache) GetBucketIAMBinding(projectID, bucket, member, role string) (*BucketIAMBinding, error) {
+	rows, err := c.db.Query(`SELECT project_id, bucket, member, role, condition, updated_at
+		FROM bucket_iam_bindings WHERE project_id = ? AND bucket = ? AND member = ? AND role = ?`,
+		projectID, bucket, member, role)
+	if err != nil {
+		return nil, err
+	}
+	bindings, err := scanBucketIAMBindings(rows)
 	if err != nil {
 		return nil, err
 	}

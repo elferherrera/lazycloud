@@ -2053,3 +2053,47 @@ func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
 	}
 	return bindings, nil
 }
+
+type BucketIAMBinding struct {
+	ProjectID string
+	Bucket    string
+	Member    string
+	Role      string
+	Condition string
+	UpdatedAt string
+}
+
+func ListBucketIAMPolicy(projectID, bucket string) ([]BucketIAMBinding, error) {
+	ctx := context.Background()
+
+	svc, err := storage.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	policy, err := svc.Buckets.GetIamPolicy(bucket).OptionsRequestedPolicyVersion(3).Do()
+	if err != nil {
+		return nil, err
+	}
+
+	var bindings []BucketIAMBinding
+	for _, b := range policy.Bindings {
+		condition := ""
+		if b.Condition != nil {
+			condition = b.Condition.Title
+			if condition == "" {
+				condition = b.Condition.Expression
+			}
+		}
+		for _, member := range b.Members {
+			bindings = append(bindings, BucketIAMBinding{
+				ProjectID: projectID,
+				Bucket:    bucket,
+				Member:    member,
+				Role:      b.Role,
+				Condition: condition,
+			})
+		}
+	}
+	return bindings, nil
+}

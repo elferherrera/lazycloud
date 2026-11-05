@@ -49,6 +49,11 @@ func GCPBucketURL(projectID, name string) string {
 		url.PathEscape(name) + ";tab=objects?project=" + url.QueryEscape(projectID)
 }
 
+func GCPBucketIAMURL(projectID, name string) string {
+	return "https://console.cloud.google.com/storage/browser/" +
+		url.PathEscape(name) + ";tab=permissions?project=" + url.QueryEscape(projectID)
+}
+
 func gcpLBListURL(projectID, table, name string) string {
 	filter := fmt.Sprintf(`[{"k":"","t":10,"v":"\"%s\""}]`, name)
 	encoded := strings.NewReplacer(

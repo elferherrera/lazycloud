@@ -224,6 +224,8 @@ func autoFetchScope(kind viewKind) string {
 		return appState.ClusterProject + "/" + appState.Cluster
 	case kind == viewDNSRecords:
 		return appState.ZoneProject + "/" + appState.Zone
+	case kind == viewBucketIAM:
+		return appState.BucketProject + "/" + appState.Bucket
 	case slices.Contains(projectViewKinds, kind):
 		return appState.ProjectID
 	}

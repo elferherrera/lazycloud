@@ -2162,3 +2162,37 @@ func TestSaveAndListIAMBindings(t *testing.T) {
 		t.Fatalf("ListAllIAMBindings() len = %d, want 4", len(all))
 	}
 }
+
+func TestSaveAndListBucketIAMBindings(t *testing.T) {
+	cache := newTestCache(t)
+	bindings := []BucketIAMBinding{
+		{ProjectID: "p1", Bucket: "bkt-a", Member: "user:alice@example.com", Role: "roles/storage.objectViewer"},
+		{ProjectID: "p1", Bucket: "bkt-a", Member: "user:alice@example.com", Role: "roles/storage.objectViewer", Condition: "prod only"},
+	}
+	if err := cache.SaveBucketIAMBindings("p1", "bkt-a", bindings); err != nil {
+		t.Fatalf("SaveBucketIAMBindings() error = %v", err)
+	}
+	if err := cache.SaveBucketIAMBindings("p1", "bkt-b", bindings[:1]); err != nil {
+		t.Fatalf("SaveBucketIAMBindings() other bucket error = %v", err)
+	}
+
+	got, err := cache.ListBucketIAMBindings("p1", "bkt-a")
+	if err != nil {
+		t.Fatalf("ListBucketIAMBindings() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListBucketIAMBindings() len = %d, want 2 (same member+role with different conditions)", len(got))
+	}
+	if got[0].Bucket != "bkt-a" || got[0].UpdatedAt == "" {
+		t.Fatalf("ListBucketIAMBindings()[0] = %+v, want bucket and timestamp", got[0])
+	}
+
+	if missing, err := cache.ListBucketIAMBindings("p1", "bkt-c"); err != nil || len(missing) != 0 {
+		t.Fatalf("ListBucketIAMBindings() for unknown bucket = %v, %v, want empty", missing, err)
+	}
+
+	binding, err := cache.GetBucketIAMBinding("p1", "bkt-a", "user:alice@example.com", "roles/storage.objectViewer")
+	if err != nil || binding == nil {
+		t.Fatalf("GetBucketIAMBinding() = %v, %v, want a binding", binding, err)
+	}
+}

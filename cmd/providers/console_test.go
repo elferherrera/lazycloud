@@ -233,3 +233,11 @@ func TestGCPIAMURL(t *testing.T) {
 		t.Fatalf("GCPIAMURL() =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPBucketIAMURL(t *testing.T) {
+	got := GCPBucketIAMURL("revolut-labs", "my-bucket")
+	want := "https://console.cloud.google.com/storage/browser/my-bucket;tab=permissions?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPBucketIAMURL() =\n%s\nwant\n%s", got, want)
+	}
+}

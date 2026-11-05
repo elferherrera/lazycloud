@@ -50,6 +50,7 @@ const (
 	viewDisksAll             viewKind = "disks-all"
 	viewIAM                  viewKind = "iam"
 	viewIAMAll               viewKind = "iam-all"
+	viewBucketIAM            viewKind = "bucket-iam"
 )
 
 type cmdMode string
@@ -71,6 +72,8 @@ type State struct {
 	ClusterProject string
 	Zone           string
 	ZoneProject    string
+	Bucket         string
+	BucketProject  string
 }
 
 var appState State

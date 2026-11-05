@@ -58,6 +58,10 @@ func inInstanceTemplatesView() bool {
 	return appState.ViewKind == viewInstanceTemplates || appState.ViewKind == viewInstanceTemplatesAll
 }
 
+func inBucketsView() bool {
+	return appState.ViewKind == viewBuckets || appState.ViewKind == viewBucketsAll
+}
+
 func inRoutesView() bool {
 	return appState.ViewKind == viewRoutes || appState.ViewKind == viewRoutesAll
 }
@@ -145,6 +149,13 @@ func init() {
 			visible: inInstanceTemplatesView,
 			enabled: func(a *app) bool { return inInstanceTemplatesView() },
 			run:     (*app).showTemplateVMs,
+		},
+		{
+			key:     'i',
+			desc:    "show iam policy for bucket",
+			visible: inBucketsView,
+			enabled: func(a *app) bool { return inBucketsView() },
+			run:     (*app).showBucketIAM,
 		},
 		{
 			key:     'd',

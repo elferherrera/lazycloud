@@ -47,6 +47,20 @@ func fetchProjectBuckets(a *app, projectID string) (string, error) {
 	return fmt.Sprintf("Fetched %d buckets", len(buckets)), nil
 }
 
+func (a *app) showBucketIAM() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewBucketsAll {
+		projectID = a.info.GetCell(row, 6).Text
+	}
+	appState.BucketProject = projectID
+	appState.Bucket = a.info.GetCell(row, 0).Text
+	a.setView(viewBucketIAM)
+}
+
 var bucketsView = viewDef{
 	title:   "Buckets",
 	headers: []string{"Name", "Location", "Storage Class", "Versioning", "Created", "Updated"},

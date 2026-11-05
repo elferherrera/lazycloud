@@ -69,6 +69,7 @@ func init() {
 		viewDisksAll:             disksAllView,
 		viewIAM:                  iamView,
 		viewIAMAll:               iamAllView,
+		viewBucketIAM:            bucketIAMView,
 	}
 }
 
