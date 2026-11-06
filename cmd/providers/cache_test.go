@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -2201,5 +2202,178 @@ func TestSaveAndListBucketIAMBindings(t *testing.T) {
 	binding, err := cache.GetBucketIAMBinding("p1", "bkt-a", "user:alice@example.com", "roles/storage.objectViewer")
 	if err != nil || binding == nil {
 		t.Fatalf("GetBucketIAMBinding() = %v, %v, want a binding", binding, err)
+	}
+}
+
+func TestViewUpdates(t *testing.T) {
+	cache := newTestCache(t)
+
+	if err := cache.SeedViewUpdates([]string{"ips", "vms"}); err != nil {
+		t.Fatalf("SeedViewUpdates() error = %v", err)
+	}
+	for _, view := range []string{"ips", "vms"} {
+		updatedAt, err := cache.GetViewUpdate(view, "")
+		if err != nil {
+			t.Fatalf("GetViewUpdate(%q, \"\") error = %v", view, err)
+		}
+		if updatedAt != "" {
+			t.Fatalf("GetViewUpdate(%q, \"\") = %q, want empty before first refresh", view, updatedAt)
+		}
+	}
+	updatedAt, err := cache.GetViewUpdate("never-seeded", "proj-a")
+	if err != nil {
+		t.Fatalf("GetViewUpdate() on missing view error = %v", err)
+	}
+	if updatedAt != "" {
+		t.Fatalf("GetViewUpdate() on missing view = %q, want empty", updatedAt)
+	}
+
+	if err := cache.SaveViewUpdate("ips", "labs"); err != nil {
+		t.Fatalf("SaveViewUpdate() error = %v", err)
+	}
+	labs, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, labs) error = %v", err)
+	}
+	if labs == "" {
+		t.Fatalf("GetViewUpdate(ips, labs) = empty, want timestamp")
+	}
+	if _, err := time.Parse(time.RFC3339, labs); err != nil {
+		t.Fatalf("saved updated_at %q is not RFC3339: %v", labs, err)
+	}
+
+	if err := cache.SaveViewUpdate("ips", "dev-apps"); err != nil {
+		t.Fatalf("SaveViewUpdate() error = %v", err)
+	}
+	devApps, err := cache.GetViewUpdate("ips", "dev-apps")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, dev-apps) error = %v", err)
+	}
+	if devApps == "" {
+		t.Fatalf("GetViewUpdate(ips, dev-apps) = empty, want timestamp")
+	}
+	Labs, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, labs) after dev-apps save error = %v", err)
+	}
+	if labs != Labs {
+		t.Fatalf("saving dev-apps changed the labs entry: %q -> %q", labs, Labs)
+	}
+
+	if err := cache.SaveViewUpdate("ips", "labs"); err != nil {
+		t.Fatalf("SaveViewUpdate() second error = %v", err)
+	}
+	relabs, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, labs) after re-save error = %v", err)
+	}
+	if relabs == "" {
+		t.Fatalf("GetViewUpdate(ips, labs) after re-save = empty, want timestamp")
+	}
+
+	if err := cache.SeedViewUpdates([]string{"ips"}); err != nil {
+		t.Fatalf("SeedViewUpdates() after save error = %v", err)
+	}
+	reseeded, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate() after reseed error = %v", err)
+	}
+	if reseeded != relabs {
+		t.Fatalf("SeedViewUpdates() overwrote %q with %q", relabs, reseeded)
+	}
+}
+
+func TestViewUpdatesOldSchemaMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cache.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("opening old db: %v", err)
+	}
+	if _, err := old.Exec(`CREATE TABLE view_updates (
+		view TEXT PRIMARY KEY,
+		project_id TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT ''
+	)`); err != nil {
+		t.Fatalf("creating old schema: %v", err)
+	}
+	if _, err := old.Exec(`INSERT INTO view_updates (view, project_id, updated_at) VALUES ('ips', 'labs', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seeding old row: %v", err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatalf("closing old db: %v", err)
+	}
+
+	cache, err := NewCacheAt(path)
+	if err != nil {
+		t.Fatalf("NewCacheAt() on old schema error = %v", err)
+	}
+	defer cache.Close()
+	updatedAt, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate() after migration error = %v", err)
+	}
+	if updatedAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("GetViewUpdate() after migration = %q, want old row preserved", updatedAt)
+	}
+
+	if err := cache.SaveViewUpdate("ips", "dev-apps"); err != nil {
+		t.Fatalf("SaveViewUpdate() after migration error = %v", err)
+	}
+	devApps, err := cache.GetViewUpdate("ips", "dev-apps")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, dev-apps) error = %v", err)
+	}
+	if devApps == "" {
+		t.Fatalf("GetViewUpdate(ips, dev-apps) = empty, want timestamp")
+	}
+	preserved, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, labs) after new save error = %v", err)
+	}
+	if preserved != "2026-01-01T00:00:00Z" {
+		t.Fatalf("labs entry changed by dev-apps save: %q", preserved)
+	}
+}
+
+func TestViewUpdatesOriginalSchemaMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cache.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("opening old db: %v", err)
+	}
+	if _, err := old.Exec(`CREATE TABLE view_updates (
+		view TEXT PRIMARY KEY,
+		updated_at TEXT NOT NULL DEFAULT ''
+	)`); err != nil {
+		t.Fatalf("creating original schema: %v", err)
+	}
+	if _, err := old.Exec(`INSERT INTO view_updates (view, updated_at) VALUES ('ips', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seeding original row: %v", err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatalf("closing old db: %v", err)
+	}
+
+	cache, err := NewCacheAt(path)
+	if err != nil {
+		t.Fatalf("NewCacheAt() on original schema error = %v", err)
+	}
+	defer cache.Close()
+	updatedAt, err := cache.GetViewUpdate("ips", "")
+	if err != nil {
+		t.Fatalf("GetViewUpdate() after migration error = %v", err)
+	}
+	if updatedAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("GetViewUpdate() after migration = %q, want original row preserved under empty project", updatedAt)
+	}
+	if err := cache.SaveViewUpdate("ips", "labs"); err != nil {
+		t.Fatalf("SaveViewUpdate() after migration error = %v", err)
+	}
+	labs, err := cache.GetViewUpdate("ips", "labs")
+	if err != nil {
+		t.Fatalf("GetViewUpdate(ips, labs) error = %v", err)
+	}
+	if labs == "" {
+		t.Fatalf("GetViewUpdate(ips, labs) = empty, want timestamp")
 	}
 }

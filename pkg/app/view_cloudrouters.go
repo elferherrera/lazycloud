@@ -122,6 +122,7 @@ var cloudRoutersAllView = viewDef{
 				a.logger.Update("cloud-routers", p.ProjectID, len(routers))
 				total += len(routers)
 			}
+			a.markViewUpdated(viewCloudRoutersAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewCloudRoutersAll)
 				status := fmt.Sprintf("[green]Fetched %d cloud routers across %d projects[-]", total, len(projects))

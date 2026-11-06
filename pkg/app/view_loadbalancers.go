@@ -168,6 +168,7 @@ var lbsAllView = viewDef{
 				}
 				total += count
 			}
+			a.markViewUpdated(viewLBsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewLBsAll)
 				status := fmt.Sprintf("[green]Fetched %d load balancers across %d projects[-]", total, len(projects))

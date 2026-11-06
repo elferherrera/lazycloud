@@ -115,6 +115,7 @@ var imagesAllView = viewDef{
 				a.logger.Update("images", p.ProjectID, len(images))
 				total += len(images)
 			}
+			a.markViewUpdated(viewImagesAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewImagesAll)
 				status := fmt.Sprintf("[green]Fetched %d images across %d projects[-]", total, len(projects))

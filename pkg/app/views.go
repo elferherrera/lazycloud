@@ -114,10 +114,19 @@ func projectRefresh(kind viewKind, label string, fetch func(a *app, projectID st
 				a.reportError(string(kind), projectID, "Failed to fetch "+label, err)
 				return
 			}
+			a.markViewUpdated(kind, projectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(kind)
 				a.statusText("[green]" + msg + "[-]")
 			})
 		}()
 	}
+}
+
+func viewKindNames() []string {
+	names := make([]string, 0, len(views))
+	for kind := range views {
+		names = append(names, string(kind))
+	}
+	return names
 }

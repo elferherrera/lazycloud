@@ -143,6 +143,7 @@ var vmsAllView = viewDef{
 				a.logger.Update("disks", p.ProjectID, len(disks))
 				total += len(vms)
 			}
+			a.markViewUpdated(viewVMsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewVMsAll)
 				status := fmt.Sprintf("[green]Fetched %d VMs across %d projects[-]", total, len(projects))

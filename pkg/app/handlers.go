@@ -742,6 +742,8 @@ func (a *app) refreshProjectViews() {
 			if _, err := def.fetch(a, projectID); err != nil {
 				a.reportError(string(kind), projectID, "Failed to fetch "+def.title, err)
 				failed++
+			} else {
+				a.markViewUpdated(kind, projectID)
 			}
 		}
 		a.tapp.QueueUpdateDraw(func() {

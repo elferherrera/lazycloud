@@ -503,7 +503,80 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS view_updates (
+		view TEXT NOT NULL,
+		project_id TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (view, project_id)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "view_updates", "project_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureViewUpdatesPrimaryKey(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Cache{db: db}, nil
+}
+
+func ensureViewUpdatesPrimaryKey(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA table_info(view_updates)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	positions := map[int]string{}
+	found := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		found = true
+		if pk > 0 {
+			positions[pk] = name
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	current := make([]string, 0, len(positions))
+	for i := 1; ; i++ {
+		name, ok := positions[i]
+		if !ok {
+			break
+		}
+		current = append(current, name)
+	}
+	if slices.Equal(current, []string{"view", "project_id"}) {
+		return nil
+	}
+	if _, err := db.Exec("ALTER TABLE view_updates RENAME TO view_updates_old"); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE view_updates (
+		view TEXT NOT NULL,
+		project_id TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (view, project_id)
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`INSERT INTO view_updates (view, project_id, updated_at)
+		SELECT view, project_id, updated_at FROM view_updates_old`); err != nil {
+		return err
+	}
+	_, err = db.Exec("DROP TABLE view_updates_old")
+	return err
 }
 
 func ensureIPAddressesPrimaryKey(db *sql.DB) error {
@@ -2868,4 +2941,29 @@ func (c *Cache) GetBucketIAMBinding(projectID, bucket, member, role string) (*Bu
 		return nil, nil
 	}
 	return &bindings[0], nil
+}
+
+func (c *Cache) SeedViewUpdates(views []string) error {
+	for _, view := range views {
+		if _, err := c.db.Exec(`INSERT INTO view_updates (view, project_id, updated_at) VALUES (?, '', '') ON CONFLICT(view, project_id) DO NOTHING`, view); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Cache) SaveViewUpdate(view, projectID string) error {
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	_, err := c.db.Exec(`INSERT INTO view_updates (view, project_id, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(view, project_id) DO UPDATE SET updated_at = excluded.updated_at`, view, projectID, updatedAt)
+	return err
+}
+
+func (c *Cache) GetViewUpdate(view, projectID string) (string, error) {
+	var updatedAt string
+	err := c.db.QueryRow(`SELECT updated_at FROM view_updates WHERE view = ? AND project_id = ?`, view, projectID).Scan(&updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return updatedAt, err
 }

@@ -120,6 +120,7 @@ var routesAllView = viewDef{
 				a.logger.Update("routes", p.ProjectID, len(routes))
 				total += len(routes)
 			}
+			a.markViewUpdated(viewRoutesAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewRoutesAll)
 				status := fmt.Sprintf("[green]Fetched %d routes across %d projects[-]", total, len(projects))

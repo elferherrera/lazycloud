@@ -115,6 +115,7 @@ var disksAllView = viewDef{
 				a.logger.Update("disks", p.ProjectID, len(disks))
 				total += len(disks)
 			}
+			a.markViewUpdated(viewDisksAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewDisksAll)
 				status := fmt.Sprintf("[green]Fetched %d disks across %d projects[-]", total, len(projects))

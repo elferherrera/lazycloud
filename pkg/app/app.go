@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
@@ -27,14 +28,15 @@ type app struct {
 	helpRow   *tview.Flex
 	screen    tcell.Screen
 
-	viewHeaders   []string
-	allRows       [][]string
-	filterBase    [][]string
-	visibleRows   [][]string
-	rowResources  []any
-	savedFilter   string
-	filterStashed bool
-	autoFetched   map[string]bool
+	viewHeaders      []string
+	allRows          [][]string
+	filterBase       [][]string
+	visibleRows      [][]string
+	rowResources     []any
+	savedFilter      string
+	filterStashed    bool
+	autoFetched      map[string]bool
+	staleAutoRefresh bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -211,7 +213,70 @@ func (a *app) setView(kind viewKind) {
 	if def.status != nil {
 		a.statusInfo(def.status(a, len(rows)))
 	}
-	a.autoFetchIfEmpty(kind, def, rows)
+	if !a.autoFetchIfEmpty(kind, def, rows) {
+		a.autoRefreshStale(kind, def)
+	}
+}
+
+var staleViewAfter = 60 * time.Minute
+
+func defaultAutoUpdateConfig() providers.AutoUpdate {
+	return providers.AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+}
+
+func applyAutoUpdateConfig(autoUpdate providers.AutoUpdate) {
+	threshold := autoUpdate.ThresholdInMinutes
+	if threshold <= 0 {
+		threshold = 60
+	}
+	staleViewAfter = time.Duration(threshold) * time.Minute
+}
+
+func viewUpdateProject(kind viewKind) string {
+	switch kind {
+	case viewWorkloads, viewNodePools:
+		return appState.ClusterProject
+	case viewDNSRecords:
+		return appState.ZoneProject
+	case viewBucketIAM:
+		return appState.BucketProject
+	}
+	return appState.ProjectID
+}
+
+func viewUpdateStale(updatedAt string) bool {
+	if updatedAt == "" {
+		return true
+	}
+	t, err := time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return true
+	}
+	return time.Since(t) > staleViewAfter
+}
+
+func viewRefreshesProject(kind viewKind) bool {
+	return slices.Contains(projectViewKinds, kind) ||
+		kind == viewWorkloads || kind == viewNodePools || kind == viewDNSRecords || kind == viewBucketIAM
+}
+
+func (a *app) autoRefreshStale(kind viewKind, def viewDef) {
+	if !a.staleAutoRefresh || def.refresh == nil {
+		return
+	}
+	if !viewRefreshesProject(kind) {
+		return
+	}
+	projectID := viewUpdateProject(kind)
+	if projectID == "" {
+		return
+	}
+	updatedAt, err := a.cache.GetViewUpdate(string(kind), projectID)
+	if err != nil || !viewUpdateStale(updatedAt) {
+		return
+	}
+	a.markAutoFetched(autoFetchKey(kind, autoFetchScope(kind)))
+	def.refresh(a)
 }
 
 func autoFetchKey(kind viewKind, scope string) string {
@@ -242,16 +307,23 @@ func (a *app) markViewAutoFetched(kind viewKind) {
 	a.markAutoFetched(autoFetchKey(kind, autoFetchScope(kind)))
 }
 
-func (a *app) autoFetchIfEmpty(kind viewKind, def viewDef, rows [][]string) {
+func (a *app) markViewUpdated(kind viewKind, projectID string) {
+	if err := a.cache.SaveViewUpdate(string(kind), projectID); err != nil {
+		a.reportError(string(kind), projectID, "Failed to record view update", err)
+	}
+}
+
+func (a *app) autoFetchIfEmpty(kind viewKind, def viewDef, rows [][]string) bool {
 	if a.autoFetched == nil || len(rows) > 0 || def.refresh == nil {
-		return
+		return false
 	}
 	key := autoFetchKey(kind, autoFetchScope(kind))
 	if a.autoFetched[key] {
-		return
+		return false
 	}
 	a.autoFetched[key] = true
 	def.refresh(a)
+	return true
 }
 
 func (a *app) enterFilterMode() {

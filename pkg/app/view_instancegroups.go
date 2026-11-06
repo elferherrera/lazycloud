@@ -114,6 +114,7 @@ var instanceGroupsAllView = viewDef{
 				a.logger.Update("instance-groups", p.ProjectID, len(groups))
 				total += len(groups)
 			}
+			a.markViewUpdated(viewInstanceGroupsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewInstanceGroupsAll)
 				status := fmt.Sprintf("[green]Fetched %d instance groups across %d projects[-]", total, len(projects))

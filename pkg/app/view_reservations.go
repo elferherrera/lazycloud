@@ -115,6 +115,7 @@ var reservationsAllView = viewDef{
 				a.logger.Update("reservations", p.ProjectID, len(reservations))
 				total += len(reservations)
 			}
+			a.markViewUpdated(viewReservationsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewReservationsAll)
 				status := fmt.Sprintf("[green]Fetched %d reservations across %d projects[-]", total, len(projects))

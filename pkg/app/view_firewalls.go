@@ -114,6 +114,7 @@ var firewallsAllView = viewDef{
 				a.logger.Update("firewalls", p.ProjectID, len(rules))
 				total += len(rules)
 			}
+			a.markViewUpdated(viewFirewallsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewFirewallsAll)
 				status := fmt.Sprintf("[green]Fetched %d firewall rules across %d projects[-]", total, len(projects))

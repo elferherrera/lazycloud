@@ -126,6 +126,7 @@ var bucketsAllView = viewDef{
 				a.logger.Update("buckets", p.ProjectID, len(buckets))
 				total += len(buckets)
 			}
+			a.markViewUpdated(viewBucketsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewBucketsAll)
 				status := fmt.Sprintf("[green]Fetched %d buckets across %d projects[-]", total, len(projects))

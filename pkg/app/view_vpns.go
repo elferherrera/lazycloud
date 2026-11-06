@@ -117,6 +117,7 @@ var vpnsAllView = viewDef{
 				a.logger.Update("vpns", p.ProjectID, len(gateways))
 				total += len(gateways)
 			}
+			a.markViewUpdated(viewVPNsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewVPNsAll)
 				status := fmt.Sprintf("[green]Fetched %d VPN gateways across %d projects[-]", total, len(projects))

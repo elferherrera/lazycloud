@@ -193,6 +193,7 @@ var pscAllView = viewDef{
 				a.logger.Update("psc", p.ProjectID, len(attachments)+len(pscEndpoints(rules)))
 				total += len(attachments) + len(pscEndpoints(rules))
 			}
+			a.markViewUpdated(viewPSCAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewPSCAll)
 				status := fmt.Sprintf("[green]Fetched %d PSC resources across %d projects[-]", total, len(projects))

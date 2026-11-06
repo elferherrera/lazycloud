@@ -121,6 +121,7 @@ var accountsAllView = viewDef{
 				a.logger.Update("accounts", p.ProjectID, len(accounts))
 				total += len(accounts)
 			}
+			a.markViewUpdated(viewAccountsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewAccountsAll)
 				status := fmt.Sprintf("[green]Fetched %d service accounts across %d projects[-]", total, len(projects))

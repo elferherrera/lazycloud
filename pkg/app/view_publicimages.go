@@ -42,6 +42,7 @@ var publicImagesView = viewDef{
 				a.logger.Update("public-images", projectID, len(images))
 				total += len(images)
 			}
+			a.markViewUpdated(viewPublicImages, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewPublicImages)
 				status := fmt.Sprintf("[green]Fetched %d public images across %d projects[-]", total, len(providers.PublicImageProjects))

@@ -112,6 +112,7 @@ var dnsZonesAllView = viewDef{
 				a.logger.Update("dns-zones", p.ProjectID, len(zones))
 				total += len(zones)
 			}
+			a.markViewUpdated(viewDNSZonesAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewDNSZonesAll)
 				status := fmt.Sprintf("[green]Fetched %d dns zones across %d projects[-]", total, len(projects))

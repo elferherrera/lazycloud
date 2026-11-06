@@ -60,8 +60,9 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
 	if err != nil {
 		t.Fatalf("LoadConfig() on missing file error = %v", err)
 	}
@@ -71,12 +72,18 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	if !reflect.DeepEqual(got.Shortcuts, defaultShortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want defaults %v", got.Shortcuts, defaultShortcuts)
 	}
+	if got.AutoUpdate != defaultAutoUpdate {
+		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
+	}
 	onDisk := readConfigFile(t, dir)
 	if onDisk.Theme != defaultTheme {
 		t.Fatalf("config file theme = %+v, want defaults %+v", onDisk.Theme, defaultTheme)
 	}
 	if !reflect.DeepEqual(onDisk.Shortcuts, defaultShortcuts) {
 		t.Fatalf("config file shortcuts = %v, want defaults %v", onDisk.Shortcuts, defaultShortcuts)
+	}
+	if onDisk.AutoUpdate != defaultAutoUpdate {
+		t.Fatalf("config file autoupdate = %+v, want defaults %+v", onDisk.AutoUpdate, defaultAutoUpdate)
 	}
 }
 
@@ -88,8 +95,9 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -99,6 +107,9 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Shortcuts, legacyShortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want legacy %v", got.Shortcuts, legacyShortcuts)
+	}
+	if got.AutoUpdate != defaultAutoUpdate {
+		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
 	}
 	onDisk := readConfigFile(t, dir)
 	if onDisk.Theme != want {
@@ -119,13 +130,14 @@ func TestConfigRoundtrip(t *testing.T) {
 	testConfigDir(t)
 
 	custom := Config{
-		Theme:     Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", ActiveRowText: "lime", ActiveRowBackground: "teal"},
-		Shortcuts: map[string]string{"1": "clusters", "5": "ips"},
+		Theme:      Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", ActiveRowText: "lime", ActiveRowBackground: "teal"},
+		Shortcuts:  map[string]string{"1": "clusters", "5": "ips"},
+		AutoUpdate: AutoUpdate{Enabled: false, ThresholdInMinutes: 30},
 	}
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
-	got, err := LoadConfig(Theme{}, nil)
+	got, err := LoadConfig(Theme{}, nil, AutoUpdate{})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -134,6 +146,9 @@ func TestConfigRoundtrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Shortcuts, custom.Shortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want saved %v", got.Shortcuts, custom.Shortcuts)
+	}
+	if got.AutoUpdate != custom.AutoUpdate {
+		t.Fatalf("LoadConfig() autoupdate = %+v, want saved %+v", got.AutoUpdate, custom.AutoUpdate)
 	}
 }
 
@@ -149,8 +164,9 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -162,8 +178,42 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 	if !reflect.DeepEqual(got.Shortcuts, wantShortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want %v", got.Shortcuts, wantShortcuts)
 	}
+	if got.AutoUpdate != defaultAutoUpdate {
+		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
+	}
 	onDisk := readConfigFile(t, dir)
 	if onDisk.Theme != want {
 		t.Fatalf("config file theme = %+v, want merged %+v", onDisk.Theme, want)
+	}
+	if onDisk.AutoUpdate != defaultAutoUpdate {
+		t.Fatalf("config file autoupdate = %+v, want defaults %+v", onDisk.AutoUpdate, defaultAutoUpdate)
+	}
+}
+
+func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	existing := "theme:\n  labels: aqua\nshortcuts:\n  1: vms\nautoupdate:\n  enabled: false\n  threshold_in_minutes: 15\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	defaultTheme := Theme{}
+	defaultShortcuts := map[string]string{}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	want := AutoUpdate{Enabled: false, ThresholdInMinutes: 15}
+	if got.AutoUpdate != want {
+		t.Fatalf("LoadConfig() autoupdate = %+v, want preserved %+v", got.AutoUpdate, want)
+	}
+	onDisk := readConfigFile(t, dir)
+	if onDisk.AutoUpdate != want {
+		t.Fatalf("config file autoupdate = %+v, want preserved %+v", onDisk.AutoUpdate, want)
 	}
 }

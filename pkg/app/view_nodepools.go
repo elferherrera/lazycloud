@@ -91,6 +91,7 @@ var nodePoolsView = viewDef{
 				return
 			}
 			a.logger.Update("cluster-nodes", projectID+"/"+clusterName, len(nodes))
+			a.markViewUpdated(viewNodePools, projectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewNodePools)
 				a.statusText(fmt.Sprintf("[green]Fetched %d nodes[-]", len(nodes)))

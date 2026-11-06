@@ -130,6 +130,7 @@ var peeringsAllView = viewDef{
 				a.logger.Update("peerings", p.ProjectID, len(peerings))
 				total += len(peerings)
 			}
+			a.markViewUpdated(viewPeeringsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewPeeringsAll)
 				status := fmt.Sprintf("[green]Fetched %d network peerings across %d projects[-]", total, len(projects))

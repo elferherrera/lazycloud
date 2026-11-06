@@ -120,6 +120,7 @@ var iamAllView = viewDef{
 				a.logger.Update("iam", p.ProjectID, len(bindings))
 				total += len(bindings)
 			}
+			a.markViewUpdated(viewIAMAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewIAMAll)
 				status := fmt.Sprintf("[green]Fetched %d IAM bindings across %d projects[-]", total, len(projects))

@@ -126,6 +126,7 @@ var clustersAllView = viewDef{
 				a.logger.Update("clusters", p.ProjectID, len(clusters))
 				total += len(clusters)
 			}
+			a.markViewUpdated(viewClustersAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewClustersAll)
 				status := fmt.Sprintf("[green]Fetched %d clusters across %d projects[-]", total, len(projects))

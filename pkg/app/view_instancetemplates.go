@@ -140,6 +140,7 @@ var instanceTemplatesAllView = viewDef{
 				a.logger.Update("instance-templates", p.ProjectID, len(templates))
 				total += len(templates)
 			}
+			a.markViewUpdated(viewInstanceTemplatesAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewInstanceTemplatesAll)
 				status := fmt.Sprintf("[green]Fetched %d instance templates across %d projects[-]", total, len(projects))

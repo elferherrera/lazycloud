@@ -9,9 +9,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type AutoUpdate struct {
+	Enabled            bool `yaml:"enabled"`
+	ThresholdInMinutes int  `yaml:"threshold_in_minutes"`
+}
+
 type Config struct {
-	Theme     Theme             `yaml:"theme"`
-	Shortcuts map[string]string `yaml:"shortcuts"`
+	Theme      Theme             `yaml:"theme"`
+	Shortcuts  map[string]string `yaml:"shortcuts"`
+	AutoUpdate AutoUpdate        `yaml:"autoupdate"`
 }
 
 func configPath() (string, error) {
@@ -37,7 +43,7 @@ func SaveConfig(config Config) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config, error) {
+func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate) (Config, error) {
 	path, err := configPath()
 	if err != nil {
 		return Config{}, err
@@ -47,7 +53,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config,
 		if !os.IsNotExist(err) {
 			return Config{}, err
 		}
-		config, err := legacyConfig(defaultTheme, defaultShortcuts)
+		config, err := legacyConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
 		if err != nil {
 			return Config{}, err
 		}
@@ -61,16 +67,30 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config,
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return Config{}, err
 	}
+	var sections struct {
+		AutoUpdate *AutoUpdate `yaml:"autoupdate"`
+	}
+	if err := yaml.Unmarshal(data, &sections); err != nil {
+		return Config{}, err
+	}
+	rewrote := false
 	merged := mergeTheme(config.Theme, defaultTheme)
 	if merged != config.Theme {
 		config.Theme = merged
+		rewrote = true
+	}
+	if sections.AutoUpdate == nil {
+		config.AutoUpdate = defaultAutoUpdate
+		rewrote = true
+	}
+	if rewrote {
 		_ = SaveConfig(config)
 	}
 	return config, nil
 }
 
-func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config, error) {
-	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts}
+func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate) (Config, error) {
+	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate}
 	themePath, err := themePath()
 	if err != nil {
 		return Config{}, err

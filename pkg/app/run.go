@@ -36,6 +36,9 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("opening cache: %w", err)
 	}
+	if err := cache.SeedViewUpdates(viewKindNames()); err != nil {
+		return fmt.Errorf("seeding view updates: %w", err)
+	}
 	defer cache.Close()
 
 	logger, err := providers.NewLogger()
@@ -44,12 +47,13 @@ func Run() error {
 	}
 	defer logger.Close()
 
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig())
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
 	applyTheme(config.Theme)
+	applyAutoUpdateConfig(config.AutoUpdate)
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
@@ -64,15 +68,16 @@ func Run() error {
 	tapp := tview.NewApplication()
 
 	a := &app{
-		tapp:        tapp,
-		cmd:         tview.NewInputField(),
-		info:        newInfoPanel(),
-		summary:     newSummaryPanel(),
-		status:      tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
-		pages:       tview.NewPages(),
-		cache:       cache,
-		logger:      logger,
-		autoFetched: map[string]bool{},
+		tapp:             tapp,
+		cmd:              tview.NewInputField(),
+		info:             newInfoPanel(),
+		summary:          newSummaryPanel(),
+		status:           tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
+		pages:            tview.NewPages(),
+		cache:            cache,
+		logger:           logger,
+		autoFetched:      map[string]bool{},
+		staleAutoRefresh: config.AutoUpdate.Enabled,
 	}
 
 	a.info.SetBorder(true)

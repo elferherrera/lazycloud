@@ -186,6 +186,7 @@ var ipsAllView = viewDef{
 				a.logger.Update("ips", p.ProjectID, len(ips))
 				total += len(ips)
 			}
+			a.markViewUpdated(viewIPsAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewIPsAll)
 				status := fmt.Sprintf("[green]Fetched %d IP addresses across %d projects[-]", total, len(projects))

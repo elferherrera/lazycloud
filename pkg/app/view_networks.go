@@ -175,6 +175,7 @@ var networksAllView = viewDef{
 				totalNetworks += len(networks)
 				totalSubnets += len(subnetworks)
 			}
+			a.markViewUpdated(viewNetworksAll, appState.ProjectID)
 			a.tapp.QueueUpdateDraw(func() {
 				a.setView(viewNetworksAll)
 				status := fmt.Sprintf("[green]Fetched %d networks and %d subnetworks across %d projects[-]",
