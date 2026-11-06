@@ -23,6 +23,32 @@ func ipAddressResource(a *app, projectID, name, address string) (any, error) {
 	}
 }
 
+type subnetKey struct {
+	project, region, name string
+}
+
+func subnetNetworkMap(subnetworks []providers.Subnetwork) map[subnetKey]string {
+	networks := make(map[subnetKey]string, len(subnetworks))
+	for _, s := range subnetworks {
+		networks[subnetKey{s.ProjectID, s.Region, s.Name}] = s.Network
+	}
+	return networks
+}
+
+func resolveIPNetworks(ips []providers.IPAddress, networks map[subnetKey]string) []providers.IPAddress {
+	resolved := make([]providers.IPAddress, len(ips))
+	copy(resolved, ips)
+	for i := range resolved {
+		ip := &resolved[i]
+		if ip.Network == "" && ip.Subnetwork != "" && ip.Region != "" && ip.Region != "global" {
+			if network, ok := networks[subnetKey{ip.ProjectID, ip.Region, ip.Subnetwork}]; ok && network != "" {
+				ip.Network = network
+			}
+		}
+	}
+	return resolved
+}
+
 func ipAddressRows(ips []providers.IPAddress) [][]string {
 	rows := make([][]string, 0, len(ips))
 	for _, a := range ips {
@@ -30,7 +56,7 @@ func ipAddressRows(ips []providers.IPAddress) [][]string {
 		if t, err := time.Parse(time.RFC3339, updatedAt); err == nil {
 			updatedAt = t.Local().Format("2006-01-02 15:04")
 		}
-		rows = append(rows, []string{a.Name, a.Address, a.Region, a.Status, updatedAt})
+		rows = append(rows, []string{a.Name, a.Address, a.AddressType, a.Region, a.Network, a.Subnetwork, a.Status, updatedAt})
 	}
 	return rows
 }
@@ -49,13 +75,17 @@ func fetchProjectIPs(a *app, projectID string) (string, error) {
 
 var ipsView = viewDef{
 	title:   "IP Addresses",
-	headers: []string{"Name", "Address", "Region", "Status", "Updated"},
+	headers: []string{"Name", "Address", "Type", "Region", "Network", "Subnet", "Status", "Updated"},
 	load: func(a *app) ([][]string, error) {
 		ips, err := a.cache.ListIPAddresses(appState.ProjectID)
 		if err != nil {
 			return nil, err
 		}
-		return ipAddressRows(ips), nil
+		networks := map[subnetKey]string{}
+		if subs, err := a.cache.ListSubnetworks(appState.ProjectID); err == nil {
+			networks = subnetNetworkMap(subs)
+		}
+		return ipAddressRows(resolveIPNetworks(ips, networks)), nil
 	},
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d IP addresses for %s", count, appState.ProjectID)
@@ -106,20 +136,24 @@ func ipAddressRowsAll(ips []providers.IPAddress) [][]string {
 		if t, err := time.Parse(time.RFC3339, updatedAt); err == nil {
 			updatedAt = t.Local().Format("2006-01-02 15:04")
 		}
-		rows = append(rows, []string{a.Name, a.Address, a.Region, a.Status, updatedAt, a.ProjectID})
+		rows = append(rows, []string{a.Name, a.Address, a.AddressType, a.Region, a.Network, a.Subnetwork, a.Status, updatedAt, a.ProjectID})
 	}
 	return rows
 }
 
 var ipsAllView = viewDef{
 	title:   "IP Addresses",
-	headers: []string{"Name", "Address", "Region", "Status", "Updated", "Project"},
+	headers: []string{"Name", "Address", "Type", "Region", "Network", "Subnet", "Status", "Updated", "Project"},
 	load: func(a *app) ([][]string, error) {
 		ips, err := a.cache.ListAllIPAddresses()
 		if err != nil {
 			return nil, err
 		}
-		return ipAddressRowsAll(ips), nil
+		networks := map[subnetKey]string{}
+		if subs, err := a.cache.ListAllSubnetworks(); err == nil {
+			networks = subnetNetworkMap(subs)
+		}
+		return ipAddressRowsAll(resolveIPNetworks(ips, networks)), nil
 	},
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d IP addresses for all projects", count)
@@ -163,11 +197,11 @@ var ipsAllView = viewDef{
 		}()
 	},
 	resource: func(a *app, row []string) (any, error) {
-		return ipAddressResource(a, row[5], row[0], row[1])
+		return ipAddressResource(a, row[8], row[0], row[1])
 	},
 	samples: []any{providers.IPAddress{}},
 	consoleURL: func(a *app, row int) string {
-		projectID := a.info.GetCell(row, 5).Text
+		projectID := a.info.GetCell(row, 8).Text
 		return providers.GCPAddressesURL(projectID, a.info.GetCell(row, 0).Text)
 	},
 }

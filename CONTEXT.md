@@ -63,7 +63,7 @@ Each view is a `viewDef` struct (views.go) registered by view kind in `views` ma
 |---|---|---|
 | `viewProjects` | view_projects.go | Project ID, Number, Updated |
 | `viewVMs` / `viewVMsAll` | view_vms.go | Name, Zone, Machine Type, Status, Internal IPs, Updated (+ Project in All) |
-| `viewIPs` / `viewIPsAll` | view_ips.go, view_ips_all.go | Name, Address, Region, Status, Updated (+ Project in All) |
+| `viewIPs` / `viewIPsAll` | view_ips.go | Name, Address, Type (INTERNAL/EXTERNAL), Region, Network, Subnet, Status, Updated (+ Project in All). The Address API returns `network` only for special internal usages (VPC peering / PSA / DNS reservations), so `resolveIPNetworks` (view_ips.go) fills blank Networks from the cached subnetworks (`networks` table, `kind='subnet'`, populated by the networks view fetch) at load time — keyed by `(project, region, subnet)`, skipping global addresses and already-set values; rows without a cached subnet stay blank |
 | `viewNetworks` | view_networks.go | — also defines `formatUpdatedAt` helper |
 | `viewPeerings` / `viewPeeringsAll` | view_peerings.go | VPC peerings: Network, Peering, Peer Network, Peer Project (parsed from the peering's network URL), State, Route Exchange (subnets, export-custom, import-custom), Updated (+ Project in All) |
 | `viewRoutes` / `viewRoutesAll` | view_routes.go | Routes: Name, Network, Destination, Priority, Next Hop Type, Next Hop, Description, Updated (+ Project in All) |

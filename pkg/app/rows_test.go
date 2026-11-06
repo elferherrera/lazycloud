@@ -125,37 +125,79 @@ func TestProjectRows(t *testing.T) {
 
 func TestIPAddressRows(t *testing.T) {
 	ips := []providers.IPAddress{
-		{Name: "ip-a", Address: "10.0.0.1", Region: "europe-west1", Status: "RESERVED", UpdatedAt: "2026-10-12T18:23:12Z"},
-		{Name: "ip-b", Address: "34.1.1.1", Region: "global", Status: "IN_USE", UpdatedAt: "not-a-date"},
+		{Name: "ip-a", Address: "10.0.0.1", AddressType: "INTERNAL", Region: "europe-west1", Network: "net-a", Subnetwork: "sn-a", Status: "RESERVED", UpdatedAt: "2026-10-12T18:23:12Z"},
+		{Name: "ip-b", Address: "34.1.1.1", AddressType: "EXTERNAL", Region: "global", Status: "IN_USE", UpdatedAt: "not-a-date"},
 	}
 	rows := ipAddressRows(ips)
 	if len(rows) != 2 {
 		t.Fatalf("ipAddressRows() len = %d, want 2", len(rows))
 	}
-	if rows[0][0] != "ip-a" || rows[0][1] != "10.0.0.1" || rows[0][2] != "europe-west1" || rows[0][3] != "RESERVED" {
-		t.Fatalf("ipAddressRows()[0] = %v", rows[0])
+	want := []string{"ip-a", "10.0.0.1", "INTERNAL", "europe-west1", "net-a", "sn-a", "RESERVED"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("ipAddressRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
 	}
-	if len(rows[0]) != 5 {
-		t.Fatalf("ipAddressRows()[0] len = %d, want 5", len(rows[0]))
+	if len(rows[0]) != 8 {
+		t.Fatalf("ipAddressRows()[0] len = %d, want 8", len(rows[0]))
 	}
-	if rows[1][4] != "not-a-date" {
-		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][4])
+	if rows[1][2] != "EXTERNAL" {
+		t.Fatalf("address type should render, got %q", rows[1][2])
+	}
+	if rows[1][4] != "" || rows[1][5] != "" {
+		t.Fatalf("empty network/subnet should render empty, got %q/%q", rows[1][4], rows[1][5])
+	}
+	if rows[1][7] != "not-a-date" {
+		t.Fatalf("unparseable UpdatedAt should be kept as-is, got %q", rows[1][7])
+	}
+}
+
+func TestResolveIPNetworks(t *testing.T) {
+	ips := []providers.IPAddress{
+		{ProjectID: "p1", Name: "ip-a", Address: "10.0.0.1", Region: "europe-west1", Subnetwork: "sn-a"},
+		{ProjectID: "p2", Name: "ip-b", Address: "10.0.0.2", Region: "europe-west1", Subnetwork: "sn-a"},
+		{ProjectID: "p1", Name: "ip-c", Address: "34.1.1.1", Region: "global", Subnetwork: "sn-a"},
+		{ProjectID: "p1", Name: "ip-d", Address: "10.0.0.4", Region: "europe-west1", Subnetwork: "sn-x", Network: "preset"},
+		{ProjectID: "p1", Name: "ip-e", Address: "10.0.0.5", Region: "europe-west1", Subnetwork: "sn-missing"},
+	}
+	networks := subnetNetworkMap([]providers.Subnetwork{
+		{ProjectID: "p1", Name: "sn-a", Region: "europe-west1", Network: "vpc-a"},
+		{ProjectID: "p2", Name: "sn-a", Region: "europe-west1", Network: "vpc-b"},
+	})
+	resolved := resolveIPNetworks(ips, networks)
+	if resolved[0].Network != "vpc-a" {
+		t.Fatalf("resolveIPNetworks()[0].Network = %q, want vpc-a", resolved[0].Network)
+	}
+	if resolved[1].Network != "vpc-b" {
+		t.Fatalf("resolveIPNetworks()[1].Network = %q, want vpc-b (project-scoped key)", resolved[1].Network)
+	}
+	if resolved[2].Network != "" {
+		t.Fatalf("global address should stay empty, got %q", resolved[2].Network)
+	}
+	if resolved[3].Network != "preset" {
+		t.Fatalf("pre-set network should be kept, got %q", resolved[3].Network)
+	}
+	if resolved[4].Network != "" {
+		t.Fatalf("subnet missing from cache should stay empty, got %q", resolved[4].Network)
+	}
+	if ips[0].Network != "" {
+		t.Fatalf("input slice should not be mutated, got %q", ips[0].Network)
 	}
 }
 
 func TestIPAddressRowsAll(t *testing.T) {
 	ips := []providers.IPAddress{
-		{ProjectID: "p1", Name: "ip-a", Address: "10.0.0.1", Region: "europe-west1", Status: "RESERVED", UpdatedAt: "2026-10-12T18:23:12Z"},
+		{ProjectID: "p1", Name: "ip-a", Address: "10.0.0.1", Region: "europe-west1", Network: "net-a", Subnetwork: "sn-a", Status: "RESERVED", UpdatedAt: "2026-10-12T18:23:12Z"},
 	}
 	rows := ipAddressRowsAll(ips)
 	if len(rows) != 1 {
 		t.Fatalf("ipAddressRowsAll() len = %d, want 1", len(rows))
 	}
-	if len(rows[0]) != 6 {
-		t.Fatalf("ipAddressRowsAll()[0] len = %d, want 6", len(rows[0]))
+	if len(rows[0]) != 9 {
+		t.Fatalf("ipAddressRowsAll()[0] len = %d, want 9", len(rows[0]))
 	}
-	if rows[0][5] != "p1" {
-		t.Fatalf("ipAddressRowsAll()[0][5] = %q, want project id", rows[0][5])
+	if rows[0][8] != "p1" {
+		t.Fatalf("ipAddressRowsAll()[0][8] = %q, want project id", rows[0][8])
 	}
 }
 
