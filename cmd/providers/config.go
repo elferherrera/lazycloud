@@ -1,0 +1,101 @@
+package providers
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Theme     Theme             `yaml:"theme"`
+	Shortcuts map[string]string `yaml:"shortcuts"`
+}
+
+func configPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "lazycloud", "config.yaml"), nil
+}
+
+func SaveConfig(config Config) error {
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config, error) {
+	path, err := configPath()
+	if err != nil {
+		return Config{}, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return Config{}, err
+		}
+		config, err := legacyConfig(defaultTheme, defaultShortcuts)
+		if err != nil {
+			return Config{}, err
+		}
+		config.Theme = mergeTheme(config.Theme, defaultTheme)
+		if err := SaveConfig(config); err != nil {
+			return Config{}, err
+		}
+		return config, nil
+	}
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return Config{}, err
+	}
+	merged := mergeTheme(config.Theme, defaultTheme)
+	if merged != config.Theme {
+		config.Theme = merged
+		_ = SaveConfig(config)
+	}
+	return config, nil
+}
+
+func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string) (Config, error) {
+	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts}
+	themePath, err := themePath()
+	if err != nil {
+		return Config{}, err
+	}
+	if data, err := os.ReadFile(themePath); err == nil {
+		var theme Theme
+		if err := json.Unmarshal(data, &theme); err != nil {
+			return Config{}, fmt.Errorf("reading legacy theme file: %w", err)
+		}
+		config.Theme = theme
+	} else if !os.IsNotExist(err) {
+		return Config{}, err
+	}
+	shortcutsPath, err := shortcutsPath()
+	if err != nil {
+		return Config{}, err
+	}
+	if data, err := os.ReadFile(shortcutsPath); err == nil {
+		var shortcuts map[string]string
+		if err := json.Unmarshal(data, &shortcuts); err != nil {
+			return Config{}, fmt.Errorf("reading legacy shortcuts file: %w", err)
+		}
+		config.Shortcuts = shortcuts
+	} else if !os.IsNotExist(err) {
+		return Config{}, err
+	}
+	return config, nil
+}

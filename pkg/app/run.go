@@ -44,17 +44,12 @@ func Run() error {
 	}
 	defer logger.Close()
 
-	shortcutConfig, err := providers.LoadShortcuts(defaultShortcutConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig())
 	if err != nil {
-		return fmt.Errorf("loading shortcuts config: %w", err)
+		return fmt.Errorf("loading config: %w", err)
 	}
-	applyShortcutConfig(shortcutConfig)
-
-	themeConfig, err := providers.LoadTheme(defaultThemeConfig())
-	if err != nil {
-		return fmt.Errorf("loading theme config: %w", err)
-	}
-	applyTheme(themeConfig)
+	applyShortcutConfig(config.Shortcuts)
+	applyTheme(config.Theme)
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {

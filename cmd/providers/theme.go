@@ -1,26 +1,25 @@
 package providers
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 )
 
 type Theme struct {
-	Labels              string `json:"labels"`
-	Text                string `json:"text"`
-	Borders             string `json:"borders"`
-	Title               string `json:"title"`
-	ShortcutLabels      string `json:"shortcutLabels"`
-	ShortcutText        string `json:"shortcutText"`
-	StatusLabels        string `json:"statusLabels"`
-	StatusText          string `json:"statusText"`
-	SummaryLabels       string `json:"summaryLabels"`
-	SummaryText         string `json:"summaryText"`
-	DetailLabels        string `json:"detailLabels"`
-	DetailText          string `json:"detailText"`
-	ActiveRowText       string `json:"activeRowText"`
-	ActiveRowBackground string `json:"activeRowBackground"`
+	Labels              string `json:"labels" yaml:"labels"`
+	Text                string `json:"text" yaml:"text"`
+	Borders             string `json:"borders" yaml:"borders"`
+	Title               string `json:"title" yaml:"title"`
+	ShortcutLabels      string `json:"shortcutLabels" yaml:"shortcutLabels"`
+	ShortcutText        string `json:"shortcutText" yaml:"shortcutText"`
+	StatusLabels        string `json:"statusLabels" yaml:"statusLabels"`
+	StatusText          string `json:"statusText" yaml:"statusText"`
+	SummaryLabels       string `json:"summaryLabels" yaml:"summaryLabels"`
+	SummaryText         string `json:"summaryText" yaml:"summaryText"`
+	DetailLabels        string `json:"detailLabels" yaml:"detailLabels"`
+	DetailText          string `json:"detailText" yaml:"detailText"`
+	ActiveRowText       string `json:"activeRowText" yaml:"activeRowText"`
+	ActiveRowBackground string `json:"activeRowBackground" yaml:"activeRowBackground"`
 }
 
 func themePath() (string, error) {
@@ -29,47 +28,6 @@ func themePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".config", "lazycloud", "theme.json"), nil
-}
-
-func SaveTheme(theme Theme) error {
-	path, err := themePath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(theme, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
-}
-
-func LoadTheme(defaults Theme) (Theme, error) {
-	path, err := themePath()
-	if err != nil {
-		return Theme{}, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := SaveTheme(defaults); err != nil {
-				return Theme{}, err
-			}
-			return defaults, nil
-		}
-		return Theme{}, err
-	}
-	var theme Theme
-	if err := json.Unmarshal(data, &theme); err != nil {
-		return Theme{}, err
-	}
-	merged := mergeTheme(theme, defaults)
-	if merged != theme {
-		_ = SaveTheme(merged)
-	}
-	return merged, nil
 }
 
 func mergeTheme(theme, defaults Theme) Theme {
