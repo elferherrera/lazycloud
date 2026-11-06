@@ -179,6 +179,13 @@ func init() {
 		},
 		{
 			key:     'e',
+			desc:    "open cluster autoscaler logs in GCP console",
+			visible: inClustersView,
+			enabled: func(a *app) bool { return inClustersView() },
+			run:     (*app).openClusterAutoscalerLogs,
+		},
+		{
+			key:     'e',
 			desc:    "open workload events in GCP console",
 			visible: func() bool { return appState.ViewKind == viewWorkloads },
 			enabled: func(a *app) bool { return appState.ViewKind == viewWorkloads },

@@ -117,6 +117,17 @@ func GCPClusterEventsURL(projectID, clusterName string) string {
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
 }
 
+func GCPClusterAutoscalerLogsURL(projectID, clusterName string) string {
+	var sb strings.Builder
+	sb.WriteString("log_id(\"container.googleapis.com/cluster-autoscaler-visibility\")\n")
+	sb.WriteString("resource.type=\"k8s_cluster\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"", projectID))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
 func GCPNodePoolEventsURL(projectID, clusterName, poolName string) string {
 	var sb strings.Builder
 	sb.WriteString("log_id(\"events\")\n")
