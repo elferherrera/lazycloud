@@ -697,6 +697,9 @@ func (c *Cache) SaveIPAddresses(projectID string, addresses []IPAddress) error {
 	}
 	defer tx.Rollback()
 	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM ip_addresses WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
 	for _, a := range addresses {
 		if _, err := tx.Exec(`INSERT INTO ip_addresses
 			(project_id, name, address, address_type, status, region, subnetwork, network, updated_at)

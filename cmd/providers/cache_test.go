@@ -1169,7 +1169,7 @@ func TestGetProject(t *testing.T) {
 	}
 }
 
-func TestSaveIPAddressesUpserts(t *testing.T) {
+func TestSaveIPAddressesReplacesProjectRows(t *testing.T) {
 	cache := newTestCache(t)
 	addresses := []IPAddress{
 		{ProjectID: "p1", Name: "ip-a", Address: "10.0.0.1", AddressType: "INTERNAL", Status: "RESERVED", Region: "europe-west1", Subnetwork: "subnet-1"},
@@ -1199,29 +1199,15 @@ func TestSaveIPAddressesUpserts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListIPAddresses() error = %v", err)
 	}
-	var ipA *IPAddress
-	for i := range got {
-		if got[i].Name == "ip-a" {
-			ipA = &got[i]
-		}
+	if len(got) != 1 {
+		t.Fatalf("ListIPAddresses() len = %d, want 1 (stale rows replaced)", len(got))
 	}
-	if ipA == nil {
-		t.Fatal("ip-a missing after update")
-	}
+	ipA := got[0]
 	if ipA.Status != "IN_USE" {
 		t.Fatalf("ip-a Status = %q, want IN_USE", ipA.Status)
 	}
 	if ipA.UpdatedAt == "" {
 		t.Fatal("ip-a UpdatedAt empty, want timestamp")
-	}
-	var found bool
-	for _, a := range got {
-		if a.Name == "ip-b" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("ip-b was deleted, want upsert to keep unrelated rows")
 	}
 }
 
