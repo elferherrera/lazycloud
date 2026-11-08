@@ -65,6 +65,8 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		return showInstanceTemplates
 	case viewDisks:
 		return showDisks
+	case viewSnapshots:
+		return showSnapshots
 	case viewIAM:
 		return showIAM
 	case viewWorkloads:
@@ -102,7 +104,7 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 	case viewIPsAll, viewNetworksAll, viewPeeringsAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
 		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
 		viewVPNsAll, viewPSCAll, viewInstanceGroupsAll, viewReservationsAll, viewImagesAll,
-		viewInstanceTemplatesAll, viewDisksAll, viewIAMAll:
+		viewInstanceTemplatesAll, viewDisksAll, viewSnapshotsAll, viewIAMAll:
 		return func(a *app) { a.setView(kind) }
 	}
 	return nil

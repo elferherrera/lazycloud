@@ -222,6 +222,23 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT '',
+		source_disk TEXT NOT NULL DEFAULT '',
+		size_gb INTEGER NOT NULL DEFAULT 0,
+		storage_bytes INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT '',
+		storage_location TEXT NOT NULL DEFAULT '',
+		labels TEXT NOT NULL DEFAULT '{}',
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS buckets (
 		project_id TEXT NOT NULL,
 		name TEXT NOT NULL,
@@ -1154,7 +1171,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings", "bucket_iam_bindings"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "snapshots", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings", "bucket_iam_bindings"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -1478,6 +1495,84 @@ func (c *Cache) GetDisk(projectID, zone, name string) (*Disk, error) {
 		return nil, nil
 	}
 	return &disks[0], nil
+}
+
+func (c *Cache) SaveSnapshots(projectID string, snapshots []Snapshot) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM snapshots WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, s := range snapshots {
+		labels, err := json.Marshal(s.Labels)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO snapshots
+			(project_id, name, description, status, source_disk, size_gb, storage_bytes, created_at, storage_location, labels, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, s.Name, s.Description, s.Status, s.SourceDisk, s.SizeGB, s.StorageBytes,
+			s.CreatedAt, s.StorageLocation, string(labels), updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanSnapshots(rows *sql.Rows) ([]Snapshot, error) {
+	defer rows.Close()
+	var snapshots []Snapshot
+	for rows.Next() {
+		var s Snapshot
+		var labels string
+		if err := rows.Scan(&s.ProjectID, &s.Name, &s.Description, &s.Status, &s.SourceDisk,
+			&s.SizeGB, &s.StorageBytes, &s.CreatedAt, &s.StorageLocation, &labels, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(labels), &s.Labels); err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, s)
+	}
+	return snapshots, rows.Err()
+}
+
+func (c *Cache) ListSnapshots(projectID string) ([]Snapshot, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, description, status, source_disk, size_gb, storage_bytes, created_at, storage_location, labels, updated_at
+		FROM snapshots WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanSnapshots(rows)
+}
+
+func (c *Cache) ListAllSnapshots() ([]Snapshot, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, description, status, source_disk, size_gb, storage_bytes, created_at, storage_location, labels, updated_at
+		FROM snapshots ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanSnapshots(rows)
+}
+
+func (c *Cache) GetSnapshot(projectID, name string) (*Snapshot, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, description, status, source_disk, size_gb, storage_bytes, created_at, storage_location, labels, updated_at
+		FROM snapshots WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	snapshots, err := scanSnapshots(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshots) == 0 {
+		return nil, nil
+	}
+	return &snapshots[0], nil
 }
 
 func (c *Cache) SaveBuckets(projectID string, buckets []Bucket) error {

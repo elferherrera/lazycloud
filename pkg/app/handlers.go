@@ -101,6 +101,7 @@ func init() {
 			{":public-images", "show public images", viewPublicImages},
 			{":templates", "show instance templates", viewInstanceTemplates},
 			{":disks", "show disks", viewDisks},
+			{":snapshots", "show disk snapshots", viewSnapshots},
 			{":iam", "show iam policy", viewIAM},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
@@ -273,6 +274,9 @@ func visibleShortcuts() []shortcut {
 			visible = append(visible, s)
 		}
 	}
+	sort.SliceStable(visible, func(i, j int) bool {
+		return strings.ToLower(visible[i].label()) < strings.ToLower(visible[j].label())
+	})
 	return visible
 }
 
@@ -311,6 +315,14 @@ func (s shortcut) matches(event *tcell.EventKey) bool {
 	return event.Rune() == s.key
 }
 
+func sortedCommands(commands []viewCommand) []viewCommand {
+	sorted := append([]viewCommand(nil), commands...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].cmd < sorted[j].cmd
+	})
+	return sorted
+}
+
 func populateShortcutsPanel(table *tview.Table) int {
 	table.Clear()
 	row := 0
@@ -321,7 +333,7 @@ func populateShortcutsPanel(table *tview.Table) int {
 		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1).
 			SetTextColor(theme.shortcutTextColor()))
 		row++
-		for _, c := range s.commands {
+		for _, c := range sortedCommands(s.commands) {
 			desc := c.desc
 			if c.view != "" {
 				desc += " (" + string(c.view) + ")"
@@ -661,6 +673,12 @@ func (a *app) toggleAllProjects() {
 			a.statusText("[red]No project selected[-]")
 		} else {
 			a.setView(disksViewKind())
+		}
+	case viewSnapshots, viewSnapshotsAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(snapshotsViewKind())
 		}
 	case viewIAM, viewIAMAll:
 		if !appState.AllProjects && appState.ProjectID == "" {
@@ -1065,6 +1083,8 @@ var viewCommands = map[string]func(a *app){
 	"templates":               showInstanceTemplates,
 	"disks":                   showDisks,
 	"disk":                    showDisks,
+	"snapshots":               showSnapshots,
+	"snapshot":                showSnapshots,
 	"iam":                     showIAM,
 	"policies":                showIAM,
 	"projects":                func(a *app) { a.setView(viewProjects) },

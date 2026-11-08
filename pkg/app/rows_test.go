@@ -895,6 +895,55 @@ func TestImageRows(t *testing.T) {
 	}
 }
 
+func TestSnapshotRows(t *testing.T) {
+	snapshots := []providers.Snapshot{
+		{
+			ProjectID: "p1", Name: "snap-a", SourceDisk: "disk-a", Status: "READY", SizeGB: 10,
+			StorageBytes: 4096, CreatedAt: "2026-10-12T18:23:12Z", StorageLocation: "eu",
+			Description: "nightly", Labels: map[string]string{"env": "prod"}, UpdatedAt: "2026-10-13T10:00:00Z",
+		},
+		{
+			ProjectID: "p1", Name: "snap-b", Status: "UPLOADING", CreatedAt: "not-a-date", UpdatedAt: "not-a-date",
+		},
+	}
+	rows := snapshotRows(snapshots)
+	if len(rows) != 2 {
+		t.Fatalf("snapshotRows() len = %d, want 2", len(rows))
+	}
+	want := []string{"snap-a", "disk-a", "10", "READY"}
+	for col, val := range want {
+		if rows[0][col] != val {
+			t.Fatalf("snapshotRows()[0][%d] = %q, want %q", col, rows[0][col], val)
+		}
+	}
+	if rows[0][4] == "" || rows[0][6] == "" {
+		t.Fatalf("snapshotRows()[0] formatted dates missing: %v", rows[0])
+	}
+	if rows[0][5] != "nightly" {
+		t.Fatalf("snapshotRows()[0][5] = %q, want %q", rows[0][5], "nightly")
+	}
+	if len(rows[0]) != 7 {
+		t.Fatalf("snapshotRows()[0] len = %d, want 7", len(rows[0]))
+	}
+	if rows[1][1] != "" || rows[1][3] != "UPLOADING" {
+		t.Fatalf("snapshotRows()[1] empty fields: %v", rows[1])
+	}
+	if rows[1][4] != "not-a-date" {
+		t.Fatalf("unparseable CreatedAt should be kept as-is, got %q", rows[1][4])
+	}
+
+	rowsAll := snapshotRowsAll(snapshots)
+	if len(rowsAll) != 2 {
+		t.Fatalf("snapshotRowsAll() len = %d, want 2", len(rowsAll))
+	}
+	if len(rowsAll[0]) != 8 {
+		t.Fatalf("snapshotRowsAll()[0] len = %d, want 8", len(rowsAll[0]))
+	}
+	if rowsAll[0][7] != "p1" {
+		t.Fatalf("snapshotRowsAll()[0][7] = %q, want project id", rowsAll[0][7])
+	}
+}
+
 func TestShortcutsSummaryPanel(t *testing.T) {
 	table := newShortcutsSummaryPanel()
 	var found int

@@ -1945,6 +1945,87 @@ func TestSaveAndListImages(t *testing.T) {
 	}
 }
 
+func TestSaveAndListSnapshots(t *testing.T) {
+	cache := newTestCache(t)
+	snapshots := []Snapshot{
+		{Name: "snap-b", Description: "second", Status: "READY", SourceDisk: "disk-b", SizeGB: 20, StorageBytes: 4096, CreatedAt: "2026-01-02T03:04:05Z", StorageLocation: "eu", Labels: map[string]string{"env": "staging"}},
+		{Name: "snap-a", Status: "UPLOADING", SourceDisk: "disk-a", SizeGB: 10, StorageBytes: 512},
+	}
+	if err := cache.SaveSnapshots("p1", snapshots); err != nil {
+		t.Fatalf("SaveSnapshots() error = %v", err)
+	}
+	if err := cache.SaveSnapshots("p2", snapshots[:1]); err != nil {
+		t.Fatalf("SaveSnapshots() other project error = %v", err)
+	}
+
+	got, err := cache.ListSnapshots("p1")
+	if err != nil {
+		t.Fatalf("ListSnapshots() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListSnapshots() len = %d, want 2", len(got))
+	}
+	if got[0].Name != "snap-a" || got[1].Name != "snap-b" {
+		t.Fatalf("ListSnapshots() not ordered by name: %+v", got)
+	}
+	if got[0].ProjectID != "p1" || got[0].SourceDisk != "disk-a" || got[0].SizeGB != 10 || got[0].StorageBytes != 512 {
+		t.Fatalf("ListSnapshots()[0] = %+v", got[0])
+	}
+	if got[1].Description != "second" || got[1].Status != "READY" || got[1].CreatedAt != "2026-01-02T03:04:05Z" || got[1].StorageLocation != "eu" {
+		t.Fatalf("ListSnapshots()[1] = %+v", got[1])
+	}
+	if got[1].Labels["env"] != "staging" {
+		t.Fatalf("ListSnapshots()[1] labels = %v, want env=staging", got[1].Labels)
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatalf("ListSnapshots()[0] missing updated at: %+v", got[0])
+	}
+
+	all, err := cache.ListAllSnapshots()
+	if err != nil {
+		t.Fatalf("ListAllSnapshots() error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("ListAllSnapshots() len = %d, want 3", len(all))
+	}
+	if all[0].ProjectID != "p1" || all[1].ProjectID != "p1" || all[2].ProjectID != "p2" {
+		t.Fatalf("ListAllSnapshots() not ordered by project then name: %+v", all)
+	}
+
+	if err := cache.SaveSnapshots("p1", snapshots[:1]); err != nil {
+		t.Fatalf("SaveSnapshots() replace error = %v", err)
+	}
+	got, err = cache.ListSnapshots("p1")
+	if err != nil {
+		t.Fatalf("ListSnapshots() replace error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "snap-b" {
+		t.Fatalf("ListSnapshots() = %+v, want 1 snapshot after replace", got)
+	}
+	got, err = cache.ListSnapshots("p2")
+	if err != nil {
+		t.Fatalf("ListSnapshots(p2) error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ListSnapshots(p2) len = %d, want 1 (other project untouched)", len(got))
+	}
+
+	single, err := cache.GetSnapshot("p1", "snap-b")
+	if err != nil {
+		t.Fatalf("GetSnapshot() error = %v", err)
+	}
+	if single == nil || single.SourceDisk != "disk-b" || single.SizeGB != 20 {
+		t.Fatalf("GetSnapshot() = %+v", single)
+	}
+	single, err = cache.GetSnapshot("p1", "snap-missing")
+	if err != nil {
+		t.Fatalf("GetSnapshot() missing error = %v", err)
+	}
+	if single != nil {
+		t.Fatalf("GetSnapshot() missing = %+v, want nil", single)
+	}
+}
+
 func TestSaveAndListPublicImages(t *testing.T) {
 	cache := newTestCache(t)
 	public := []Image{

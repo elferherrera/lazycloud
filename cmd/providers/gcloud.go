@@ -129,6 +129,20 @@ type Disk struct {
 	UpdatedAt   string
 }
 
+type Snapshot struct {
+	ProjectID       string
+	Name            string
+	Description     string
+	Status          string
+	SourceDisk      string
+	SizeGB          int64
+	StorageBytes    int64
+	CreatedAt       string
+	StorageLocation string
+	Labels          map[string]string
+	UpdatedAt       string
+}
+
 func ListGcloudProjects() ([]Project, error) {
 	ctx := context.Background()
 	client, err := resourcemanager.NewProjectsClient(ctx)
@@ -591,6 +605,41 @@ func ListProjectDisks(projectID string) ([]Disk, error) {
 		}
 	}
 	return disks, nil
+}
+
+func ListProjectSnapshots(projectID string) ([]Snapshot, error) {
+	ctx := context.Background()
+
+	client, err := computev1.NewSnapshotsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	var snapshots []Snapshot
+	it := client.List(ctx, &computepb.ListSnapshotsRequest{Project: projectID})
+	for {
+		s, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, Snapshot{
+			ProjectID:       projectID,
+			Name:            s.GetName(),
+			Description:     s.GetDescription(),
+			Status:          s.GetStatus(),
+			SourceDisk:      resourceShortName(s.GetSourceDisk(), ""),
+			SizeGB:          s.GetDiskSizeGb(),
+			StorageBytes:    s.GetStorageBytes(),
+			CreatedAt:       s.GetCreationTimestamp(),
+			StorageLocation: strings.Join(s.GetStorageLocations(), ","),
+			Labels:          s.GetLabels(),
+		})
+	}
+	return snapshots, nil
 }
 
 type Bucket struct {

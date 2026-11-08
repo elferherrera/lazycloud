@@ -67,6 +67,8 @@ func init() {
 		viewInstanceTemplatesAll: instanceTemplatesAllView,
 		viewDisks:                disksView,
 		viewDisksAll:             disksAllView,
+		viewSnapshots:            snapshotsView,
+		viewSnapshotsAll:         snapshotsAllView,
 		viewIAM:                  iamView,
 		viewIAMAll:               iamAllView,
 		viewBucketIAM:            bucketIAMView,
@@ -94,6 +96,7 @@ var projectViewKinds = []viewKind{
 	viewImages,
 	viewInstanceTemplates,
 	viewDisks,
+	viewSnapshots,
 	viewIAM,
 }
 

@@ -114,6 +114,65 @@ func TestShortcutKeyLabel(t *testing.T) {
 	}
 }
 
+func TestVisibleShortcutsSortedByKeyLabel(t *testing.T) {
+	appState.ViewKind = viewProjects
+	visible := visibleShortcuts()
+	if len(visible) < 2 {
+		t.Fatal("visibleShortcuts() is empty")
+	}
+	for i := 1; i < len(visible); i++ {
+		prev, cur := strings.ToLower(visible[i-1].label()), strings.ToLower(visible[i].label())
+		if prev > cur {
+			t.Fatalf("visibleShortcuts() not sorted: %q before %q", visible[i-1].label(), visible[i].label())
+		}
+	}
+	var colon *shortcut
+	for i := range visible {
+		if visible[i].key == ':' {
+			colon = &visible[i]
+		}
+	}
+	if colon == nil {
+		t.Fatal("visibleShortcuts() missing the ':' shortcut")
+	}
+	if len(colon.commands) == 0 {
+		t.Fatal("visibleShortcuts() ':' shortcut lost its command rows")
+	}
+	var f1, space bool
+	for _, s := range visible {
+		if s.specialKey == tcell.KeyF1 {
+			f1 = true
+		}
+		if s.key == ' ' {
+			space = true
+		}
+	}
+	if !f1 || !space {
+		t.Fatalf("visibleShortcuts() missing F1 (%v) or space (%v)", f1, space)
+	}
+}
+
+func TestHelpPanelCommandsSorted(t *testing.T) {
+	appState.ViewKind = viewProjects
+	table := newShortcutsPanel()
+	prev := ""
+	seen := 0
+	for r := 0; r < table.GetRowCount(); r++ {
+		key := table.GetCell(r, 0).Text
+		if !strings.HasPrefix(key, ":") {
+			continue
+		}
+		seen++
+		if prev != "" && prev > key {
+			t.Fatalf("help panel commands not sorted: %q before %q", prev, key)
+		}
+		prev = key
+	}
+	if seen < 2 {
+		t.Fatalf("help panel shows %d command rows, want the : command list", seen)
+	}
+}
+
 func TestF1ShortcutOpensConfigFile(t *testing.T) {
 	var f1 *shortcut
 	for i := range shortcuts {

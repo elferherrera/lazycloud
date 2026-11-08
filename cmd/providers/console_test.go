@@ -226,6 +226,14 @@ func TestGCPDiskURL(t *testing.T) {
 	}
 }
 
+func TestGCPSnapshotURL(t *testing.T) {
+	got := GCPSnapshotURL("revolut-labs", "snap-a")
+	want := "https://console.cloud.google.com/compute/snapshotsDetail/projects/revolut-labs/global/snapshots/snap-a?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPSnapshotURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestGCPIAMURL(t *testing.T) {
 	got := GCPIAMURL("revolut-labs")
 	want := "https://console.cloud.google.com/iam-admin/iam?project=revolut-labs"

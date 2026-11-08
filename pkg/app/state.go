@@ -48,6 +48,8 @@ const (
 	viewInstanceTemplatesAll viewKind = "instance-templates-all"
 	viewDisks                viewKind = "disks"
 	viewDisksAll             viewKind = "disks-all"
+	viewSnapshots            viewKind = "snapshots"
+	viewSnapshotsAll         viewKind = "snapshots-all"
 	viewIAM                  viewKind = "iam"
 	viewIAMAll               viewKind = "iam-all"
 	viewBucketIAM            viewKind = "bucket-iam"
@@ -220,6 +222,13 @@ func disksViewKind() viewKind {
 		return viewDisksAll
 	}
 	return viewDisks
+}
+
+func snapshotsViewKind() viewKind {
+	if appState.AllProjects {
+		return viewSnapshotsAll
+	}
+	return viewSnapshots
 }
 
 func iamViewKind() viewKind {
