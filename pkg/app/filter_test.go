@@ -20,14 +20,15 @@ func newFilterTestApp(t *testing.T) *app {
 	}
 	t.Cleanup(func() { cache.Close() })
 	a := &app{
-		tapp:      tview.NewApplication(),
-		cmd:       tview.NewInputField(),
-		info:      newInfoPanel(),
-		summary:   newSummaryPanel(),
-		status:    tview.NewTextView().SetDynamicColors(true),
-		pages:     tview.NewPages(),
-		cache:     cache,
-		shortcuts: newShortcutsPanel(),
+		tapp:             tview.NewApplication(),
+		cmd:              tview.NewInputField(),
+		info:             newInfoPanel(),
+		summary:          newSummaryPanel(),
+		status:           tview.NewTextView().SetDynamicColors(true),
+		pages:            tview.NewPages(),
+		cache:            cache,
+		shortcuts:        newShortcutsPanel(),
+		shortcutsSummary: newShortcutsSummaryPanel(),
 	}
 	_, a.helpRow = newHelpOverlay(a.shortcuts)
 	a.info.SetBorder(true)

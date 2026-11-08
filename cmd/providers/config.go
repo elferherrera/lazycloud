@@ -20,7 +20,7 @@ type Config struct {
 	AutoUpdate AutoUpdate        `yaml:"autoupdate"`
 }
 
-func configPath() (string, error) {
+func ConfigFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -29,7 +29,7 @@ func configPath() (string, error) {
 }
 
 func SaveConfig(config Config) error {
-	path, err := configPath()
+	path, err := ConfigFilePath()
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func SaveConfig(config Config) error {
 }
 
 func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate) (Config, error) {
-	path, err := configPath()
+	path, err := ConfigFilePath()
 	if err != nil {
 		return Config{}, err
 	}

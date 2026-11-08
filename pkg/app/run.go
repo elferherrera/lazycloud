@@ -88,6 +88,7 @@ func Run() error {
 	a.helpRow = helpRow
 
 	shortcutsSummary := newShortcutsSummaryPanel()
+	a.shortcutsSummary = shortcutsSummary
 	summary := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(a.summary, 0, 1, false).
 		AddItem(shortcutsSummary, 0, 1, false)

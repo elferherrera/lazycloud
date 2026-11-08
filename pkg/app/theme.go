@@ -45,6 +45,14 @@ func (t themeColors) shortcutLabelColor() tcell.Color {
 	return tcell.GetColor(t.shortcutLabels)
 }
 
+func (t themeColors) borderColor() tcell.Color {
+	return tcell.GetColor(t.borders)
+}
+
+func (t themeColors) titleColor() tcell.Color {
+	return tcell.GetColor(t.title)
+}
+
 func (t themeColors) shortcutTextColor() tcell.Color {
 	return tcell.GetColor(t.shortcutText)
 }

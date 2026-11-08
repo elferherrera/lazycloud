@@ -1,8 +1,13 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -106,6 +111,108 @@ func TestShortcutKeyLabel(t *testing.T) {
 	}
 	if got := shortcutKeyLabel('u'); got != "u" {
 		t.Fatalf("shortcutKeyLabel('u') = %q, want %q", got, "u")
+	}
+}
+
+func TestF1ShortcutOpensConfigFile(t *testing.T) {
+	var f1 *shortcut
+	for i := range shortcuts {
+		if shortcuts[i].specialKey == tcell.KeyF1 {
+			f1 = &shortcuts[i]
+			break
+		}
+	}
+	if f1 == nil {
+		t.Fatal("no F1 shortcut registered")
+	}
+	if f1.desc != "open config file in editor" {
+		t.Fatalf("F1 shortcut desc = %q, want %q", f1.desc, "open config file in editor")
+	}
+	if f1.run == nil {
+		t.Fatal("F1 shortcut has no run action")
+	}
+	if got := f1.label(); got != "F1" {
+		t.Fatalf("F1 shortcut label = %q, want %q", got, "F1")
+	}
+	if !f1.matches(tcell.NewEventKey(tcell.KeyF1, 0, tcell.ModNone)) {
+		t.Fatal("F1 shortcut does not match an F1 key event")
+	}
+	if f1.matches(tcell.NewEventKey(tcell.KeyRune, 'u', tcell.ModNone)) {
+		t.Fatal("F1 shortcut matches a rune key event")
+	}
+}
+
+func TestReloadConfigAppliesEditedValues(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "lazycloud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	configYaml := "theme:\n  labels: orange\n  text: silver\nautoupdate:\n  enabled: false\n  threshold_in_minutes: 15\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	originalTheme := theme
+	originalShortcuts := shortcuts
+	originalStaleViewAfter := staleViewAfter
+	secondary, primary := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor
+	t.Cleanup(func() {
+		theme = originalTheme
+		shortcuts = originalShortcuts
+		staleViewAfter = originalStaleViewAfter
+		tview.Styles.SecondaryTextColor = secondary
+		tview.Styles.PrimaryTextColor = primary
+	})
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	a.staleAutoRefresh = true
+	a.reloadConfig()
+	if theme.labels != "orange" || theme.text != "silver" {
+		t.Fatalf("reloadConfig() theme = %+v, want orange/silver", theme)
+	}
+	if tview.Styles.SecondaryTextColor != tcell.GetColor("orange") {
+		t.Errorf("reloadConfig() SecondaryTextColor = %v, want orange", tview.Styles.SecondaryTextColor)
+	}
+	if tview.Styles.PrimaryTextColor != tcell.GetColor("silver") {
+		t.Errorf("reloadConfig() PrimaryTextColor = %v, want silver", tview.Styles.PrimaryTextColor)
+	}
+	if a.staleAutoRefresh {
+		t.Error("reloadConfig() staleAutoRefresh = true, want false")
+	}
+	if staleViewAfter != 15*time.Minute {
+		t.Errorf("reloadConfig() staleViewAfter = %v, want 15m", staleViewAfter)
+	}
+	if got := a.status.GetText(false); !strings.Contains(got, "Config reloaded") {
+		t.Errorf("reloadConfig() status = %q, want Config reloaded", got)
+	}
+}
+
+func TestReloadConfigKeepsValuesOnBrokenFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "lazycloud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: [broken"), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	originalTheme := theme
+	t.Cleanup(func() { theme = originalTheme })
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	originalLabels := theme.labels
+	a.reloadConfig()
+	if theme.labels != originalLabels {
+		t.Errorf("reloadConfig() theme.labels = %q, want %q kept", theme.labels, originalLabels)
+	}
+	if got := a.status.GetText(false); !strings.Contains(got, "Failed to reload config") {
+		t.Errorf("reloadConfig() status = %q, want failure message", got)
 	}
 }
 

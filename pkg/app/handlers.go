@@ -16,12 +16,13 @@ import (
 )
 
 type shortcut struct {
-	key      rune
-	desc     string
-	visible  func() bool
-	enabled  func(a *app) bool
-	run      func(a *app)
-	commands []viewCommand
+	key        rune
+	specialKey tcell.Key
+	desc       string
+	visible    func() bool
+	enabled    func(a *app) bool
+	run        func(a *app)
+	commands   []viewCommand
 }
 
 type viewCommand struct {
@@ -172,6 +173,11 @@ func init() {
 			run:     (*app).openLogFile,
 		},
 		{
+			specialKey: tcell.KeyF1,
+			desc:       "open config file in editor",
+			run:        (*app).openConfigFile,
+		},
+		{
 			key:     'b',
 			desc:    "back to previous view",
 			enabled: func(a *app) bool { return appState.PrevViewKind != "" },
@@ -291,11 +297,25 @@ func shortcutKeyLabel(key rune) string {
 	return string(key)
 }
 
+func (s shortcut) label() string {
+	if s.specialKey != 0 {
+		return tcell.KeyNames[s.specialKey]
+	}
+	return shortcutKeyLabel(s.key)
+}
+
+func (s shortcut) matches(event *tcell.EventKey) bool {
+	if s.specialKey != 0 {
+		return event.Key() == s.specialKey
+	}
+	return event.Rune() == s.key
+}
+
 func populateShortcutsPanel(table *tview.Table) int {
 	table.Clear()
 	row := 0
 	for _, s := range visibleShortcuts() {
-		table.SetCell(row, 0, tview.NewTableCell(shortcutKeyLabel(s.key)).
+		table.SetCell(row, 0, tview.NewTableCell(s.label()).
 			SetTextColor(theme.shortcutLabelColor()).
 			SetAttributes(tcell.AttrBold))
 		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1).
@@ -353,7 +373,7 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 	for _, s := range shortcuts {
-		if event.Rune() != s.key {
+		if !s.matches(event) {
 			continue
 		}
 		enabled := s.enabled
@@ -901,12 +921,7 @@ func (a *app) openConsole() {
 	a.statusText("[green]Opened GCP console in browser[-]")
 }
 
-func (a *app) openLogFile() {
-	path, err := providers.LogFilePath()
-	if err != nil {
-		a.statusText("[red]Failed to locate log file: [-]" + err.Error())
-		return
-	}
+func (a *app) openFileInEditor(path string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
@@ -920,11 +935,47 @@ func (a *app) openLogFile() {
 	a.tapp.Suspend(func() {
 		runErr = cmd.Run()
 	})
-	if runErr != nil {
-		a.statusText("[red]Editor exited with error: [-]" + runErr.Error())
+	return runErr
+}
+
+func (a *app) openLogFile() {
+	path, err := providers.LogFilePath()
+	if err != nil {
+		a.statusText("[red]Failed to locate log file: [-]" + err.Error())
+		return
+	}
+	if err := a.openFileInEditor(path); err != nil {
+		a.statusText("[red]Editor exited with error: [-]" + err.Error())
 		return
 	}
 	a.statusText("[green]Log file closed[-]")
+}
+
+func (a *app) openConfigFile() {
+	path, err := providers.ConfigFilePath()
+	if err != nil {
+		a.statusText("[red]Failed to locate config file: [-]" + err.Error())
+		return
+	}
+	if err := a.openFileInEditor(path); err != nil {
+		a.statusText("[red]Editor exited with error: [-]" + err.Error())
+		return
+	}
+	a.reloadConfig()
+}
+
+func (a *app) reloadConfig() {
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig())
+	if err != nil {
+		a.statusText("[red]Failed to reload config: [-]" + err.Error())
+		return
+	}
+	applyShortcutConfig(config.Shortcuts)
+	applyTheme(config.Theme)
+	applyAutoUpdateConfig(config.AutoUpdate)
+	a.staleAutoRefresh = config.AutoUpdate.Enabled
+	a.applyThemeToWidgets()
+	a.statusText("[green]Config reloaded[-]")
 }
 
 func (a *app) toggleHelp() {

@@ -22,11 +22,12 @@ type app struct {
 	summary   *tview.TextView
 	status    *tview.TextView
 	pages     *tview.Pages
-	cache     *providers.Cache
-	logger    *providers.Logger
-	shortcuts *tview.Table
-	helpRow   *tview.Flex
-	screen    tcell.Screen
+	cache            *providers.Cache
+	logger           *providers.Logger
+	shortcuts        *tview.Table
+	helpRow          *tview.Flex
+	shortcutsSummary *tview.Table
+	screen           tcell.Screen
 
 	viewHeaders      []string
 	allRows          [][]string
@@ -47,6 +48,12 @@ func newSummaryPanel() *tview.TextView {
 }
 
 func newShortcutsSummaryPanel() *tview.Table {
+	table := tview.NewTable().SetBorders(false).SetSelectable(false, false)
+	populateShortcutsSummaryPanel(table)
+	return table
+}
+
+func populateShortcutsSummaryPanel(table *tview.Table) {
 	var numeric []shortcut
 	for _, s := range shortcuts {
 		if s.key >= '0' && s.key <= '9' {
@@ -54,7 +61,7 @@ func newShortcutsSummaryPanel() *tview.Table {
 		}
 	}
 	rows := (len(numeric) + 2) / 3
-	table := tview.NewTable().SetBorders(false).SetSelectable(false, false)
+	table.Clear()
 	for i, s := range numeric {
 		row, col := i%rows, (i/rows)*2
 		table.SetCell(row, col, tview.NewTableCell(string(s.key)).
@@ -64,7 +71,6 @@ func newShortcutsSummaryPanel() *tview.Table {
 			SetExpansion(1).
 			SetTextColor(theme.shortcutTextColor()))
 	}
-	return table
 }
 
 func newInfoPanel() *tview.Table {
@@ -189,6 +195,24 @@ func splitFilterQuery(query string) ([]string, []string) {
 func (a *app) refreshShortcuts() {
 	count := populateShortcutsPanel(a.shortcuts)
 	a.helpRow.ResizeItem(a.shortcuts, count+2, 1)
+}
+
+func (a *app) applyThemeToWidgets() {
+	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+	a.cmd.SetBorderColor(theme.borderColor())
+	a.info.SetSelectedStyle(tcell.StyleDefault.
+		Foreground(theme.activeRowTextColor()).
+		Background(theme.activeRowBackgroundColor()))
+	a.info.SetBorderColor(theme.borderColor())
+	a.info.SetTitleColor(theme.titleColor())
+	a.shortcuts.SetBorderColor(theme.borderColor())
+	a.shortcuts.SetTitleColor(theme.titleColor())
+	a.summary.SetTextColor(theme.summaryTextColor())
+	a.status.SetTextColor(theme.statusTextColor())
+	renderSummary(a.summary)
+	a.refreshShortcuts()
+	populateShortcutsSummaryPanel(a.shortcutsSummary)
+	a.applyFilter()
 }
 
 func (a *app) setView(kind viewKind) {
