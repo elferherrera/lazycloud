@@ -167,7 +167,7 @@ Per-project views (`viewX`) use `appState.ProjectID`; the `viewXAll` variants co
 
 Built on `tview.Pages` (stacked, hidden/shown pages), centered with spacer-Flexes:
 
-- `help` page — `newHelpOverlay()` (handlers.go), toggled by `?` (`toggleHelp()`).
+- `help` page — `newHelpOverlay()` (handlers.go), toggled by `?` (`toggleHelp()`). tview's `Pages.ShowPage`/`HidePage` re-delegate focus to the topmost visible page, so the help table takes focus while open (PgUp/PgDn scroll it) — and on close `toggleHelp()` must `SetFocus(a.info)` itself, because the main layout is a Flex whose items were all added with `focus=false` and `Flex.Focus` would otherwise fall back to the bare Box, leaving the info table unfocused.
 - `vm` page — VM details window, opened via VM views' `selectRow` → `showVMDetails()` (view_vms.go). `vmDetails()` builds the `[yellow]label: [-]value` color-tagged text.
 - `ip` page — IP address details window, opened via IP views' `selectRow` → `showIPDetails()` (view_ips.go). `ipDetails()` formats all cached `IPAddress` fields.
 - `lb` page — Load balancer details window, opened via LB views' `selectRow` → `showLBDetails()` (view_loadbalancers.go). `lbDetails()` renders the composed rule → proxy → URL map → backend services chain.

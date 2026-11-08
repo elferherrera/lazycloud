@@ -999,9 +999,10 @@ func (a *app) reloadConfig() {
 func (a *app) toggleHelp() {
 	if name, _ := a.pages.GetFrontPage(); name == "help" {
 		a.pages.HidePage("help")
-	} else {
-		a.pages.ShowPage("help")
+		a.tapp.SetFocus(a.info)
+		return
 	}
+	a.pages.ShowPage("help")
 }
 
 func (a *app) quit() {

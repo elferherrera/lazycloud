@@ -173,6 +173,29 @@ func TestHelpPanelCommandsSorted(t *testing.T) {
 	}
 }
 
+func TestToggleHelpRestoresInfoFocus(t *testing.T) {
+	a := newFilterTestApp(t)
+	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(a.summary, 4, 1, false).
+		AddItem(a.cmd, 0, 0, false).
+		AddItem(a.info, 0, 1, false).
+		AddItem(a.status, 1, 1, false)
+	a.pages.AddPage("main", mainView, true, true)
+	a.pages.AddPage("help", a.helpRow, true, false)
+	a.tapp.SetRoot(a.pages, true)
+	a.tapp.SetFocus(a.info)
+
+	a.toggleHelp()
+	if got := a.tapp.GetFocus(); got != a.shortcuts {
+		t.Fatalf("focus with help open = %T, want the help shortcuts table", got)
+	}
+
+	a.toggleHelp()
+	if got := a.tapp.GetFocus(); got != a.info {
+		t.Fatalf("focus after closing help = %T, want the info table", got)
+	}
+}
+
 func TestF1ShortcutOpensConfigFile(t *testing.T) {
 	var f1 *shortcut
 	for i := range shortcuts {
