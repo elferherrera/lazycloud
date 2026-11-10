@@ -30,3 +30,7 @@ run = "go vet ./..."
 [tasks.check]
 description = "Run all checks"
 depends = ["vet", "test"]
+
+[tasks.coverage]
+description = "Run tests with statement coverage (merged, incl. the e2e child binary)"
+run = "scripts/coverage.sh"

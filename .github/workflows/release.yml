@@ -3,10 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      # Exact MAJOR.MINOR.PATCH only: prerelease tags (v1.2.3-rc1) do not
+      # trigger a build that the SemVer gate would then reject.
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -79,6 +81,9 @@ jobs:
     name: Publish GitHub release
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      # Only this job creates the release; build stays read-only.
+      contents: write
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v8
@@ -157,4 +162,6 @@ jobs:
           git config user.name "elferherrera-release-bot"
           git config user.email "actions@github.com"
           git commit -m "lazycloud ${GITHUB_REF_NAME#v}"
-          git push
+          # Retrying on a non-fast-forward keeps a stray tap-side commit
+          # from failing the whole release.
+          git push || { git pull --rebase origin main && git push; }

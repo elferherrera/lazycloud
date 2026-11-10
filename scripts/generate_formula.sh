@@ -37,7 +37,10 @@ BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 checksum() {
   local asset="$1"
   local sha_file="${asset}.sha256"
-  fetch "${BASE_URL}/${sha_file}" | awk '{print $1}'
+  # curl -f under pipefail would abort inside the command substitution
+  # before the explicit missing-sidecar message below runs, so fetch
+  # errors are swallowed here and the empty check reports instead.
+  fetch "${BASE_URL}/${sha_file}" 2>/dev/null | awk '{print $1}' || true
 }
 
 DARWIN_ARM64_SHA="$(checksum lazycloud-darwin-arm64.tar.gz)"
@@ -100,7 +103,7 @@ class Lazycloud < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/lazycloud --version")
+    assert_equal "v#{version}", shell_output("#{bin}/lazycloud --version").strip
   end
 end
 EOF
