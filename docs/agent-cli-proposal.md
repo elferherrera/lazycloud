@@ -7,7 +7,7 @@ No TUI code is touched. The CLI reads the same cache and calls the same fetchers
 ## Why
 
 - **Agents cannot use the TUI.** `app.Run()` opens `/dev/tty`; inside an agent shell there is no TTY, so today the only agent path is raw `gcloud` with per-resource flag archaeology. The value of lazycloud, one consistent view over 30+ resource types with a local cache, is exactly what an agent needs but cannot reach.
-- **The layer separation already exists.** `cmd/providers` has zero `tview`/`tcell` imports: 36 `List*` functions (gcloud.go, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
+- **The layer separation already exists.** `cmd/providers` has zero `tview`/`tcell` imports: 31 `List*` functions (gcloud.go, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
 - **JSON is already half-implemented.** The `y` copy key serializes any row's cached resource (handlers.go `rowCopyPayload`), and `:write` dumps whole views as JSON/YAML/CSV. The CLI generalizes what already exists.
 
 ## Non-goals
@@ -81,7 +81,7 @@ The awkward part: cache methods return concrete types (`[]providers.VM`) and mar
 
 - **A. `[]any` in the registry** (sketch above). Simple, some `any` plumbing at registration; `json.Marshal` plus the tags makes it stable. Chosen.
 - **B. Generics.** Cleaner signatures, but each resource still needs its own helpers and the registry map gets awkward. Rejected.
-- **C. Reuse `viewDef` from pkg/app.** Tempting: headers, rows and fetch closures already exist per view. But `viewDef` methods take `*app` (TUI state: statusText, QueueUpdateDraw, appState.ProjectID), so reuse needs a refactor lifting `load`/`fetch` out of `*app` first. Right long-term, not needed for a read-only CLI. Deferred, see phase 3.
+- **C. Reuse `viewDef` from pkg/app.** Tempting: headers, `load` closures and `fetch` closures already exist per view. But `viewDef` methods take `*app` (TUI state: statusText, QueueUpdateDraw, appState.ProjectID), so reuse needs a refactor lifting `load`/`fetch` out of `*app` first. Right long-term, not needed for a read-only CLI. Deferred, see phase 3.
 
 ### main.go dispatch
 
@@ -105,7 +105,7 @@ TUI behavior is unchanged; `lazycloud` with no args still opens the TUI. Existin
 
 The provider structs need `json:"snake_case"` tags. This also changes `y`-copy and `:write` JSON output (PascalCase to snake_case). The TUI itself renders rows, not raw JSON, so nothing visual changes; the only behavioral change is the copy/write payload key casing. Alternatives considered and rejected:
 
-- A separate CLI DTO layer: duplicates all 36 structs and drifts.
+- A separate CLI DTO layer: duplicates the provider structs and drifts.
 - PascalCase in CLI output: agents expect snake_case.
 
 Recommendation: add the tags, accept the `y`/`:write` casing change, note it in the changelog. The tags are mechanical to add.
