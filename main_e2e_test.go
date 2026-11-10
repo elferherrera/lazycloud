@@ -9,10 +9,11 @@ import (
 )
 
 // TestMainFunctionE2E runs the real binary in a subprocess, the standard
-// pattern for covering the os.Exit adapter in main(). The binary is
-// built with -cover and inherits GOCOVERDIR, so statements executed in
-// the child merge into the same coverage report as the in-process tests
-// when the suite runs with GOCOVERDIR set (mise run coverage).
+// pattern for covering the os.Exit adapter in main(). The binary is built
+// with -cover; the coverage run (mise run coverage) starts the test binary
+// with GOCOVERDIR set, which propagates to the child so main() lands in the
+// merged profile. Plain runs set a temp GOCOVERDIR because an
+// instrumented binary without it warns on stderr.
 func TestMainFunctionE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary, skipped in -short mode")
@@ -32,9 +33,11 @@ func TestMainFunctionE2E(t *testing.T) {
 	cmd := exec.Command(bin, "--version")
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	// GOCOVERDIR set by the coverage run propagates to the child, so
-	// main() lands in the merged profile. Without it the child just runs.
-	cmd.Env = os.Environ()
+	coverDir := os.Getenv("GOCOVERDIR")
+	if coverDir == "" {
+		coverDir = t.TempDir()
+	}
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
 
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("binary exited with error: %v\nstderr: %s", err, stderr.String())

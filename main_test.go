@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"testing"
-
-	"github.com/elferherrera/lazycloud/pkg/cli"
 )
 
 func TestRunVersionFlag(t *testing.T) {
@@ -134,5 +132,3 @@ func TestRunDevVersionDefault(t *testing.T) {
 		t.Errorf("stdout = %q, want %q", got, "dev\n")
 	}
 }
-
-var _ = cli.Run // compile-time link to the dispatch package under test

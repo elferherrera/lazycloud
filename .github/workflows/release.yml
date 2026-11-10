@@ -3,9 +3,10 @@ name: Release
 on:
   push:
     tags:
-      # Exact MAJOR.MINOR.PATCH only: prerelease tags (v1.2.3-rc1) do not
-      # trigger a build that the SemVer gate would then reject.
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      # Glob (fnmatch) syntax, not regex: no "+". Prerelease tags
+      # (v1.2.3-rc1) still match and then fail the SemVer gate below
+      # with an explicit error instead of silently skipping.
+      - "v[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
   contents: read
@@ -164,4 +165,4 @@ jobs:
           git commit -m "lazycloud ${GITHUB_REF_NAME#v}"
           # Retrying on a non-fast-forward keeps a stray tap-side commit
           # from failing the whole release.
-          git push || { git pull --rebase origin main && git push; }
+          git push || { git pull --rebase && git push; }
