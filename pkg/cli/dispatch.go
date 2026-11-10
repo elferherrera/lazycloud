@@ -187,6 +187,9 @@ func formatFlag(arg string) string {
 
 // runList refreshes when asked, reads the cache, and prints.
 func runList(noun string, def resourceDef, opts Options, cache *providers.Cache, stdout, stderr io.Writer, saveViewUpdate func(*providers.Cache, string, string) error) int {
+	if opts.Project != "" && def.project == nil {
+		return usageErr(stderr, "%s is global, --project does not apply", noun)
+	}
 	if opts.Refresh {
 		targets, err := refreshTargets(def, opts.Project, cache)
 		if err != nil {
@@ -214,7 +217,16 @@ func runList(noun string, def resourceDef, opts Options, cache *providers.Cache,
 	if err != nil {
 		return failErr(stderr, "reading cache: %v", err)
 	}
-	if err := renderItems(items, opts.Format, def, stdout); err != nil {
+	// Unscoped lists print the TUI's all-projects columns, Project
+	// column included.
+	listDef := def
+	if opts.Project == "" && def.project != nil {
+		listDef = resourceDef{
+			headers: def.headersAll,
+			row:     def.rowAll,
+		}
+	}
+	if err := renderItems(items, opts.Format, listDef, stdout); err != nil {
 		return failErr(stderr, "rendering: %v", err)
 	}
 	return exitOK

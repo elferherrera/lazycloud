@@ -100,7 +100,6 @@ func TestRowRenderers(t *testing.T) {
 			name: "network unknown type",
 			row:  networkRow,
 			v:    "not a network",
-			want: []string{},
 		},
 		{
 			name: "bucket",
@@ -129,7 +128,16 @@ func TestRowRenderers(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.row(tt.v); !reflect.DeepEqual(got, tt.want) {
+			if tt.want == nil {
+				// Rows panic on unsupported types, like the other row
+				// renderers; a blank row would hide registry bugs.
+				defer func() {
+					if recover() == nil {
+						t.Error("row must panic on unsupported type")
+					}
+				}()
+			}
+			if got := tt.row(tt.v); tt.want != nil && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("row = %v, want %v", got, tt.want)
 			}
 		})

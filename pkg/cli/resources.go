@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,8 +32,15 @@ type resourceDef struct {
 	refresh func(*providers.Cache, string) error
 	// headers are the --table columns, same set as the TUI view.
 	headers []string
+	// headersAll are the --table columns for unscoped lists, where
+	// the TUI's all-projects view appends the Project column.
+	headersAll []string
 	// row renders one object as --table cells.
 	row func(any) []string
+	// rowAll renders one object as --table cells for an unscoped
+	// list. The default appends the object's ProjectID to row, like
+	// the TUI's *RowsAll helpers.
+	rowAll func(any) []string
 	// viewKind is the TUI view name for this resource, used to
 	// record view updates so the TUI's staleness tracking stays
 	// honest when the CLI refreshes the shared cache.
@@ -214,6 +220,9 @@ func getNetworks(c *providers.Cache, sel []string) (any, error) {
 	return nil, errBadSelector
 }
 
+// networkRow renders VPCs and subnets through one column set, like
+// the TUI's networks view: the kind column (vpc/subnet) tells them
+// apart. Anything else is a programming error inside the registry.
 func networkRow(v any) []string {
 	switch n := v.(type) {
 	case providers.Network:
@@ -221,7 +230,7 @@ func networkRow(v any) []string {
 	case providers.Subnetwork:
 		return []string{"subnet", n.Name, n.Region, n.Network, n.IPRange, "", n.Status, formatUpdatedAt(n.UpdatedAt)}
 	}
-	return []string{}
+	panic(fmt.Sprintf("networkRow: unsupported type %T", v))
 }
 
 func getBucket(c *providers.Cache, sel []string) (any, error) {
@@ -277,8 +286,10 @@ func iamBindingRow(v any) []string {
 
 // defaultRegistry maps nouns to their resource plumbing. Adding a noun
 // is one entry: cache reads, a fetch-and-save, headers, a row renderer.
+// Scoped entries get their all-projects table columns filled in at
+// the end: the TUI's All views add a trailing Project column.
 func defaultRegistry(f Fetchers) map[string]resourceDef {
-	return map[string]resourceDef{
+	registry := map[string]resourceDef{
 		"projects": {
 			all:          genericAll((*providers.Cache).ListProjects),
 			project:      nil,
@@ -398,6 +409,55 @@ func defaultRegistry(f Fetchers) map[string]resourceDef {
 			viewKind: "iam",
 		},
 	}
+	for name, def := range registry {
+		if def.project == nil {
+			continue
+		}
+		if len(def.headersAll) == 0 {
+			def.headersAll = withProjectColumn(def.headers)
+		}
+		if def.rowAll == nil {
+			row := def.row
+			def.rowAll = func(v any) []string {
+				return append(row(v), projectID(v))
+			}
+		}
+		registry[name] = def
+	}
+	return registry
+}
+
+// projectID extracts the owning project from any registry object;
+// the all-projects table column needs it for every resource type.
+func projectID(v any) string {
+	switch r := v.(type) {
+	case providers.VM:
+		return r.ProjectID
+	case providers.Disk:
+		return r.ProjectID
+	case providers.Cluster:
+		return r.ProjectID
+	case providers.Network:
+		return r.ProjectID
+	case providers.Subnetwork:
+		return r.ProjectID
+	case providers.Bucket:
+		return r.ProjectID
+	case providers.ServiceAccount:
+		return r.ProjectID
+	case providers.IAMBinding:
+		return r.ProjectID
+	}
+	return ""
+}
+
+// withProjectColumn appends the Project column to headers, like the
+// TUI's all-projects views.
+func withProjectColumn(headers []string) []string {
+	out := make([]string, len(headers)+1)
+	copy(out, headers)
+	out[len(headers)] = "Project"
+	return out
 }
 
 // formatUpdatedAt follows the TUI's helper of the same name: RFC3339
@@ -462,15 +522,16 @@ var Aliases = map[string]string{
 	"project":        "projects",
 }
 
+// resourceNouns is the static noun set; the registry below is its
+// single source of truth, so a drift here fails TestResourceNames.
+var resourceNouns = []string{
+	"buckets", "clusters", "disks", "iam", "networks",
+	"projects", "serviceaccounts", "vms",
+}
+
 // ResourceNames returns the sorted registry keys.
 func ResourceNames() []string {
-	reg := defaultRegistry(Fetchers{})
-	names := make([]string, 0, len(reg))
-	for name := range reg {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return resourceNouns
 }
 
 // ResolveAlias normalizes a noun to its registry key.

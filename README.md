@@ -196,7 +196,7 @@ $ lazycloud list vms --project my-prod --refresh
 [{"project_id":"my-prod","name":"api-01","zone":"europe-west1-b",...}]
 
 $ lazycloud get vm my-prod/europe-west1-b/api-01
-{...}
+{"project_id":"my-prod","name":"api-01","zone":"europe-west1-b",...}
 
 $ lazycloud list clusters --project my-prod --table
 Name        Location      Status    Version  Node Pools   Created             Updated

@@ -477,22 +477,93 @@ func TestExecuteAliasNouns(t *testing.T) {
 	}
 }
 
-func TestExecuteScopedListOnGlobalResourceIgnoresProject(t *testing.T) {
+func TestExecuteGlobalResourceRejectsProject(t *testing.T) {
+	// projects is global: --project cannot apply, and silently
+	// ignoring it would tell the agent its scope worked.
+	d, stdout, stderr := testDeps(t, Fetchers{})
+	args := []string{"lazycloud", "list", "projects", "--project", "whatever"}
+	if code := ExecuteDeps(args, stdout, stderr, d); code != exitUsage {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "global") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on usage error", stdout.String())
+	}
+}
+
+func TestExecuteGlobalResourceProjectFlagForm(t *testing.T) {
+	// Same rule through the --project= form.
+	d, _, stderr := testDeps(t, Fetchers{})
+	args := []string{"lazycloud", "projects", "--project=whatever"}
+	if code := ExecuteDeps(args, new(bytes.Buffer), stderr, d); code != exitUsage {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+}
+
+func TestExecuteUnscopedTableHasProjectColumn(t *testing.T) {
+	// The TUI's all-projects views add a trailing Project column;
+	// unscoped --table output must match them.
 	d, stdout, stderr := testDeps(t, fixedFetchers())
-	if code := ExecuteDeps([]string{"lazycloud", "projects", "--refresh"}, stdout, stderr, d); code != exitOK {
+	seed := []string{"lazycloud", "list", "vms", "--project", "p1", "--refresh"}
+	if code := ExecuteDeps(seed, stdout, stderr, d); code != exitOK {
 		t.Fatalf("seed failed: %d; stderr: %s", code, stderr.String())
 	}
 	stdout.Reset()
-	args := []string{"lazycloud", "list", "projects", "--project", "whatever"}
+	if code := ExecuteDeps([]string{"lazycloud", "list", "vms", "--table"}, stdout, stderr, d); code != exitOK {
+		t.Fatalf("exit = %d; stderr: %s", code, stderr.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	header := strings.Fields(lines[0])
+	if header[len(header)-1] != "Project" {
+		t.Errorf("unscoped header = %v, want trailing Project", header)
+	}
+	row := strings.Fields(lines[1])
+	if row[len(row)-1] != "p1" {
+		t.Errorf("unscoped row ends with %q, want project id", row[len(row)-1])
+	}
+}
+
+func TestExecuteScopedTableHasNoProjectColumn(t *testing.T) {
+	d, stdout, stderr := testDeps(t, fixedFetchers())
+	seed := []string{"lazycloud", "list", "vms", "--project", "p1", "--refresh"}
+	if code := ExecuteDeps(seed, stdout, stderr, d); code != exitOK {
+		t.Fatalf("seed failed: %d; stderr: %s", code, stderr.String())
+	}
+	stdout.Reset()
+	args := []string{"lazycloud", "list", "vms", "--project", "p1", "--table"}
 	if code := ExecuteDeps(args, stdout, stderr, d); code != exitOK {
 		t.Fatalf("exit = %d; stderr: %s", code, stderr.String())
 	}
-	var got []map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
-		t.Fatalf("stdout not JSON: %v", err)
+	header := strings.Fields(strings.SplitN(stdout.String(), "\n", 2)[0])
+	if header[len(header)-1] != "Updated" {
+		t.Errorf("scoped header = %v, want no Project column", header)
 	}
-	if len(got) != 1 {
-		t.Errorf("projects = %v, want global list regardless of scope", got)
+}
+
+func TestExecuteNetworksUnscopedTableHasProjectColumn(t *testing.T) {
+	d, stdout, stderr := testDeps(t, fixedFetchers())
+	seed := []string{"lazycloud", "list", "networks", "--project", "p1", "--refresh"}
+	if code := ExecuteDeps(seed, stdout, stderr, d); code != exitOK {
+		t.Fatalf("seed failed: %d; stderr: %s", code, stderr.String())
+	}
+	stdout.Reset()
+	if code := ExecuteDeps([]string{"lazycloud", "list", "networks", "--table"}, stdout, stderr, d); code != exitOK {
+		t.Fatalf("exit = %d; stderr: %s", code, stderr.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	if len(lines) != 3 { // header + VPC + subnet
+		t.Fatalf("lines = %d, want 3: %q", len(lines), stdout.String())
+	}
+	header := strings.Fields(lines[0])
+	if header[len(header)-1] != "Project" {
+		t.Errorf("networks unscoped header = %v", header)
+	}
+	for _, line := range lines[1:] {
+		if cells := strings.Fields(line); cells[len(cells)-1] != "p1" {
+			t.Errorf("row must end with project id: %q", line)
+		}
 	}
 }
 
