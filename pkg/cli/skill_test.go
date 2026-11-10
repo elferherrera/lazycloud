@@ -207,3 +207,12 @@ func TestSkillContentCoversCLIContract(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillContentCoversNebius(t *testing.T) {
+	c := skillContent()
+	for _, want := range []string{"Nebius setup", "NEBIUS_IAM_TOKEN", "--cloud gcp|nebius", "cache-nebius.db", "group:<name>"} {
+		if !strings.Contains(c, want) {
+			t.Errorf("skill content missing nebius fact %q", want)
+		}
+	}
+}

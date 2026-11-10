@@ -98,12 +98,12 @@ func installSkillFiles(base, name, content string) (string, error) {
 func skillContent() string {
 	return `---
 name: lazycloud
-description: Investigate cloud resources through the lazycloud CLI. Use when asked to find, list, or analyse GCP resources: VMs, disks, clusters, networks, buckets, service accounts, IAM.
+description: Investigate cloud resources through the lazycloud CLI. Use when asked to find, list, or analyse GCP or Nebius resources: VMs, disks, clusters, networks, buckets, service accounts, IAM.
 ---
 
 # lazycloud
 
-GCP TUI + agent CLI over one SQLite cache (~/.config/lazycloud/cache.db). CLI = data, JSON, fast. TUI = humans.
+Cloud TUI + agent CLI over one SQLite cache per cloud. GCP: ~/.config/lazycloud/cache.db. Nebius: cache-nebius.db. CLI = data, JSON, fast. TUI = humans.
 
 ## Commands
 
@@ -127,14 +127,25 @@ The networks noun lists VPCs and subnets together; the kind column (vpc, subnet)
 
 ## Flags
 
+- --cloud gcp|nebius: pick the provider. gcp is the default. LAZYCLOUD_CLOUD fills the flag when absent. Each cloud keeps its own cache: switching never mixes data.
 - --project <id>: scope one project. Absent, and no LAZYCLOUD_PROJECT env: all projects.
-- --refresh: fetch from GCP before printing. List only. When a multi-project refresh partially fails, refreshed data still prints on stdout, failures land on stderr, exit code is 3.
+- --refresh: fetch from the cloud before printing. List only. When a multi-project refresh partially fails, refreshed data still prints on stdout, failures land on stderr, exit code is 3.
 - --json (default, compact array), --ndjson (one object per line), --yaml, --table (the TUI columns).
 
 ## Output contract
 
 - snake_case keys. stdout = data only. [] is a valid empty result. Warnings and errors go to stderr.
 - Exit codes: 0 ok, 1 usage, 2 not found, 3 infra (cache, auth, quota, API).
+
+## Nebius setup
+
+- Token: NEBIUS_IAM_TOKEN env, or the nebius CLI (nebius profile create, then nebius iam get-access-token runs behind the scenes).
+- Project ids are Nebius iam project ids, not GCP-style strings.
+- The projects table reuses the Project Number column for the Nebius region.
+- VMs have no zone: the zone field stays empty. Region lives on the project row.
+- Disks: size_gb comes from status.size_bytes; users lists attached instances.
+- Networks: subnets carry ip_range, the CIDR pools comma-joined.
+- IAM: rows come from groups with access permits; condition carries group:<name> resource:<id>. Tenant-level groups are out of scope; a project scope lists that project's groups.
 
 ## Investigation recipes
 
@@ -147,12 +158,13 @@ The networks noun lists VPCs and subnets together; the kind column (vpc, subnet)
 - Oversized VMs: machine_type per vm, compare against observed load.
 - IAM audit: list iam --project <id>, the member prefix is the type (user, serviceAccount, group).
 - Network layout: list networks --project <id>, vpc and subnet rows, ip_range column.
-- Exit 2: wrong name, fix the selector. Exit 3: infra, check gcloud auth, then retry.
+- Exit 2: wrong name, fix the selector. Exit 3: infra, check auth (gcloud or nebius), then retry.
 
 ## Judgement
 
 - Cache reads are instant and possibly stale. --refresh costs API quota; use it when truth matters.
-- Refresh needs the gcloud CLI installed and authed; cache reads need nothing.
+- Refresh needs the cloud CLI installed and authed (gcloud for GCP, nebius for Nebius); cache reads need nothing.
 - Prefer JSON for parsing, table for eyeballing.
+- One cloud per invocation: repeat the command with the other --cloud instead of assuming one view covers both.
 `
 }
