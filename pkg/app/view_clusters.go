@@ -216,6 +216,23 @@ func (a *app) openClusterAutoscalerLogs() {
 	a.statusText(fmt.Sprintf("[green]Opened autoscaler logs for %s in browser[-]", clusterName))
 }
 
+func (a *app) openClusterCreateAuditLogs() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	projectID := appState.ProjectID
+	if appState.ViewKind == viewClustersAll {
+		projectID = a.info.GetCell(row, 7).Text
+	}
+	clusterName := a.info.GetCell(row, 0).Text
+	if err := openBrowser(providers.GCPClusterCreateAuditLogsURL(projectID, clusterName)); err != nil {
+		a.statusText("[red]Failed to open browser: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened create audit logs for %s in browser[-]", clusterName))
+}
+
 func showClusters(a *app) {
 	if !appState.AllProjects && appState.ProjectID == "" {
 		a.statusText("[red]No project selected[-]")

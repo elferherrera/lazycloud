@@ -128,6 +128,18 @@ func GCPClusterAutoscalerLogsURL(projectID, clusterName string) string {
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
 }
 
+func GCPClusterCreateAuditLogsURL(projectID, clusterName string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString("resource.type=\"k8s_cluster\"\n")
+	sb.WriteString("log_id(\"cloudaudit.googleapis.com/activity\")\n")
+	sb.WriteString("protoPayload.methodName=~\"create\"")
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
 func GCPNodePoolEventsURL(projectID, clusterName, poolName string) string {
 	var sb strings.Builder
 	sb.WriteString("log_id(\"events\")\n")

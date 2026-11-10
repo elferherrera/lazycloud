@@ -192,6 +192,13 @@ func init() {
 			run:     (*app).openClusterAutoscalerLogs,
 		},
 		{
+			key:     'f',
+			desc:    "open cluster create audit logs in GCP console",
+			visible: inClustersView,
+			enabled: func(a *app) bool { return inClustersView() },
+			run:     (*app).openClusterCreateAuditLogs,
+		},
+		{
 			key:     'e',
 			desc:    "open workload events in GCP console",
 			visible: func() bool { return appState.ViewKind == viewWorkloads },

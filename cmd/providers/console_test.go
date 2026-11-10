@@ -61,6 +61,20 @@ func TestGCPClusterEventsURL(t *testing.T) {
 	}
 }
 
+func TestGCPClusterCreateAuditLogsURL(t *testing.T) {
+	got := GCPClusterCreateAuditLogsURL("revolut-labs", "integration")
+	want := "https://console.cloud.google.com/logs/query;query=" +
+		"resource.labels.cluster_name%3D%22integration%22" +
+		"%0Aresource.labels.project_id%3D%22revolut-labs%22" +
+		"%0Aresource.type%3D%22k8s_cluster%22" +
+		"%0Alog_id%28%22cloudaudit.googleapis.com%2Factivity%22%29" +
+		"%0AprotoPayload.methodName%3D~%22create%22" +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPClusterCreateAuditLogsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestGCPWorkloadEventsURL(t *testing.T) {
 	got := GCPWorkloadEventsURL("revolut-prod-apps", "europe-west2", "apps-prod-europe-west2", "web")
 	want := "https://console.cloud.google.com/logs/query;query=" +
