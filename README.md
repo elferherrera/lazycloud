@@ -173,3 +173,42 @@ A term is a **detail filter** when its first token (before the first space) is a
 A `+ ` followed by a space starts an **include term**: a row is only shown when it matches every include term, so `web + running` requires both (`Labels env=prod + running` combines detail and plain includes too). Terms can be combined with `- ` exclusions (`europe + running - other`). A `+` without a following space is matched literally, like a substring.
 
 `Tab` completes and cycles detail paths: a partial path completes to the full one (`Servi` → `ServiceAccounts`), further presses rotate through every available path of the view, and text that matches no path gets the first path prepended. `Backtab` cycles backwards. `Enter` applies the filter and returns focus to the table (press `/` again to narrow further within the visible rows); `Esc` clears the filter.
+
+## Command line
+
+Running `lazycloud` with no arguments still opens the TUI. Passing a subcommand runs the same views as an agent-friendly CLI instead: it reads the same cache, refreshes with the same fetchers, and prints snake_case JSON by default.
+
+```
+lazycloud list <resource> [--project <id>] [--json|--yaml|--table|--ndjson] [--refresh]
+lazycloud get <resource> <selector...> [--json|--yaml|--table|--ndjson]
+lazycloud projects            # shortcut: lazycloud list projects
+lazycloud resources           # the valid resource names
+```
+
+Resources: `projects`, `vms`, `disks`, `clusters`, `networks`, `buckets`, `serviceaccounts` (`sa`), `iam`. Singular aliases work (`lazycloud get vm ...`).
+
+Selectors: `project` for projects, `project/zone/name` for VMs and disks, `project/name` for clusters, buckets, and VPCs, `project/region/name` for subnets, `project/email` for service accounts, `project/member/role` for IAM bindings (the role keeps its slashes).
+
+Examples:
+
+```
+$ lazycloud list vms --project my-prod --refresh
+[{"project_id":"my-prod","name":"api-01","zone":"europe-west1-b",...}]
+
+$ lazycloud get vm my-prod/europe-west1-b/api-01
+{...}
+
+$ lazycloud list clusters --project my-prod --table
+Name        Location      Status    Version  Node Pools   Created             Updated
+cluster-01  europe-west1  RUNNING   1.31     pool-1 (+1)  2026-01-01 00:00    2026-01-02 10:00
+```
+
+Behavior:
+
+- Output formats: `--json` (default, compact array), `--ndjson` (one object per line), `--yaml`, `--table` (the same columns as the TUI view).
+- Keys are snake_case; map keys like VM labels pass through untouched.
+- `--project <id>` scopes one project; without it (and without `LAZYCLOUD_PROJECT`) the list covers every project in the cache. `--refresh` re-fetches from GCP first, like the TUI's `u` key, and records the view update so the TUI's staleness display stays accurate.
+- stdout is data only; warnings and diagnostics go to stderr.
+- Exit codes: `0` ok (empty result is `[]`), `1` usage, `2` not found, `3` infrastructure (cache, auth, quota, API).
+
+Design rationale: [docs/agent-cli-proposal.md](docs/agent-cli-proposal.md).

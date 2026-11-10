@@ -1,5 +1,7 @@
 # lazycloud agent CLI proposal
 
+**Status: implemented (phase 1).** The `list`/`get`/`projects`/`resources` commands ship in `pkg/cli` with the eight flagship resources, all four output formats, `--project`/`LAZYCLOUD_PROJECT`, `--refresh`, and the exit-code contract described below. This document is the design rationale; run `lazycloud resources` for the live list and see the README's CLI section for usage.
+
 lazycloud is a TUI today. This document proposes a companion CLI surface, `lazycloud list <resource>`, exposing the same resource browsing as structured JSON (or table) output, designed for scripts and AI agents (Claude Code, Codex, Jcode, Gemini CLI, cagent) instead of humans at a keyboard.
 
 No TUI code is touched. The CLI reads the same cache and calls the same fetchers.
@@ -19,11 +21,13 @@ No TUI code is touched. The CLI reads the same cache and calls the same fetchers
 ## Proposed interface
 
 ```
-lazycloud list <resource> [--project <id>] [--json|--yaml|--table|--ndjson] [--refresh] [--filter <expr>]
+lazycloud list <resource> [--project <id>] [--json|--yaml|--table|--ndjson] [--refresh]
 lazycloud get <resource> <selector> [--project <id>] [--json|--yaml]
 lazycloud projects            # shortcut: list projects
 lazycloud resources           # list valid resource names
 ```
+
+`--filter` (below) is phase 2.
 
 Examples for an agent session:
 

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -97,22 +98,23 @@ func TestRunTUIErrorReportsAndExitsOne(t *testing.T) {
 }
 
 func TestRunVersionAtSecondPositionOnly(t *testing.T) {
-	// --version anywhere but args[1] is not a version query; the TUI
-	// starts. Same contract as the pre-CLI main.go.
+	// --version is only a version query at args[1]. With the CLI
+	// subcommands, "list --version" now fails as a usage error inside
+	// the list command instead of falling through to the TUI.
 	var stdout, stderr bytes.Buffer
 	started := false
 	startTUI := func() error { started = true; return nil }
 
 	code := run([]string{"lazycloud", "list", "--version"}, &stdout, &stderr, "v1.2.3", startTUI)
 
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1 for usage error", code)
 	}
-	if !started {
-		t.Error("--version after another arg must not be treated as the version flag")
+	if started {
+		t.Error("list is a CLI command, --version must not start the TUI")
 	}
-	if stdout.Len() != 0 {
-		t.Errorf("stdout = %q, want empty", stdout.String())
+	if stderr.Len() == 0 {
+		t.Error("usage error must print a diagnostic to stderr")
 	}
 }
 
@@ -130,5 +132,41 @@ func TestRunDevVersionDefault(t *testing.T) {
 	}
 	if got := stdout.String(); got != "dev\n" {
 		t.Errorf("stdout = %q, want %q", got, "dev\n")
+	}
+}
+
+func TestRunResourcesCommandHandled(t *testing.T) {
+	// A real command flows through cli.Execute and its exit code
+	// reaches the process; the TUI never starts.
+	var stdout, stderr bytes.Buffer
+	started := false
+	startTUI := func() error { started = true; return nil }
+
+	code := run([]string{"lazycloud", "resources"}, &stdout, &stderr, "v1.2.3", startTUI)
+
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout.String(), "projects") {
+		t.Errorf("resources = %q", stdout.String())
+	}
+	if started {
+		t.Error("resources is a CLI command, must not start the TUI")
+	}
+}
+
+func TestRunListExitCodePropagates(t *testing.T) {
+	// Exit codes must reach the process untouched: agents depend on
+	// 1/2/3 meaning usage/not-found/infra.
+	var stdout, stderr bytes.Buffer
+	startTUI := func() error { return nil }
+
+	code := run([]string{"lazycloud", "list", "dragons"}, &stdout, &stderr, "v1.2.3", startTUI)
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if stderr.Len() == 0 {
+		t.Error("usage error must print to stderr")
 	}
 }
