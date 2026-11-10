@@ -207,7 +207,8 @@ Behavior:
 
 - Output formats: `--json` (default, compact array), `--ndjson` (one object per line), `--yaml`, `--table` (the same columns as the TUI view).
 - Keys are snake_case; map keys like VM labels pass through untouched.
-- `--project <id>` scopes one project; without it (and without `LAZYCLOUD_PROJECT`) the list covers every project in the cache. `--refresh` re-fetches from GCP first, like the TUI's `u` key, and records the view update so the TUI's staleness display stays accurate.
+- `--project <id>` scopes one project; without it (and without `LAZYCLOUD_PROJECT`) the list covers every project in the cache. `--refresh` re-fetches from GCP first, like the TUI's `u` key, and records the view update so the TUI's staleness display stays accurate. The global `projects` resource rejects a project scope (`--project` or `LAZYCLOUD_PROJECT`) with a usage error instead of ignoring it.
+- Unscoped `--table` output prints the TUI's all-projects columns, including the trailing Project column; a scoped `--table` prints the per-project view's columns.
 - stdout is data only; warnings and diagnostics go to stderr.
 - Exit codes: `0` ok (empty result is `[]`), `1` usage, `2` not found, `3` infrastructure (cache, auth, quota, API).
 
