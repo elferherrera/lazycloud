@@ -54,6 +54,13 @@ type deps struct {
 	// saveViewUpdate records freshness for the TUI; the default is the
 	// opened cache's method, tests inject a fake.
 	saveViewUpdate func(cache *providers.Cache, view, projectID string) error
+	// skillsBaseDir resolves the skill install base dir; the default
+	// reads LAZYCLOUD_SKILLS_DIR then ~/.agents/skills, tests inject
+	// a fixed dir so no test touches the real home.
+	skillsBaseDir func() (string, error)
+	// installSkill writes one skill under a base dir; the default
+	// touches the filesystem, tests inject a fake for error paths.
+	installSkill func(base, name, content string) (string, error)
 }
 
 func defaultDeps() deps {
@@ -65,6 +72,8 @@ func defaultDeps() deps {
 		saveViewUpdate: func(cache *providers.Cache, view, projectID string) error {
 			return cache.SaveViewUpdate(view, projectID)
 		},
+		skillsBaseDir: defaultSkillsBaseDir,
+		installSkill:  installSkillFiles,
 	}
 }
 
@@ -137,7 +146,7 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 func isCLICommand(args []string) bool {
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
-		case "resources", "projects", "list", "get":
+		case "resources", "projects", "list", "get", "skill":
 			return true
 		case "--cloud":
 			i++
@@ -192,6 +201,8 @@ func ExecuteDeps(args []string, stdout, stderr io.Writer, d deps) int {
 		return ExecuteDeps(listArgs, stdout, stderr, d)
 	case "list", "get":
 		return runCommand(args, stdout, stderr, d)
+	case "skill":
+		return runSkill(args, stdout, stderr, d)
 	}
 	return NotHandled
 }
