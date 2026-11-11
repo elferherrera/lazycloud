@@ -232,9 +232,10 @@ func GCPInstanceGroupURL(projectID, location, name string) string {
 		url.PathEscape(location) + "/" + url.PathEscape(name) + "?project=" + url.QueryEscape(projectID)
 }
 
-func GCPReservationsURL(projectID string) string {
-	return "https://console.cloud.google.com/compute/reservations?project=" +
-		url.QueryEscape(projectID)
+func GCPReservationsURL(projectID, zone, name string) string {
+	return "https://console.cloud.google.com/compute/reservations/detail/" +
+		url.PathEscape(zone) + "/" + url.PathEscape(name) +
+		"?project=" + url.QueryEscape(projectID)
 }
 
 func GCPDiskURL(projectID, zone, name string) string {

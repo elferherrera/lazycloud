@@ -70,7 +70,7 @@ var reservationsView = viewDef{
 	},
 	samples: []any{providers.Reservation{}},
 	consoleURL: func(a *app, row int) string {
-		return providers.GCPReservationsURL(appState.ProjectID)
+		return providers.GCPReservationsURL(appState.ProjectID, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
 }
 
@@ -131,7 +131,7 @@ var reservationsAllView = viewDef{
 	},
 	samples: []any{providers.Reservation{}},
 	consoleURL: func(a *app, row int) string {
-		return providers.GCPReservationsURL(a.info.GetCell(row, 9).Text)
+		return providers.GCPReservationsURL(a.info.GetCell(row, 9).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 0).Text)
 	},
 }
 

@@ -181,8 +181,8 @@ func TestGCPInstanceGroupURL(t *testing.T) {
 }
 
 func TestGCPReservationsURL(t *testing.T) {
-	got := GCPReservationsURL("revolut-labs")
-	want := "https://console.cloud.google.com/compute/reservations?project=revolut-labs"
+	got := GCPReservationsURL("revolut-dev-dbs", "europe-west2-b", "db-rsv-ae-db-ai-engine-1-202608201141")
+	want := "https://console.cloud.google.com/compute/reservations/detail/europe-west2-b/db-rsv-ae-db-ai-engine-1-202608201141?project=revolut-dev-dbs"
 	if got != want {
 		t.Fatalf("GCPReservationsURL() =\n%s\nwant\n%s", got, want)
 	}
