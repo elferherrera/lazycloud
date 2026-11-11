@@ -216,3 +216,15 @@ func TestSkillContentCoversNebius(t *testing.T) {
 		}
 	}
 }
+
+// TestSkillDescriptionTriggersOnCloudSearch pins the trigger words: an
+// agent asked to search for resources in GCP, Google Cloud, or Nebius must
+// match the description, in the vocabularies users actually use.
+func TestSkillDescriptionTriggersOnCloudSearch(t *testing.T) {
+	c := skillContent()
+	for _, want := range []string{"search", "Google Cloud", "GCP", "Nebius", "cloud resources"} {
+		if !strings.Contains(c, want) {
+			t.Errorf("skill description missing trigger %q", want)
+		}
+	}
+}

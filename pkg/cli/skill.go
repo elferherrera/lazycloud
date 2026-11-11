@@ -98,7 +98,7 @@ func installSkillFiles(base, name, content string) (string, error) {
 func skillContent() string {
 	return `---
 name: lazycloud
-description: Investigate cloud resources through the lazycloud CLI. Use when asked to find, list, or analyse GCP or Nebius resources: VMs, disks, clusters, networks, buckets, service accounts, IAM.
+description: Investigate cloud resources through the lazycloud CLI. Use when asked to search, find, list, or analyse cloud resources in GCP, Google Cloud, or Nebius: VMs, disks, clusters, networks, buckets, service accounts, IAM.
 ---
 
 # lazycloud
