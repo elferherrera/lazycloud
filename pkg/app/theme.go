@@ -112,6 +112,58 @@ func themeColor(value, fallback string) string {
 	return value
 }
 
+// detectBackground is the seam tests use to pin the terminal background
+// instead of querying the real terminal.
+var detectBackground = providers.DetectBackground
+
+// resolveTheme returns the palette the UI should paint with. Explicit dark
+// mode and a dark terminal under system mode keep the configured palette, so
+// existing color customizations survive. Only an explicit light mode or a
+// detected light terminal background switches to the built-in light palette.
+func resolveTheme(config providers.Theme, background providers.BackgroundKind) providers.Theme {
+	switch providers.ParseThemeMode(config.Mode) {
+	case providers.ModeLight:
+		if palette, ok := palettes[providers.BackgroundLight]; ok {
+			return palette
+		}
+		return config
+	case providers.ModeDark:
+		return config
+	default:
+		if palette, ok := palettes[background]; ok {
+			return palette
+		}
+		return config
+	}
+}
+
+// palettes holds the built-in palettes keyed by terminal background kind.
+// A new palette is a data addition here, nothing else to touch.
+var palettes = map[providers.BackgroundKind]providers.Theme{
+	providers.BackgroundLight: {
+		Labels:              "olive",
+		Text:                "black",
+		Borders:             "black",
+		Title:               "black",
+		ShortcutLabels:      "olive",
+		ShortcutText:        "black",
+		StatusLabels:        "olive",
+		StatusText:          "black",
+		SummaryLabels:       "olive",
+		SummaryText:         "black",
+		DetailLabels:        "olive",
+		DetailText:          "black",
+		ActiveRowText:       "white",
+		ActiveRowBackground: "black",
+	},
+}
+
+// applyConfigTheme resolves the configured theme mode against the current
+// terminal background and applies the resulting palette.
+func applyConfigTheme(config providers.Theme) {
+	applyTheme(resolveTheme(config, detectBackground()))
+}
+
 func applyTheme(config providers.Theme) {
 	labels := themeColor(config.Labels, theme.labels)
 	text := themeColor(config.Text, theme.text)
@@ -150,6 +202,7 @@ func applyTheme(config providers.Theme) {
 
 func defaultThemeConfig() providers.Theme {
 	return providers.Theme{
+		Mode:                string(providers.ModeSystem),
 		Labels:              "yellow",
 		Text:                "white",
 		Borders:             "white",

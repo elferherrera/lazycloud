@@ -76,7 +76,7 @@ func bootApp() (*app, func(), error) {
 		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
-	applyTheme(config.Theme)
+	applyConfigTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
 	infobarSortOrder = config.Infobar.SortOrder

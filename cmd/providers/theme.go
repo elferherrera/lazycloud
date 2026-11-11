@@ -6,6 +6,7 @@ import (
 )
 
 type Theme struct {
+	Mode                string `json:"mode" yaml:"mode"`
 	Labels              string `json:"labels" yaml:"labels"`
 	Text                string `json:"text" yaml:"text"`
 	Borders             string `json:"borders" yaml:"borders"`
@@ -23,6 +24,31 @@ type Theme struct {
 	ActiveRowBackground string `json:"activeRowBackground" yaml:"activeRowBackground"`
 }
 
+// ThemeMode selects which palette lazycloud paints the UI with.
+type ThemeMode string
+
+const (
+	// ModeSystem resolves the palette from the terminal background.
+	ModeSystem ThemeMode = "system"
+	// ModeLight always uses the light palette.
+	ModeLight ThemeMode = "light"
+	// ModeDark always uses the dark palette.
+	ModeDark ThemeMode = "dark"
+)
+
+// ParseThemeMode maps a config value onto a ThemeMode. Unknown or empty
+// values resolve to system.
+func ParseThemeMode(value string) ThemeMode {
+	switch ThemeMode(value) {
+	case ModeLight:
+		return ModeLight
+	case ModeDark:
+		return ModeDark
+	default:
+		return ModeSystem
+	}
+}
+
 func themePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -32,6 +58,9 @@ func themePath() (string, error) {
 }
 
 func mergeTheme(theme, defaults Theme) Theme {
+	if theme.Mode == "" {
+		theme.Mode = defaults.Mode
+	}
 	if theme.Labels == "" {
 		theme.Labels = defaults.Labels
 	}

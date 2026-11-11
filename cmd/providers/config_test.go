@@ -226,6 +226,56 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 	}
 }
 
+func TestConfigThemeModeRoundtrip(t *testing.T) {
+	testConfigDir(t)
+	custom := Config{Theme: Theme{Mode: "light", Labels: "aqua"}}
+	if err := SaveConfig(custom); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{})
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if got.Theme.Mode != "light" {
+		t.Fatalf("LoadConfig() theme mode = %q, want light", got.Theme.Mode)
+	}
+}
+
+func TestConfigThemeModeDefaultsToSystem(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+	got, err := LoadConfig(Theme{Mode: "system"}, nil, AutoUpdate{}, Infobar{})
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if got.Theme.Mode != "system" {
+		t.Fatalf("LoadConfig() theme mode = %q, want system default", got.Theme.Mode)
+	}
+	if got.Theme.Labels != "aqua" {
+		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
+	}
+}
+
+func TestMergeThemeFillsEveryEmptyKey(t *testing.T) {
+	defaults := Theme{Mode: "system", Labels: "yellow", Text: "white"}
+	merged := mergeTheme(Theme{}, defaults)
+	if merged.Labels != "yellow" {
+		t.Errorf("mergeTheme() labels = %q, want default yellow", merged.Labels)
+	}
+}
+
+func TestThemePathRejectsMissingHome(t *testing.T) {
+	t.Setenv("HOME", "")
+	if _, err := themePath(); err == nil {
+		t.Error("themePath() with no home = nil error, want an error")
+	}
+}
+
 func TestConfigPreservesExplicitInfobar(t *testing.T) {
 	dir := testConfigDir(t)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
