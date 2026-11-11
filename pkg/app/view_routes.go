@@ -10,7 +10,7 @@ import (
 
 	mmaid "github.com/aaronsb/mmaid-go"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func routeRows(routes []providers.Route) [][]string {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func newFilterTestApp(t *testing.T) *app {
