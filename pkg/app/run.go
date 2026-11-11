@@ -55,6 +55,7 @@ func Run() error {
 	applyTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
+	infobarSortOrder = config.Infobar.SortOrder
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {

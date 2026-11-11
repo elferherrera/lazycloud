@@ -4,10 +4,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/elferherrera/lazycloud/cmd/providers"
 	"github.com/rivo/tview"
 )
 
 var infobarEnabled = true
+
+// infobarSortOrder mirrors the config's infobar sort_order between config
+// loads: "current" keeps the built-in order, "alphabetical" sorts by key.
+var infobarSortOrder = providers.InfobarSortCurrent
 
 var infobarGlobalOrder = []string{"u", "U", "y", "v", "g", "?", "q", ":", "/", "a", "space", "b", "F1"}
 
@@ -41,7 +46,9 @@ func infobarBudgetFor(screenWidth int) int {
 // infobarShortcuts picks the shortcuts shown in the infobar: panel-specific
 // keys first, then globals in a fixed order, deduped by label and fitted to
 // the budget. Dropped entries are reported so the caller can hint at them.
-func infobarShortcuts(budget int) (fitted []shortcut, dropped int) {
+// An alphabetical order flattens specific and global entries into one
+// label-sorted list instead.
+func infobarShortcuts(budget int, order string) (fitted []shortcut, dropped int) {
 	var specific, global []shortcut
 	for _, s := range shortcuts {
 		if s.key >= '0' && s.key <= '9' {
@@ -56,12 +63,20 @@ func infobarShortcuts(budget int) (fitted []shortcut, dropped int) {
 			specific = append(specific, s)
 		}
 	}
-	sort.SliceStable(global, func(i, j int) bool {
-		return infobarGlobalRank(global[i].label()) < infobarGlobalRank(global[j].label())
-	})
 	entries := make([]shortcut, 0, len(specific)+len(global))
-	entries = append(entries, specific...)
-	entries = append(entries, global...)
+	if order == providers.InfobarSortAlpha {
+		entries = append(entries, specific...)
+		entries = append(entries, global...)
+		sort.SliceStable(entries, func(i, j int) bool {
+			return entries[i].label() < entries[j].label()
+		})
+	} else {
+		sort.SliceStable(global, func(i, j int) bool {
+			return infobarGlobalRank(global[i].label()) < infobarGlobalRank(global[j].label())
+		})
+		entries = append(entries, specific...)
+		entries = append(entries, global...)
+	}
 	seen := make(map[string]bool, len(entries))
 	unique := make([]shortcut, 0, len(entries))
 	for _, s := range entries {
@@ -167,7 +182,7 @@ func (a *app) infobarWidth() int {
 }
 
 func populateInfobarPanel(view *tview.TextView, screenWidth int) {
-	entries, dropped := infobarShortcuts(infobarBudgetFor(screenWidth))
+	entries, dropped := infobarShortcuts(infobarBudgetFor(screenWidth), infobarSortOrder)
 	view.SetText(infobarLine(entries, dropped))
 }
 

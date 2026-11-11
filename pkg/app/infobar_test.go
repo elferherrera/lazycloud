@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/elferherrera/lazycloud/cmd/providers"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -12,13 +13,13 @@ import (
 // dropping the drop count tests here do not assert on.
 func infobarFittedAt(t *testing.T, budget int) []shortcut {
 	t.Helper()
-	fitted, _ := infobarShortcuts(budget)
+	fitted, _ := infobarShortcuts(budget, "")
 	return fitted
 }
 
 func TestInfobarShowsVisibleShortcutsPerView(t *testing.T) {
 	appState.ViewKind = viewProjects
-	projects, dropped := infobarShortcuts(infobarBudgetFor(200))
+	projects, dropped := infobarShortcuts(infobarBudgetFor(200), "")
 	if len(projects) == 0 {
 		t.Fatal("infobar shows no shortcuts in projects view")
 	}
@@ -46,7 +47,7 @@ func TestInfobarShowsVisibleShortcutsPerView(t *testing.T) {
 
 func TestInfobarShowsPanelShortcutsBeforeGlobals(t *testing.T) {
 	appState.ViewKind = viewClusters
-	entries, _ := infobarShortcuts(infobarBudgetFor(80))
+	entries, _ := infobarShortcuts(infobarBudgetFor(80), "")
 	if len(entries) == 0 {
 		t.Fatal("infobar shows no shortcuts in clusters view")
 	}
@@ -65,7 +66,7 @@ func TestInfobarShowsPanelShortcutsBeforeGlobals(t *testing.T) {
 
 	appState.ViewKind = viewRoutes
 	hasChart := false
-	chartEntries, _ := infobarShortcuts(infobarBudgetFor(80))
+	chartEntries, _ := infobarShortcuts(infobarBudgetFor(80), "")
 	for _, s := range chartEntries {
 		if s.label() == "c" && infobarDesc(s) == "chart" {
 			hasChart = true
@@ -111,7 +112,7 @@ func TestInfobarDedupKeepsFirstEntry(t *testing.T) {
 	duplicate := shortcut{key: 'q', desc: "duplicate quit"}
 	shortcuts = append(append([]shortcut(nil), shortcuts...), duplicate)
 
-	entries, _ := infobarShortcuts(200)
+	entries, _ := infobarShortcuts(200, "")
 	quitCount := 0
 	for _, s := range entries {
 		if s.label() == "q" {
@@ -140,17 +141,17 @@ func TestInfobarBudgetFollowsScreenWidth(t *testing.T) {
 
 func TestInfobarSkipsPairsOverBudget(t *testing.T) {
 	appState.ViewKind = viewProjects
-	if got, _ := infobarShortcuts(0); len(got) != 0 {
+	if got, _ := infobarShortcuts(0, ""); len(got) != 0 {
 		t.Fatalf("infobar with zero budget shows %d shortcuts, want 0", len(got))
 	}
-	if got, _ := infobarShortcuts(infobarBudgetFor(80)); len(got) == 0 {
+	if got, _ := infobarShortcuts(infobarBudgetFor(80), ""); len(got) == 0 {
 		t.Fatal("restored budget shows no shortcuts")
 	}
 }
 
 func TestInfobarReportsDroppedEntries(t *testing.T) {
 	appState.ViewKind = viewProjects
-	entries, dropped := infobarShortcuts(40)
+	entries, dropped := infobarShortcuts(40, "")
 	if len(entries) == 0 {
 		t.Fatal("40-char budget shows nothing at all")
 	}
@@ -331,6 +332,66 @@ func TestInfobarRenderMatchesCurrentView(t *testing.T) {
 	}
 	if workloads {
 		t.Error("vms infobar shows the clusters-only workloads shortcut")
+	}
+}
+
+func TestInfobarSortAlphabeticalOrdersByLabel(t *testing.T) {
+	appState.ViewKind = viewClusters
+	entries, _ := infobarShortcuts(200, providers.InfobarSortAlpha)
+	if len(entries) < 2 {
+		t.Fatal("not enough shortcuts to check alphabetical order")
+	}
+	for i := 1; i < len(entries); i++ {
+		if entries[i-1].label() > entries[i].label() {
+			t.Errorf("alphabetical infobar out of order: %q before %q", entries[i-1].label(), entries[i].label())
+		}
+	}
+}
+
+func TestInfobarSortCurrentKeepsPanelFirst(t *testing.T) {
+	appState.ViewKind = viewClusters
+	entries, _ := infobarShortcuts(200, providers.InfobarSortCurrent)
+	if len(entries) == 0 {
+		t.Fatal("infobar shows no shortcuts in clusters view")
+	}
+	if entries[0].label() != "w" && entries[0].label() != "n" {
+		t.Errorf("current infobar starts with %q, want a panel shortcut first", entries[0].label())
+	}
+}
+
+func TestInfobarSortUnknownFallsBackToCurrent(t *testing.T) {
+	appState.ViewKind = viewClusters
+	fallback, _ := infobarShortcuts(200, "bogus")
+	current, _ := infobarShortcuts(200, providers.InfobarSortCurrent)
+	if len(fallback) != len(current) {
+		t.Fatalf("fallback kept %d entries, current has %d", len(fallback), len(current))
+	}
+	for i := range fallback {
+		if fallback[i].label() != current[i].label() {
+			t.Fatalf("fallback order diverges from current at %d: %q vs %q", i, fallback[i].label(), current[i].label())
+		}
+	}
+}
+
+func TestInfobarSortOrderSetBeforeRender(t *testing.T) {
+	original := infobarSortOrder
+	t.Cleanup(func() { infobarSortOrder = original })
+
+	infobarSortOrder = providers.InfobarSortAlpha
+	view := newInfobarPanel()
+	populateInfobarPanel(view, 200)
+	text := view.GetText(true)
+	if text == "" {
+		t.Fatal("infobar renders empty with alphabetical order")
+	}
+	entries, _ := infobarShortcuts(200, providers.InfobarSortAlpha)
+	if len(entries) == 0 {
+		t.Fatal("no shortcuts fitted to compare against the render")
+	}
+	first := entries[0]
+	want := first.label() + " " + infobarDesc(first)
+	if !strings.HasPrefix(text, want) {
+		t.Errorf("rendered infobar starts with %q, want the alphabetically first pair %q", text[:len(want)], want)
 	}
 }
 

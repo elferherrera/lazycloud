@@ -254,7 +254,7 @@ func defaultAutoUpdateConfig() providers.AutoUpdate {
 }
 
 func defaultInfobarConfig() providers.Infobar {
-	return providers.Infobar{ShowShortcuts: true}
+	return providers.Infobar{ShowShortcuts: true, SortOrder: providers.InfobarSortCurrent}
 }
 
 func applyAutoUpdateConfig(autoUpdate providers.AutoUpdate) {

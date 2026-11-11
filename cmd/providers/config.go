@@ -15,8 +15,17 @@ type AutoUpdate struct {
 }
 
 type Infobar struct {
-	ShowShortcuts bool `yaml:"show_shortcuts"`
+	ShowShortcuts bool   `yaml:"show_shortcuts"`
+	SortOrder     string `yaml:"sort_order"`
 }
+
+const (
+	// InfobarSortCurrent keeps the built-in order: panel shortcuts first,
+	// then globals in infobarGlobalOrder.
+	InfobarSortCurrent = "current"
+	// InfobarSortAlpha sorts every entry by key label.
+	InfobarSortAlpha = "alphabetical"
+)
 
 type Config struct {
 	Theme      Theme             `yaml:"theme"`
@@ -91,6 +100,9 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	}
 	if sections.Infobar == nil {
 		config.Infobar = defaultInfobar
+		rewrote = true
+	} else if config.Infobar.SortOrder == "" {
+		config.Infobar.SortOrder = defaultInfobar.SortOrder
 		rewrote = true
 	}
 	if rewrote {

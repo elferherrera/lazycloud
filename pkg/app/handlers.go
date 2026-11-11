@@ -1134,6 +1134,7 @@ func (a *app) reloadConfig() {
 	applyTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	a.staleAutoRefresh = config.AutoUpdate.Enabled
+	infobarSortOrder = config.Infobar.SortOrder
 	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
 	a.applyThemeToWidgets()
 	a.statusText("[green]Config reloaded[-]")
