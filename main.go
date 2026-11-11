@@ -22,9 +22,12 @@ func main() {
 // main stays a three-line adapter over it.
 func run(args []string, stdout, stderr io.Writer, version string, startTUI func() error) int {
 	result := cli.Run(args, version)
-	cli.Print(result, stdout)
 	if result.Handled {
+		cli.Print(result, stdout)
 		return 0
+	}
+	if code := cli.Execute(args, stdout, stderr); code != cli.NotHandled {
+		return code
 	}
 	if err := startTUI(); err != nil {
 		fmt.Fprintln(stderr, "error running application:", err)
