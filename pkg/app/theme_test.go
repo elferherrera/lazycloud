@@ -221,24 +221,27 @@ func TestShortcutPanelColors(t *testing.T) {
 	theme = themeColors{labels: "yellow", text: "white", borders: "white", title: "white", shortcutLabels: "orange", shortcutText: "silver"}
 
 	appState.ViewKind = viewProjects
-	panel := newShortcutsPanel()
-	key, _, _ := panel.GetCell(0, 0).Style.Decompose()
-	if key != tcell.GetColor("orange") {
-		t.Errorf("shortcuts panel key color = %v, want orange", key)
+	text := helpText()
+	// The key column and section headers carry the shortcut label color,
+	// the descriptions the shortcut text color. The simulation screen
+	// flattens styles, so assert on the tags the TextView will parse.
+	header := "[orange]THIS VIEW[-]"
+	if !strings.Contains(text, header) {
+		t.Errorf("help text is missing section header tag %q", header)
 	}
-	desc, _, _ := panel.GetCell(0, 1).Style.Decompose()
-	if desc != tcell.GetColor("silver") {
-		t.Errorf("shortcuts panel desc color = %v, want silver", desc)
+	entry := "[orange]" + helpKeyColumn("u") + "[-][silver]update cache[-]"
+	if !strings.Contains(text, entry) {
+		t.Errorf("help text is missing key/desc tag %q", entry)
 	}
 
 	summary := newShortcutsSummaryPanel()
-	key, _, _ = summary.GetCell(0, 0).Style.Decompose()
-	if key != tcell.GetColor("orange") {
-		t.Errorf("shortcuts summary key color = %v, want orange", key)
+	sumKey, _, _ := summary.GetCell(0, 0).Style.Decompose()
+	if sumKey != tcell.GetColor("orange") {
+		t.Errorf("shortcuts summary key color = %v, want orange", sumKey)
 	}
-	desc, _, _ = summary.GetCell(0, 1).Style.Decompose()
-	if desc != tcell.GetColor("silver") {
-		t.Errorf("shortcuts summary desc color = %v, want silver", desc)
+	sumDesc, _, _ := summary.GetCell(0, 1).Style.Decompose()
+	if sumDesc != tcell.GetColor("silver") {
+		t.Errorf("shortcuts summary desc color = %v, want silver", sumDesc)
 	}
 }
 

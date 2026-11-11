@@ -14,7 +14,9 @@ import (
 // the input capture installed so GetFocus and key routing behave like the
 // real UI.
 func wireSearchApp(a *app) {
-	helpOverlay, helpRow := newHelpOverlay(a.shortcuts)
+	helpTextView := newHelpTextView()
+	helpOverlay, helpRow := newHelpOverlay(helpTextView)
+	a.helpText = helpTextView
 	a.helpRow = helpRow
 	a.buildMainLayout(helpOverlay)
 	a.tapp.SetRoot(a.pages, true)
@@ -558,7 +560,9 @@ func TestBuildMainLayoutHostsSearchColumnAndPages(t *testing.T) {
 	a := newFilterTestApp(t)
 	resetAppState()
 
-	helpOverlay, helpRow := newHelpOverlay(a.shortcuts)
+	helpTextView := newHelpTextView()
+	helpOverlay, helpRow := newHelpOverlay(helpTextView)
+	a.helpText = helpTextView
 	a.helpRow = helpRow
 	a.buildMainLayout(helpOverlay)
 

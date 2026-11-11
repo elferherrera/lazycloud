@@ -154,19 +154,27 @@ func TestVisibleShortcutsSortedByKeyLabel(t *testing.T) {
 
 func TestHelpPanelCommandsSorted(t *testing.T) {
 	appState.ViewKind = viewProjects
-	table := newShortcutsPanel()
+	text := helpText()
 	prev := ""
 	seen := 0
-	for r := 0; r < table.GetRowCount(); r++ {
-		key := table.GetCell(r, 0).Text
-		if !strings.HasPrefix(key, ":") {
+	for _, line := range strings.Split(text, "\n") {
+		// Lines carry color tags before the key column, so look for the
+		// command token anywhere in the line's fields.
+		var cmd string
+		for _, field := range strings.Fields(line) {
+			if strings.HasPrefix(field, ":") && len(field) > 1 {
+				cmd = field
+				break
+			}
+		}
+		if cmd == "" {
 			continue
 		}
 		seen++
-		if prev != "" && prev > key {
-			t.Fatalf("help panel commands not sorted: %q before %q", prev, key)
+		if prev != "" && prev > cmd {
+			t.Fatalf("help panel commands not sorted: %q before %q", prev, cmd)
 		}
-		prev = key
+		prev = cmd
 	}
 	if seen < 2 {
 		t.Fatalf("help panel shows %d command rows, want the : command list", seen)
@@ -186,8 +194,8 @@ func TestToggleHelpRestoresInfoFocus(t *testing.T) {
 	a.tapp.SetFocus(a.info)
 
 	a.toggleHelp()
-	if got := a.tapp.GetFocus(); got != a.shortcuts {
-		t.Fatalf("focus with help open = %T, want the help shortcuts table", got)
+	if got := a.tapp.GetFocus(); got != a.helpText {
+		t.Fatalf("focus with help open = %T, want the help text view", got)
 	}
 
 	a.toggleHelp()
@@ -207,8 +215,8 @@ func TestF1ShortcutOpensConfigFile(t *testing.T) {
 	if f1 == nil {
 		t.Fatal("no F1 shortcut registered")
 	}
-	if f1.desc != "open config file in editor" {
-		t.Fatalf("F1 shortcut desc = %q, want %q", f1.desc, "open config file in editor")
+	if f1.desc != "open settings" {
+		t.Fatalf("F1 shortcut desc = %q, want %q", f1.desc, "open settings")
 	}
 	if f1.run == nil {
 		t.Fatal("F1 shortcut has no run action")

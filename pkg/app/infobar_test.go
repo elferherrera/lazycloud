@@ -96,7 +96,7 @@ func TestInfobarShowsPanelShortcutsBeforeGlobals(t *testing.T) {
 	if len(entries) == 0 {
 		t.Fatal("infobar shows no shortcuts in clusters view")
 	}
-	if entries[0].label() != "w" && entries[0].label() != "n" {
+	if entries[0].label() != "w" && entries[0].label() != "n" && entries[0].label() != "s" {
 		t.Errorf("clusters infobar starts with %q, want a panel shortcut first", entries[0].label())
 	}
 	hasWorkloads := false

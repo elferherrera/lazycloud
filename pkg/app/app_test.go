@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -238,5 +239,15 @@ func TestApplyAutoUpdateConfig(t *testing.T) {
 	applyAutoUpdateConfig(providers.AutoUpdate{Enabled: true, ThresholdInMinutes: -3})
 	if staleViewAfter != 60*time.Minute {
 		t.Fatalf("negative threshold should fall back to 60m, got %v", staleViewAfter)
+	}
+}
+
+func TestInfoPanelHasColumnSeparator(t *testing.T) {
+	panel := newInfoPanel()
+	populateInfoPanel(panel, []string{"A", "B"}, [][]string{{"1", "2"}})
+	panel.SetRect(0, 0, 20, 3)
+	rendered := drawScreen(t, 20, 3, panel.Draw)
+	if !strings.Contains(rendered, "│") {
+		t.Errorf("info panel renders no column separator, want │ between columns")
 	}
 }

@@ -28,10 +28,10 @@ func newFilterTestApp(t *testing.T) *app {
 		pages:            tview.NewPages(),
 		infobar:          newInfobarPanel(),
 		cache:            cache,
-		shortcuts:        newShortcutsPanel(),
+		helpText:         newHelpTextView(),
 		shortcutsSummary: newShortcutsSummaryPanel(),
 	}
-	_, a.helpRow = newHelpOverlay(a.shortcuts)
+	_, a.helpRow = newHelpOverlay(a.helpText)
 	a.info.SetBorder(true)
 	a.cmd.SetDoneFunc(a.done)
 	a.cmd.SetChangedFunc(a.changed)

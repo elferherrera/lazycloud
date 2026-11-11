@@ -32,9 +32,10 @@ type app struct {
 	cache                *providers.Cache
 	logger               *providers.Logger
 	shortcuts            *tview.Table
+	shortcutsSummary     *tview.Table
+	helpText             *tview.TextView
 	helpRow              *tview.Flex
 	helpColumn           *tview.Flex
-	shortcutsSummary     *tview.Table
 	screen               tcell.Screen
 	uiRunning            atomic.Bool
 	infobarRenderedWidth int
@@ -63,6 +64,11 @@ type app struct {
 	searchOpen        atomic.Bool
 	cmdFocused        bool
 	statusShowing     bool
+
+	settingsForm   *tview.Form
+	settingsRow    *tview.Flex
+	settingsColumn *tview.Flex
+	settingsOpen   atomic.Bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -102,6 +108,7 @@ func newInfoPanel() *tview.Table {
 	return tview.NewTable().
 		SetBorders(false).
 		SetSelectable(true, false).
+		SetSeparator('│').
 		SetSelectedStyle(tcell.StyleDefault.
 			Foreground(theme.activeRowTextColor()).
 			Background(theme.activeRowBackgroundColor()))
@@ -244,11 +251,19 @@ func splitFilterQuery(query string) ([]string, []string) {
 }
 
 func (a *app) refreshShortcuts() {
-	count := populateShortcutsPanel(a.shortcuts)
-	a.helpRow.ResizeItem(a.shortcuts, count+2, 1)
+	a.helpText.SetText(helpText())
 }
 
 func (a *app) applyThemeToWidgets() {
+	if a.cmd == nil || a.info == nil {
+		// Widget-less apps appear in tests that exercise settings logic
+		// without a full UI; there is nothing to restyle.
+		return
+	}
+	if a.helpText != nil {
+		a.helpText.SetBorderColor(theme.borderColor())
+		a.helpText.SetTitleColor(theme.titleColor())
+	}
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetBorderColor(theme.borderColor())
 	a.info.SetSelectedStyle(tcell.StyleDefault.
@@ -256,8 +271,6 @@ func (a *app) applyThemeToWidgets() {
 		Background(theme.activeRowBackgroundColor()))
 	a.info.SetBorderColor(theme.borderColor())
 	a.info.SetTitleColor(theme.titleColor())
-	a.shortcuts.SetBorderColor(theme.borderColor())
-	a.shortcuts.SetTitleColor(theme.titleColor())
 	if a.searchInput != nil {
 		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 		a.searchResults.SetTitleColor(theme.titleColor())
