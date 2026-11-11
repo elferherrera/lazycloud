@@ -990,7 +990,7 @@ func (a *app) openConfigFile() {
 }
 
 func (a *app) reloadConfig() {
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
 		a.statusText("[red]Failed to reload config: [-]" + err.Error())
 		return
@@ -999,6 +999,7 @@ func (a *app) reloadConfig() {
 	applyTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	a.staleAutoRefresh = config.AutoUpdate.Enabled
+	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
 	a.applyThemeToWidgets()
 	a.statusText("[green]Config reloaded[-]")
 }

@@ -16,12 +16,14 @@ import (
 )
 
 type app struct {
-	tapp      *tview.Application
-	cmd       *tview.InputField
-	info      *tview.Table
-	summary   *tview.TextView
-	status    *tview.TextView
-	pages     *tview.Pages
+	tapp             *tview.Application
+	cmd              *tview.InputField
+	info             *tview.Table
+	summary          *tview.TextView
+	status           *tview.TextView
+	pages            *tview.Pages
+	infobar          *tview.Table
+	mainView         *tview.Flex
 	cache            *providers.Cache
 	logger           *providers.Logger
 	shortcuts        *tview.Table
@@ -211,6 +213,7 @@ func (a *app) applyThemeToWidgets() {
 	a.status.SetTextColor(theme.statusTextColor())
 	renderSummary(a.summary)
 	a.refreshShortcuts()
+	a.refreshInfobar()
 	populateShortcutsSummaryPanel(a.shortcutsSummary)
 	a.applyFilter()
 }
@@ -229,6 +232,7 @@ func (a *app) setView(kind viewKind) {
 	appState.ViewKind = kind
 	a.clearFilterStash()
 	a.refreshShortcuts()
+	a.refreshInfobar()
 	a.viewHeaders = def.headers
 	a.allRows = rows
 	a.setFilterBase(rows)
@@ -246,6 +250,10 @@ var staleViewAfter = 60 * time.Minute
 
 func defaultAutoUpdateConfig() providers.AutoUpdate {
 	return providers.AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+}
+
+func defaultInfobarConfig() providers.Infobar {
+	return providers.Infobar{ShowShortcuts: true}
 }
 
 func applyAutoUpdateConfig(autoUpdate providers.AutoUpdate) {
