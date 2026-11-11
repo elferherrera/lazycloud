@@ -117,7 +117,7 @@ Aliases: vm, disk, cluster, network, bucket, sa, serviceaccount, project.
 
 Selectors for get:
 - projects: project
-- vms, disks: project/zone/name
+- vms, disks: project/name or project/zone/name (the short form fits clouds without zones)
 - clusters, buckets, VPCs: project/name
 - subnets: project/region/name
 - service accounts: project/email
