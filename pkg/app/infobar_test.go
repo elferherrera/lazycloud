@@ -101,6 +101,71 @@ func TestInfobarHidesDuplicateLabels(t *testing.T) {
 	}
 }
 
+func TestInfobarDedupKeepsFirstEntry(t *testing.T) {
+	originalShortcuts := shortcuts
+	t.Cleanup(func() { shortcuts = originalShortcuts })
+
+	appState.ViewKind = viewProjects
+	duplicate := shortcut{key: 'q', desc: "duplicate quit"}
+	shortcuts = append(append([]shortcut(nil), shortcuts...), duplicate)
+
+	entries := infobarShortcuts()
+	quitCount := 0
+	for _, s := range entries {
+		if s.label() == "q" {
+			quitCount++
+		}
+	}
+	if quitCount != 1 {
+		t.Fatalf("infobar shows %d q entries, want the first only", quitCount)
+	}
+	if len(entries) > 0 && entries[len(entries)-1].desc == duplicate.desc {
+		t.Error("infobar kept the duplicate entry instead of the first")
+	}
+}
+
+func TestInfobarSkipsPairsOverBudget(t *testing.T) {
+	originalBudget := infobarBudget
+	t.Cleanup(func() { infobarBudget = originalBudget })
+
+	appState.ViewKind = viewProjects
+	infobarBudget = 0
+	if got := infobarShortcuts(); len(got) != 0 {
+		t.Fatalf("infobar with zero budget shows %d shortcuts, want 0", len(got))
+	}
+
+	infobarBudget = originalBudget
+	if got := infobarShortcuts(); len(got) == 0 {
+		t.Fatal("restored budget shows no shortcuts")
+	}
+}
+
+func TestInfobarGlobalRankKnownAndUnknown(t *testing.T) {
+	if got := infobarGlobalRank("u"); got != 0 {
+		t.Errorf("infobarGlobalRank(u) = %d, want 0", got)
+	}
+	if got := infobarGlobalRank("F1"); got != len(infobarGlobalOrder)-1 {
+		t.Errorf("infobarGlobalRank(F1) = %d, want %d", got, len(infobarGlobalOrder)-1)
+	}
+	if got := infobarGlobalRank("no-such-key"); got != len(infobarGlobalOrder) {
+		t.Errorf("infobarGlobalRank(unknown) = %d, want %d", got, len(infobarGlobalOrder))
+	}
+	if infobarGlobalRank("u") >= infobarGlobalRank("q") {
+		t.Error("infobarGlobalRank does not order u before q")
+	}
+}
+
+func TestInfobarDescFallsBackToFullDesc(t *testing.T) {
+	s := shortcut{key: 'z', desc: "brand new action with no short form"}
+	if got := infobarDesc(s); got != s.desc {
+		t.Fatalf("infobarDesc() = %q, want full desc %q", got, s.desc)
+	}
+	known := shortcut{key: 'u', desc: "update cache"}
+	if got := infobarDesc(known); got != "update" {
+		t.Fatalf("infobarDesc() = %q, want %q", got, "update")
+	}
+}
+
 func TestInfobarFitsCharBudget(t *testing.T) {
 	for _, kind := range []viewKind{viewProjects, viewVMs, viewClusters, viewWorkloads, viewRoutes, viewDNSRecords} {
 		appState.ViewKind = kind
@@ -148,6 +213,67 @@ func TestInfobarDisabledHidesPanel(t *testing.T) {
 	a.setInfobarEnabled(false)
 	if infobarEnabled {
 		t.Fatal("setInfobarEnabled(false) did not disable the infobar")
+	}
+}
+
+func TestSetInfobarEnabledNoOpWhenUnchanged(t *testing.T) {
+	original := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = original })
+
+	a := newFilterTestApp(t)
+	infobarEnabled = true
+	a.setInfobarEnabled(true)
+	if !infobarEnabled {
+		t.Fatal("setInfobarEnabled(true) flipped the state")
+	}
+	infobarEnabled = false
+	a.setInfobarEnabled(false)
+	if infobarEnabled {
+		t.Fatal("setInfobarEnabled(false) flipped the state")
+	}
+}
+
+func TestSetInfobarEnabledWithoutMainView(t *testing.T) {
+	original := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = original })
+
+	a := newFilterTestApp(t)
+	infobarEnabled = true
+	a.setInfobarEnabled(false)
+	if infobarEnabled {
+		t.Fatal("setInfobarEnabled(false) with nil mainView did not disable the infobar")
+	}
+	a.setInfobarEnabled(true)
+	if !infobarEnabled {
+		t.Fatal("setInfobarEnabled(true) with nil mainView did not enable the infobar")
+	}
+}
+
+func TestRefreshInfobarSkippedWhenDisabled(t *testing.T) {
+	original := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = original })
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	infobarEnabled = false
+	before := a.infobar.GetColumnCount()
+	a.setView(viewProjects)
+	if got := a.infobar.GetColumnCount(); got != before {
+		t.Fatalf("disabled infobar repopulated, columns %d -> %d", before, got)
+	}
+}
+
+func TestRefreshInfobarRepopulatesWhenEnabled(t *testing.T) {
+	original := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = original })
+
+	appState.ViewKind = viewClusters
+	a := newFilterTestApp(t)
+	infobarEnabled = true
+	a.infobar.Clear()
+	a.setView(viewClusters)
+	if a.infobar.GetColumnCount() == 0 {
+		t.Fatal("enabled infobar stayed empty after setView")
 	}
 }
 

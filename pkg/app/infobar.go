@@ -9,7 +9,7 @@ import (
 
 var infobarEnabled = true
 
-const infobarBudget = 160
+var infobarBudget = 160
 
 var infobarGlobalOrder = []string{"u", "U", "y", "v", "g", "?", "q", ":", "/", "a", "space", "b", "F1"}
 
@@ -136,7 +136,9 @@ func (a *app) setInfobarEnabled(enabled bool) {
 		return
 	}
 	infobarEnabled = enabled
-	a.mainView.ResizeItem(a.infobar, infobarHeight(enabled), 1)
+	if a.mainView != nil {
+		a.mainView.ResizeItem(a.infobar, infobarHeight(enabled), 1)
+	}
 	if enabled {
 		a.refreshInfobar()
 	}
