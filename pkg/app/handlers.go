@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -356,7 +357,9 @@ func populateShortcutsPanel(table *tview.Table) int {
 }
 
 // newHelpOverlay returns a centered floating window showing the shortcuts
-// table, meant to be stacked on top of the main view via Pages.
+// table, meant to be stacked on top of the main view via Pages. The width
+// starts at a comfortable default and is refit to the terminal on every
+// open via resizeHelpOverlay.
 func newHelpOverlay(help *tview.Table) (overlay, row *tview.Flex) {
 	help.SetBorder(true).SetTitle(" Help ")
 	row = tview.NewFlex().SetDirection(tview.FlexRow).
@@ -365,9 +368,24 @@ func newHelpOverlay(help *tview.Table) (overlay, row *tview.Flex) {
 		AddItem(nil, 0, 1, false)
 	overlay = tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(row, 60, 1, true).
+		AddItem(row, overlayWidth(0), 1, true).
 		AddItem(nil, 0, 1, false)
 	return overlay, row
+}
+
+// resizeHelpOverlay fits the help window to the current terminal so long
+// entries like ":templates" are not clipped on wide terminals.
+func (a *app) resizeHelpOverlay() {
+	if a.helpColumn == nil || a.screen == nil {
+		return
+	}
+	w, h := a.screen.Size()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	count := shortcutsRowCount()
+	a.helpRow.ResizeItem(a.shortcuts, overlayHeight(count, h), 1)
+	a.helpColumn.ResizeItem(a.helpRow, overlayWidth(w), 1)
 }
 
 func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
@@ -903,7 +921,91 @@ func (a *app) showRowDetails() {
 	a.tapp.SetFocus(text)
 }
 
+// humanizeDetailKey turns raw JSON field names into readable labels:
+// "ProjectID" -> "Project ID", "sizeGB" -> "Size GB", "external_ip" -> "External IP",
+// "HTTPSPort" -> "HTTPS Port". Acronym runs stay glued in uppercase.
+func humanizeDetailKey(key string) string {
+	var sb strings.Builder
+	words := splitDetailWords(key)
+	for i, w := range words {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		if isAcronymRun(w) {
+			sb.WriteString(strings.ToUpper(w))
+		} else {
+			runes := []rune(w)
+			runes[0] = unicode.ToUpper(runes[0])
+			sb.WriteRune(runes[0])
+			sb.WriteString(string(runes[1:]))
+		}
+	}
+	return sb.String()
+}
+
+// splitDetailWords splits camelCase, PascalCase, snake_case and kebab-case
+// keys into lowercase word runs.
+func splitDetailWords(key string) []string {
+	var words []string
+	var current strings.Builder
+	flush := func() {
+		if current.Len() > 0 {
+			words = append(words, current.String())
+			current.Reset()
+		}
+	}
+	for i, r := range key {
+		switch {
+		case r == '_' || r == '-' || r == ' ':
+			flush()
+		case unicode.IsUpper(r) && i > 0 && (unicode.IsLower(rune(key[i-1])) || (i+1 < len(key) && unicode.IsLower(rune(key[i+1])) && unicode.IsUpper(rune(key[i-1])))):
+			flush()
+			current.WriteRune(r)
+		default:
+			current.WriteRune(r)
+		}
+	}
+	flush()
+	return words
+}
+
+// isAcronymRun reports whether a word is an uppercase acronym run such as
+// "ip", "https", "gb" coming from "IP", "HTTPS", "GB" fields.
+func isAcronymRun(word string) bool {
+	switch strings.ToLower(word) {
+	case "ip", "id", "gb", "tcp", "udp", "http", "https", "url", "uri", "api", "ssh", "vpn", "vpc", "gcp", "gke", "asn", "bgp", "nat", "dns", "iam", "os", "cpu", "gpu", "mb", "tb", "kb":
+		return true
+	}
+	return false
+}
+
+// detailValueEmpty reports whether a JSON value carries no information and
+// should be skipped instead of rendered as an empty label.
+func detailValueEmpty(v any) bool {
+	switch val := v.(type) {
+	case nil:
+		return true
+	case string:
+		return val == ""
+	case []any:
+		return len(val) == 0
+	case map[string]any:
+		return len(val) == 0
+	case float64:
+		return val == 0
+	}
+	return false
+}
+
+// appendRowDetails renders the JSON view of a row as an indented key: value
+// tree. Keys are humanized, empty values are skipped, scalar slices join on
+// one line, and consecutive upper-level sections are separated by a blank
+// line so the modal reads in blocks instead of one long list.
 func appendRowDetails(sb *strings.Builder, data any, indent string) {
+	appendRowDetailsBlock(sb, data, indent, true)
+}
+
+func appendRowDetailsBlock(sb *strings.Builder, data any, indent string, topLevel bool) {
 	switch v := data.(type) {
 	case map[string]any:
 		keys := make([]string, 0, len(v))
@@ -912,22 +1014,55 @@ func appendRowDetails(sb *strings.Builder, data any, indent string) {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
+			if detailValueEmpty(v[k]) {
+				continue
+			}
 			switch v[k].(type) {
 			case map[string]any, []any:
-				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s:[-]\n", indent, k)
-				appendRowDetails(sb, v[k], indent+"  ")
+				if topLevel && sb.Len() > 0 {
+					sb.WriteByte('\n')
+				}
+				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s:[-]\n", indent, humanizeDetailKey(k))
+				appendRowDetailsBlock(sb, v[k], indent+"  ", false)
 			default:
-				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s: [-]%v\n", indent, k, v[k])
+				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%s: [-]%v\n", indent, humanizeDetailKey(k), v[k])
 			}
 		}
 	case []any:
-		for i, item := range v {
+		allScalar := true
+		for _, item := range v {
 			switch item.(type) {
 			case map[string]any, []any:
-				fmt.Fprintf(sb, "%s"+theme.detailLabelTag()+"%d:[-]\n", indent, i)
-				appendRowDetails(sb, item, indent+"  ")
+				allScalar = false
+			}
+		}
+		if allScalar {
+			parts := make([]string, 0, len(v))
+			for _, item := range v {
+				if detailValueEmpty(item) {
+					continue
+				}
+				parts = append(parts, fmt.Sprintf("%v", item))
+			}
+			if len(parts) > 0 {
+				fmt.Fprintf(sb, "%s%s\n", indent, strings.Join(parts, ", "))
+			}
+			return
+		}
+		for i, item := range v {
+			if detailValueEmpty(item) {
+				continue
+			}
+			label := "-"
+			if len(v) > 1 {
+				label = fmt.Sprintf("%d.", i+1)
+			}
+			switch item.(type) {
+			case map[string]any, []any:
+				fmt.Fprintf(sb, "%s%s\n", indent, label)
+				appendRowDetailsBlock(sb, item, indent+"  ", false)
 			default:
-				fmt.Fprintf(sb, "%s%v\n", indent, item)
+				fmt.Fprintf(sb, "%s%s %v\n", indent, label, item)
 			}
 		}
 	}
@@ -1010,6 +1145,8 @@ func (a *app) toggleHelp() {
 		a.tapp.SetFocus(a.info)
 		return
 	}
+	a.refreshShortcuts()
+	a.resizeHelpOverlay()
 	a.pages.ShowPage("help")
 }
 

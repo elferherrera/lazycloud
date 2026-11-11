@@ -88,6 +88,7 @@ func Run() error {
 	helpOverlay, helpRow := newHelpOverlay(shortcutsTable)
 	a.shortcuts = shortcutsTable
 	a.helpRow = helpRow
+	a.helpColumn = helpOverlay
 
 	shortcutsSummary := newShortcutsSummaryPanel()
 	a.shortcutsSummary = shortcutsSummary

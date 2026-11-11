@@ -82,7 +82,7 @@ func TestVMMatchesNodePool(t *testing.T) {
 }
 
 func TestAppendRowDetails(t *testing.T) {
-	data := `{"ProjectID":"p1","Interfaces":[{"InternalIP":"10.0.0.1"}],"Tags":["a","b"],"Empty":null}`
+	data := `{"ProjectID":"p1","Interfaces":[{"InternalIP":"10.0.0.1"}],"Tags":["a","b"],"Empty":null,"EmptyStr":""}`
 	var parsed any
 	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
 		t.Fatal(err)
@@ -91,18 +91,117 @@ func TestAppendRowDetails(t *testing.T) {
 	appendRowDetails(&sb, parsed, "")
 	got := sb.String()
 	for _, want := range []string{
-		"[yellow]ProjectID: [-]p1",
+		"[yellow]Project ID: [-]p1",
 		"[yellow]Interfaces:[-]",
-		"  [yellow]0:[-]",
-		"    [yellow]InternalIP: [-]10.0.0.1",
+		"[yellow]Internal IP: [-]10.0.0.1",
 		"[yellow]Tags:[-]",
-		"  a",
-		"  b",
-		"[yellow]Empty: [-]<nil>",
+		"  a, b",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("appendRowDetails() output missing %q:\n%s", want, got)
 		}
+	}
+	for _, banned := range []string{
+		"ProjectID",
+		"InternalIP",
+		"Empty",
+		"EmptyStr",
+		"<nil>",
+		"[yellow]0:[-]",
+	} {
+		if strings.Contains(got, banned) {
+			t.Errorf("appendRowDetails() output should not contain raw key %q:\n%s", banned, got)
+		}
+	}
+	if idxA, idxB := strings.Index(got, "Interfaces:"), strings.Index(got, "Tags:"); idxA > idxB {
+		t.Errorf("appendRowDetails() section order wrong, Interfaces after Tags:\n%s", got)
+	}
+}
+
+func TestAppendRowDetailsHumanizesKeys(t *testing.T) {
+	for key, want := range map[string]string{
+		"ProjectID":        "Project ID",
+		"sizeGB":           "Size GB",
+		"external_ip":      "External IP",
+		"instanceTemplate": "Instance Template",
+		"networkTags":      "Network Tags",
+		"simple":           "Simple",
+		"HTTPSPort":        "HTTPS Port",
+	} {
+		if got := humanizeDetailKey(key); got != want {
+			t.Errorf("humanizeDetailKey(%q) = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestAppendRowDetailsSkipsEmptyValues(t *testing.T) {
+	data := `{"Keep":"v","Nil":null,"Blank":"","Zero":0,"EmptyList":[],"EmptyMap":{}}`
+	var parsed any
+	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, parsed, "")
+	got := sb.String()
+	if !strings.Contains(got, "[yellow]Keep: [-]v") {
+		t.Errorf("appendRowDetails() dropped the non-empty value:\n%s", got)
+	}
+	for _, banned := range []string{"Nil", "Blank", "Zero", "EmptyList", "EmptyMap"} {
+		if strings.Contains(got, banned) {
+			t.Errorf("appendRowDetails() rendered empty value %q:\n%s", banned, got)
+		}
+	}
+}
+
+func TestAppendRowDetailsNumbersObjectLists(t *testing.T) {
+	data := `{"Disks":[{"Name":"d1"},{"Name":"d2"},{"Name":"d3"}]}`
+	var parsed any
+	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, parsed, "")
+	got := sb.String()
+	for _, want := range []string{"1.", "2.", "3."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("appendRowDetails() multi-item list missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestAppendRowDetailsSingleObjectListItemUsesDash(t *testing.T) {
+	data := `{"Disk":[{"Name":"d1"}]}`
+	var parsed any
+	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, parsed, "")
+	got := sb.String()
+	if !strings.Contains(got, "  -") {
+		t.Errorf("appendRowDetails() single item should use a dash bullet:\n%s", got)
+	}
+	if strings.Contains(got, "1.") {
+		t.Errorf("appendRowDetails() single item should not be numbered:\n%s", got)
+	}
+}
+
+func TestAppendRowDetailsSeparatesTopLevelSections(t *testing.T) {
+	data := `{"A":"1","Block":{"X":"2"},"B":"3"}`
+	var parsed any
+	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	var sb strings.Builder
+	appendRowDetails(&sb, parsed, "")
+	got := sb.String()
+	block := strings.Index(got, "Block:")
+	b := strings.Index(got, "[yellow]B: [-]3")
+	if block < 0 || b < 0 {
+		t.Fatalf("appendRowDetails() missing sections:\n%s", got)
+	}
+	if !strings.Contains(got, "\n\n") {
+		t.Errorf("appendRowDetails() top-level sections not separated by a blank line:\n%q", got)
 	}
 }
 

@@ -156,8 +156,8 @@ func TestDetailColors(t *testing.T) {
 	theme = themeColors{detailLabels: "orange"}
 
 	var sb strings.Builder
-	appendRowDetails(&sb, map[string]any{"a": 1}, "")
-	if got, want := sb.String(), "[orange]a: [-]1\n"; got != want {
+	appendRowDetails(&sb, map[string]any{"A": 1}, "")
+	if got, want := sb.String(), "[orange]A: [-]1\n"; got != want {
 		t.Errorf("appendRowDetails() = %q, want %q", got, want)
 	}
 

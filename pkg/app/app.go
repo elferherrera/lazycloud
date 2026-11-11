@@ -22,12 +22,13 @@ type app struct {
 	summary          *tview.TextView
 	status           *tview.TextView
 	pages            *tview.Pages
-	infobar          *tview.Table
+	infobar          *tview.TextView
 	mainView         *tview.Flex
 	cache            *providers.Cache
 	logger           *providers.Logger
 	shortcuts        *tview.Table
 	helpRow          *tview.Flex
+	helpColumn       *tview.Flex
 	shortcutsSummary *tview.Table
 	screen           tcell.Screen
 
