@@ -183,6 +183,7 @@ lazycloud list <resource> [--project <id>] [--json|--yaml|--table|--ndjson] [--r
 lazycloud get <resource> <selector...> [--json|--yaml|--table|--ndjson]
 lazycloud projects            # shortcut: lazycloud list projects
 lazycloud resources           # the valid resource names
+lazycloud --help              # the full CLI surface: subcommands, flags, resources, selectors
 ```
 
 Resources: `projects`, `vms`, `disks`, `clusters`, `networks`, `buckets`, `serviceaccounts` (`sa`), `iam`. Singular aliases work (`lazycloud get vm ...`).

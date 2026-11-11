@@ -46,6 +46,29 @@ func TestRunVersionFlagIgnoresExtraArgs(t *testing.T) {
 	}
 }
 
+func TestRunHelpFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	tuiStarted := false
+	startTUI := func() error { tuiStarted = true; return nil }
+
+	code := run([]string{"lazycloud", "--help"}, &stdout, &stderr, "v1.2.3", startTUI)
+
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	for _, want := range []string{"lazycloud list <resource>", "lazycloud get <resource>", "--project", "v1.2.3"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("help output missing %q:\n%s", want, stdout.String())
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+	if tuiStarted {
+		t.Error("TUI must not start for --help")
+	}
+}
+
 func TestRunDefaultStartsTUI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	started := false

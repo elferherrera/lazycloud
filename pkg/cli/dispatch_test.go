@@ -31,6 +31,7 @@ func TestExecuteNotHandled(t *testing.T) {
 		{"lazycloud"},
 		{"lazycloud", "not-a-command"},
 		{"lazycloud", "--version"},
+		{"lazycloud", "--help"},
 	} {
 		if code := ExecuteDeps(args, new(bytes.Buffer), new(bytes.Buffer), d); code != NotHandled {
 			t.Errorf("args %v = %d, want NotHandled", args, code)

@@ -46,8 +46,18 @@ func TestRunEmptyArgsRequestsTUI(t *testing.T) {
 	}
 }
 
+func TestRunHandlesHelpFlag(t *testing.T) {
+	r := Run([]string{"lazycloud", "--help"}, "v1.2.3")
+	if !r.Handled {
+		t.Fatal("Run must handle --help")
+	}
+	if r.Output != helpText("v1.2.3") {
+		t.Errorf("Output = %q, want the help text", r.Output)
+	}
+}
+
 func TestRunUnknownArgRequestsTUI(t *testing.T) {
-	for _, arg := range []string{"list", "-v", "--help", "--version=1", ""} {
+	for _, arg := range []string{"list", "-v", "--version=1", ""} {
 		r := Run([]string{"lazycloud", arg}, "v1.2.3")
 		if r.Handled {
 			t.Errorf("arg %q must request the TUI, preserving pre-CLI behavior", arg)
