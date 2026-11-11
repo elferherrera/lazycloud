@@ -128,7 +128,7 @@ func projectRow(v any) []string {
 }
 
 // getVM selects by project/zone/name, or project/name when the cloud
-// has no zones (an empty zone, which the cache matches).
+// has no zones (Nebius stores an empty zone, which the cache matches).
 func getVM(c *providers.Cache, sel []string) (any, error) {
 	switch len(sel) {
 	case 2:

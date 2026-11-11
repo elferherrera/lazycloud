@@ -14,7 +14,8 @@ import (
 // string means the default (gcp), so callers that never learned about
 // clouds keep their old behavior.
 const (
-	GCP = "gcp"
+	GCP    = "gcp"
+	Nebius = "nebius"
 )
 
 // EnvCloud is the environment variable that fills --cloud when the

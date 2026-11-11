@@ -1420,8 +1420,8 @@ func (c *Cache) ListAllVMs() ([]VM, error) {
 }
 
 // GetVM selects one VM by project, name, and zone when the cloud has
-// zones. An empty zone matches any zone, so zone-less clouds resolve
-// by project/name alone.
+// zones. An empty zone matches any zone, so zone-less clouds (Nebius)
+// resolve by project/name alone.
 func (c *Cache) GetVM(projectID, zone, name string) (*VM, error) {
 	where := " WHERE project_id = ? AND name = ?"
 	args := []any{projectID, name}

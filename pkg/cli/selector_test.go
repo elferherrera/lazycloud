@@ -9,7 +9,7 @@ import (
 )
 
 // seedVMs writes VMs with and without a zone into a temp cache, the
-// two shapes a zoned and a zone-less cloud refresh produce.
+// two shapes a GCP and a Nebius refresh produce.
 func seedVMs(t *testing.T) *providers.Cache {
 	t.Helper()
 	cache, err := providers.NewCacheAt(filepath.Join(t.TempDir(), "cache.db"))

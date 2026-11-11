@@ -4,9 +4,8 @@ import (
 	"github.com/elferherrera/lazycloud/pkg/providers/gcp"
 )
 
-// GCP is registered in its own file: adding a new cloud means one
-// Register call plus its provider package, with no edits anywhere
-// else in the codebase.
+// GCP registration mirrors nebius.go: one cloud, one registration
+// file, no edits anywhere else to add or change it.
 func gcpFetchers() Fetchers {
 	return Fetchers{
 		Projects:        gcp.ListGcloudProjects,

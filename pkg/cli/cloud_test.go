@@ -31,10 +31,10 @@ func TestSplitCloudFlagGCPExplicit(t *testing.T) {
 	}
 }
 
-func TestSplitCloudFlagEqualsForm(t *testing.T) {
-	cloud, rest, err := splitCloudFlag([]string{"lazycloud", "list", "vms", "--cloud=gcp"}, "")
-	if err != nil || cloud != cloudreg.GCP {
-		t.Fatalf("splitCloudFlag gcp = %q, %v", cloud, err)
+func TestSplitCloudFlagNebiusEqualsForm(t *testing.T) {
+	cloud, rest, err := splitCloudFlag([]string{"lazycloud", "list", "vms", "--cloud=nebius"}, "")
+	if err != nil || cloud != cloudreg.Nebius {
+		t.Fatalf("splitCloudFlag nebius = %q, %v", cloud, err)
 	}
 	if len(rest) != 3 || rest[2] != "vms" {
 		t.Fatalf("rest = %v", rest)
@@ -42,14 +42,14 @@ func TestSplitCloudFlagEqualsForm(t *testing.T) {
 }
 
 func TestSplitCloudFlagEnvDefault(t *testing.T) {
-	cloud, _, err := splitCloudFlag([]string{"lazycloud", "list", "vms"}, "gcp")
-	if err != nil || cloud != cloudreg.GCP {
+	cloud, _, err := splitCloudFlag([]string{"lazycloud", "list", "vms"}, "nebius")
+	if err != nil || cloud != cloudreg.Nebius {
 		t.Fatalf("env default = %q, %v", cloud, err)
 	}
 }
 
 func TestSplitCloudFlagFlagWinsOverEnv(t *testing.T) {
-	cloud, _, err := splitCloudFlag([]string{"lazycloud", "--cloud", "gcp", "list", "vms"}, "other")
+	cloud, _, err := splitCloudFlag([]string{"lazycloud", "--cloud", "gcp", "list", "vms"}, "nebius")
 	if err != nil || cloud != cloudreg.GCP {
 		t.Fatalf("flag should win = %q, %v", cloud, err)
 	}
@@ -83,8 +83,8 @@ func TestSplitCloudFlagMissingValue(t *testing.T) {
 }
 
 func TestSplitCloudFlagDoubleFlagWinsLast(t *testing.T) {
-	cloud, rest, err := splitCloudFlag([]string{"lazycloud", "--cloud=other", "--cloud", "gcp", "list"}, "")
-	if err != nil || cloud != cloudreg.GCP {
+	cloud, rest, err := splitCloudFlag([]string{"lazycloud", "--cloud", "gcp", "--cloud", "nebius", "list"}, "")
+	if err != nil || cloud != cloudreg.Nebius {
 		t.Fatalf("last flag should win = %q, %v", cloud, err)
 	}
 	if len(rest) != 2 {
@@ -190,18 +190,16 @@ func TestDefaultDepsForCloudGCP(t *testing.T) {
 	}
 }
 
-func TestDefaultDepsForCloudGCPExplicit(t *testing.T) {
-	d, err := defaultDepsForCloud(cloudreg.GCP)
+func TestDefaultDepsForCloudNebius(t *testing.T) {
+	d, err := defaultDepsForCloud(cloudreg.Nebius)
 	if err != nil {
-		t.Fatalf("defaultDepsForCloud gcp: %v", err)
+		t.Fatalf("defaultDepsForCloud nebius: %v", err)
 	}
 	if d.fetchers.Projects == nil || d.fetchers.VMs == nil || d.fetchers.IAMBindings == nil {
-		t.Fatal("gcp deps must wire fetchers")
+		t.Fatal("nebius deps must wire fetchers")
 	}
 }
 
-// TestDefaultDepsForCloudUnknown rejects a name outside the
-// registry before any wiring happens.
 func TestDefaultDepsForCloudUnknown(t *testing.T) {
 	_, err := defaultDepsForCloud("wat")
 	if err == nil {
@@ -209,29 +207,30 @@ func TestDefaultDepsForCloudUnknown(t *testing.T) {
 	}
 }
 
-// TestGCPFetchersShape pins the gcp adapter through the registry:
-// every Fetchers entry non-nil, pointing at the provider functions.
-func TestGCPFetchersShape(t *testing.T) {
-	p, err := cloudreg.Get(cloudreg.GCP)
+// TestNebiusFetchersShape pins the Nebius adapter through the
+// registry: every Fetchers entry non-nil, pointing at the provider
+// functions.
+func TestNebiusFetchersShape(t *testing.T) {
+	p, err := cloudreg.Get(cloudreg.Nebius)
 	if err != nil {
-		t.Fatalf("cloud.Get(gcp): %v", err)
+		t.Fatalf("cloud.Get(nebius): %v", err)
 	}
 	fields := reflect.ValueOf(p.Fetchers)
 	for i := 0; i < fields.NumField(); i++ {
 		if fields.Field(i).IsNil() {
-			t.Errorf("gcp fetchers field %s is nil", fields.Type().Field(i).Name)
+			t.Errorf("nebius fetchers field %s is nil", fields.Type().Field(i).Name)
 		}
 	}
 }
 
-// TestGCPListThroughInjectableDeps runs a full list invocation
-// through the real gcp wiring: defaultDepsForCloud picks the gcp
-// cache and fetcher set, then only the fetchers are swapped for
-// fakes, so the invocation opens cache.db under a temp HOME and
-// exercises the registry on top of it.
-func TestGCPListThroughInjectableDeps(t *testing.T) {
+// TestNebiusListThroughInjectableDeps runs a full list invocation
+// through the real nebius wiring: defaultDepsForCloud picks the
+// nebius cache and fetcher set, then only the fetchers are swapped
+// for fakes, so the invocation opens cache-nebius.db under a temp
+// HOME and exercises the cloud-agnostic registry on top of it.
+func TestNebiusListThroughInjectableDeps(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	d, err := defaultDepsForCloud(cloudreg.GCP)
+	d, err := defaultDepsForCloud(cloudreg.Nebius)
 	if err != nil {
 		t.Fatalf("defaultDepsForCloud: %v", err)
 	}
@@ -248,17 +247,17 @@ func TestGCPListThroughInjectableDeps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserHomeDir: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".config", "lazycloud", "cache.db")); err != nil {
-		t.Fatalf("list must go through the gcp cache: %v", err)
+	if _, err := os.Stat(filepath.Join(home, ".config", "lazycloud", "cache-nebius.db")); err != nil {
+		t.Fatalf("list must go through the nebius cache: %v", err)
 	}
 }
 
-// TestGCPTableHeadersRegistryOverride proves the registry override
-// reaches the printed table: listing projects through the gcp
-// registry entry prints the gcp projects columns.
-func TestGCPTableHeadersRegistryOverride(t *testing.T) {
+// TestNebiusTableHeadersRenamedColumn proves the registry override
+// reaches the printed table: the projects third column says Region,
+// not Project Number, because Nebius fills it with the region.
+func TestNebiusTableHeadersRenamedColumn(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	d, err := defaultDepsForCloud(cloudreg.GCP)
+	d, err := defaultDepsForCloud(cloudreg.Nebius)
 	if err != nil {
 		t.Fatalf("defaultDepsForCloud: %v", err)
 	}
@@ -269,17 +268,20 @@ func TestGCPTableHeadersRegistryOverride(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
 	}
 	out := stdout.String()
-	if !strings.Contains(out, "Project Number") {
-		t.Fatalf("table headers = %q, want Project Number column", out)
+	if !strings.Contains(out, "Region") {
+		t.Fatalf("table headers = %q, want Region column", out)
+	}
+	if strings.Contains(out, "Project Number") {
+		t.Fatalf("table headers = %q, Project Number must not appear", out)
 	}
 }
 
-// TestGCPRefreshThroughInjectableDeps proves the refresh path on
-// the real gcp wiring writes fetched data through cache.db and a
-// later cache-only list reads it back from the same cache.
-func TestGCPRefreshThroughInjectableDeps(t *testing.T) {
+// TestNebiusRefreshThroughInjectableDeps proves the refresh path on
+// the real nebius wiring writes fetched data through cache-nebius.db
+// and a later cache-only list reads it back from the same cache.
+func TestNebiusRefreshThroughInjectableDeps(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	d, err := defaultDepsForCloud(cloudreg.GCP)
+	d, err := defaultDepsForCloud(cloudreg.Nebius)
 	if err != nil {
 		t.Fatalf("defaultDepsForCloud: %v", err)
 	}
@@ -305,7 +307,7 @@ func TestGCPRefreshThroughInjectableDeps(t *testing.T) {
 // TestCloudFlagStrippedBeforeNouns proves --cloud survives stripping
 // without confusing the noun parser: parsing runs on the rest slice.
 func TestCloudFlagStrippedBeforeNouns(t *testing.T) {
-	_, rest, err := splitCloudFlag([]string{"lazycloud", "--cloud", "gcp", "list", "vms", "--json"}, "")
+	_, rest, err := splitCloudFlag([]string{"lazycloud", "--cloud", "nebius", "list", "vms", "--json"}, "")
 	if err != nil {
 		t.Fatalf("splitCloudFlag: %v", err)
 	}
