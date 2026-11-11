@@ -104,6 +104,7 @@ func init() {
 			{":disks", "show disks", viewDisks},
 			{":snapshots", "show disk snapshots", viewSnapshots},
 			{":iam", "show iam policy", viewIAM},
+			{":roles", "show custom roles", viewRoles},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -711,6 +712,12 @@ func (a *app) toggleAllProjects() {
 		} else {
 			a.setView(iamViewKind())
 		}
+	case viewRoles, viewRolesAll:
+		if !appState.AllProjects && appState.ProjectID == "" {
+			a.statusText("[red]No project selected[-]")
+		} else {
+			a.setView(rolesViewKind())
+		}
 	}
 }
 
@@ -903,19 +910,25 @@ func (a *app) showRowDetails() {
 		a.statusText("[red]Failed to load row details: [-]" + err.Error())
 		return
 	}
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		a.statusText("[red]Failed to parse row details: [-]" + err.Error())
-		return
+	var body string
+	if def.details != nil {
+		body = def.details(res)
+	} else {
+		jsonBytes, err := json.Marshal(res)
+		if err != nil {
+			a.statusText("[red]Failed to parse row details: [-]" + err.Error())
+			return
+		}
+		var data any
+		if err := json.Unmarshal(jsonBytes, &data); err != nil {
+			a.statusText("[red]Failed to parse row details: [-]" + err.Error())
+			return
+		}
+		var sb strings.Builder
+		appendRowDetails(&sb, data, "")
+		body = sb.String()
 	}
-	var data any
-	if err := json.Unmarshal(jsonBytes, &data); err != nil {
-		a.statusText("[red]Failed to parse row details: [-]" + err.Error())
-		return
-	}
-	var sb strings.Builder
-	appendRowDetails(&sb, data, "")
-	overlay, text := a.newOverlay(fmt.Sprintf(" %s details ", views[appState.ViewKind].title), sb.String())
+	overlay, text := a.newOverlay(fmt.Sprintf(" %s details ", views[appState.ViewKind].title), body)
 	a.pages.RemovePage("row")
 	a.pages.AddPage("row", overlay, true, true)
 	a.tapp.SetFocus(text)
@@ -1234,6 +1247,8 @@ var viewCommands = map[string]func(a *app){
 	"snapshot":                showSnapshots,
 	"iam":                     showIAM,
 	"policies":                showIAM,
+	"roles":                   showRoles,
+	"role":                    showRoles,
 	"projects":                func(a *app) { a.setView(viewProjects) },
 }
 

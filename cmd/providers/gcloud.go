@@ -2105,6 +2105,46 @@ func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
 	return bindings, nil
 }
 
+type CustomRole struct {
+	ProjectID   string
+	Name        string
+	Title       string
+	Description string
+	Stage       string
+	Permissions []string
+	Deleted     bool
+	UpdatedAt   string
+}
+
+func ListProjectCustomRoles(projectID string) ([]CustomRole, error) {
+	ctx := context.Background()
+
+	svc, err := iam.NewService(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var roles []CustomRole
+	err = svc.Projects.Roles.List("projects/" + projectID).View("FULL").Pages(ctx, func(page *iam.ListRolesResponse) error {
+		for _, r := range page.Roles {
+			roles = append(roles, CustomRole{
+				ProjectID:   projectID,
+				Name:        resourceShortName(r.Name, ""),
+				Title:       r.Title,
+				Description: r.Description,
+				Stage:       r.Stage,
+				Permissions: r.IncludedPermissions,
+				Deleted:     r.Deleted,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
 type BucketIAMBinding struct {
 	ProjectID string
 	Bucket    string

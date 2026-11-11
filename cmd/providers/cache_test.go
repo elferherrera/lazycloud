@@ -2272,6 +2272,53 @@ func TestSaveAndListBucketIAMBindings(t *testing.T) {
 	}
 }
 
+func TestSaveAndListCustomRoles(t *testing.T) {
+	cache := newTestCache(t)
+	roles := []CustomRole{
+		{ProjectID: "p1", Name: "role-b", Title: "Role B", Stage: "GA", Permissions: []string{"compute.instances.get"}},
+		{ProjectID: "p1", Name: "role-a", Title: "Role A", Stage: "BETA", Permissions: []string{"storage.objects.get", "storage.objects.list"}, Deleted: true},
+	}
+	if err := cache.SaveCustomRoles("p1", roles); err != nil {
+		t.Fatalf("SaveCustomRoles() error = %v", err)
+	}
+	if err := cache.SaveCustomRoles("p2", roles[:1]); err != nil {
+		t.Fatalf("SaveCustomRoles() other project error = %v", err)
+	}
+	if err := cache.SaveCustomRoles("p1", roles[:1]); err != nil {
+		t.Fatalf("SaveCustomRoles() replace error = %v", err)
+	}
+
+	got, err := cache.ListCustomRoles("p1")
+	if err != nil {
+		t.Fatalf("ListCustomRoles() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "role-b" {
+		t.Fatalf("ListCustomRoles() = %+v, want only role-b after replace", got)
+	}
+	if got[0].UpdatedAt == "" {
+		t.Fatal("ListCustomRoles()[0].UpdatedAt empty, want timestamp")
+	}
+
+	role, err := cache.GetCustomRole("p2", "role-b")
+	if err != nil || role == nil {
+		t.Fatalf("GetCustomRole() = %v, %v, want a role", role, err)
+	}
+	if len(role.Permissions) != 1 || role.Permissions[0] != "compute.instances.get" {
+		t.Fatalf("GetCustomRole().Permissions = %v, want one permission", role.Permissions)
+	}
+	if missing, err := cache.GetCustomRole("p1", "role-a"); err != nil || missing != nil {
+		t.Fatalf("GetCustomRole() for missing role = %v, %v, want nil", missing, err)
+	}
+
+	all, err := cache.ListAllCustomRoles()
+	if err != nil {
+		t.Fatalf("ListAllCustomRoles() error = %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("ListAllCustomRoles() len = %d, want 2", len(all))
+	}
+}
+
 func TestViewUpdates(t *testing.T) {
 	cache := newTestCache(t)
 

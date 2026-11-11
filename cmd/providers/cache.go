@@ -520,6 +520,20 @@ func NewCacheAt(path string) (*Cache, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS custom_roles (
+		project_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		title TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		stage TEXT NOT NULL DEFAULT '',
+		permissions TEXT NOT NULL DEFAULT '[]',
+		deleted INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project_id, name)
+	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS view_updates (
 		view TEXT NOT NULL,
 		project_id TEXT NOT NULL DEFAULT '',
@@ -1171,7 +1185,7 @@ func (c *Cache) DeleteProject(projectID string) (*Project, error) {
 		}
 		return nil, err
 	}
-	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "snapshots", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings", "bucket_iam_bindings"} {
+	for _, table := range []string{"projects", "ip_addresses", "networks", "routes", "firewall_rules", "service_accounts", "vms", "disks", "snapshots", "buckets", "forwarding_rules", "target_proxies", "url_maps", "backend_services", "clusters", "workloads", "cluster_nodes", "dns_zones", "dns_records", "cloud_routers", "vpn_gateways", "instance_groups", "reservations", "images", "instance_templates", "iam_bindings", "bucket_iam_bindings", "custom_roles"} {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE project_id = ?", projectID); err != nil {
 			return nil, err
 		}
@@ -3039,6 +3053,85 @@ func (c *Cache) GetBucketIAMBinding(projectID, bucket, member, role string) (*Bu
 		return nil, nil
 	}
 	return &bindings[0], nil
+}
+
+func (c *Cache) SaveCustomRoles(projectID string, roles []CustomRole) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	updatedAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := tx.Exec("DELETE FROM custom_roles WHERE project_id = ?", projectID); err != nil {
+		return err
+	}
+	for _, r := range roles {
+		permissions, err := json.Marshal(r.Permissions)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO custom_roles
+			(project_id, name, title, description, stage, permissions, deleted, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, r.Name, r.Title, r.Description, r.Stage, string(permissions), r.Deleted, updatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func scanCustomRoles(rows *sql.Rows) ([]CustomRole, error) {
+	defer rows.Close()
+	var roles []CustomRole
+	for rows.Next() {
+		var r CustomRole
+		var permissions string
+		var deleted int
+		if err := rows.Scan(&r.ProjectID, &r.Name, &r.Title, &r.Description, &r.Stage,
+			&permissions, &deleted, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(permissions), &r.Permissions); err != nil {
+			return nil, err
+		}
+		r.Deleted = deleted != 0
+		roles = append(roles, r)
+	}
+	return roles, rows.Err()
+}
+
+func (c *Cache) ListCustomRoles(projectID string) ([]CustomRole, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, title, description, stage, permissions, deleted, updated_at
+		FROM custom_roles WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return scanCustomRoles(rows)
+}
+
+func (c *Cache) ListAllCustomRoles() ([]CustomRole, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, title, description, stage, permissions, deleted, updated_at
+		FROM custom_roles ORDER BY project_id, name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanCustomRoles(rows)
+}
+
+func (c *Cache) GetCustomRole(projectID, name string) (*CustomRole, error) {
+	rows, err := c.db.Query(`SELECT project_id, name, title, description, stage, permissions, deleted, updated_at
+		FROM custom_roles WHERE project_id = ? AND name = ?`, projectID, name)
+	if err != nil {
+		return nil, err
+	}
+	roles, err := scanCustomRoles(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) == 0 {
+		return nil, nil
+	}
+	return &roles[0], nil
 }
 
 func (c *Cache) SeedViewUpdates(views []string) error {

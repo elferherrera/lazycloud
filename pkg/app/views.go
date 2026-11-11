@@ -13,6 +13,7 @@ type viewDef struct {
 	fetch      func(a *app, projectID string) (string, error)
 	selectRow  func(a *app, row, col int)
 	resource   func(a *app, row []string) (any, error)
+	details    func(res any) string
 	samples    []any
 	consoleURL func(a *app, row int) string
 }
@@ -72,6 +73,8 @@ func init() {
 		viewIAM:                  iamView,
 		viewIAMAll:               iamAllView,
 		viewBucketIAM:            bucketIAMView,
+		viewRoles:                rolesView,
+		viewRolesAll:             rolesAllView,
 	}
 }
 
@@ -98,6 +101,7 @@ var projectViewKinds = []viewKind{
 	viewDisks,
 	viewSnapshots,
 	viewIAM,
+	viewRoles,
 }
 
 // projectRefresh builds the refresh action shared by the per-project views:

@@ -263,3 +263,11 @@ func TestGCPBucketIAMURL(t *testing.T) {
 		t.Fatalf("GCPBucketIAMURL() =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestGCPCustomRoleURL(t *testing.T) {
+	got := GCPCustomRoleURL("revolut-labs", "my-role")
+	want := "https://console.cloud.google.com/iam-admin/roles/details/projects%3Crevolut-labs%3Croles%3Cmy-role;returnToCustom=true?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPCustomRoleURL() =\n%s\nwant\n%s", got, want)
+	}
+}

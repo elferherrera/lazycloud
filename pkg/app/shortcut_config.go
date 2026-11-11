@@ -69,6 +69,8 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 		return showSnapshots
 	case viewIAM:
 		return showIAM
+	case viewRoles:
+		return showRoles
 	case viewWorkloads:
 		return func(a *app) {
 			if appState.Cluster == "" {
@@ -104,7 +106,7 @@ func viewShortcutAction(kind viewKind) func(a *app) {
 	case viewIPsAll, viewNetworksAll, viewPeeringsAll, viewRoutesAll, viewFirewallsAll, viewAccountsAll,
 		viewVMsAll, viewBucketsAll, viewLBsAll, viewClustersAll, viewDNSZonesAll, viewCloudRoutersAll,
 		viewVPNsAll, viewPSCAll, viewInstanceGroupsAll, viewReservationsAll, viewImagesAll,
-		viewInstanceTemplatesAll, viewDisksAll, viewSnapshotsAll, viewIAMAll:
+		viewInstanceTemplatesAll, viewDisksAll, viewSnapshotsAll, viewIAMAll, viewRolesAll:
 		return func(a *app) { a.setView(kind) }
 	}
 	return nil

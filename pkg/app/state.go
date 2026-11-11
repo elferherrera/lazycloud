@@ -53,6 +53,8 @@ const (
 	viewIAM                  viewKind = "iam"
 	viewIAMAll               viewKind = "iam-all"
 	viewBucketIAM            viewKind = "bucket-iam"
+	viewRoles                viewKind = "roles"
+	viewRolesAll             viewKind = "roles-all"
 )
 
 type cmdMode string
@@ -236,4 +238,11 @@ func iamViewKind() viewKind {
 		return viewIAMAll
 	}
 	return viewIAM
+}
+
+func rolesViewKind() viewKind {
+	if appState.AllProjects {
+		return viewRolesAll
+	}
+	return viewRoles
 }

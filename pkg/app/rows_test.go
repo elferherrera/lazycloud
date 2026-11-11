@@ -692,6 +692,32 @@ func TestLBDetails(t *testing.T) {
 	}
 }
 
+func TestCustomRoleDetails(t *testing.T) {
+	role := &providers.CustomRole{
+		ProjectID:   "p1",
+		Name:        "role-a",
+		Title:       "Role A",
+		Stage:       "GA",
+		Description: "read-only viewer",
+		Permissions: []string{"compute.instances.get", "compute.instances.list"},
+	}
+	details := customRoleDetails(role)
+	for _, want := range []string{
+		"Name: [-]role-a",
+		"Title: [-]Role A",
+		"Stage: [-]GA",
+		"Description: [-]read-only viewer",
+		"Permissions: [-]\n  compute.instances.get\n  compute.instances.list\n",
+	} {
+		if !strings.Contains(details, want) {
+			t.Errorf("customRoleDetails() missing %q:\n%s", want, details)
+		}
+	}
+	if strings.Contains(details, "compute.instances.get,") {
+		t.Errorf("customRoleDetails() joined permissions on one line:\n%s", details)
+	}
+}
+
 func TestLBConsoleURL(t *testing.T) {
 	cache, err := providers.NewCacheAt(filepath.Join(t.TempDir(), "cache.db"))
 	if err != nil {

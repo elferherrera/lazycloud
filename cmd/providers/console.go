@@ -253,6 +253,12 @@ func GCPIAMURL(projectID string) string {
 	return "https://console.cloud.google.com/iam-admin/iam?project=" + url.QueryEscape(projectID)
 }
 
+func GCPCustomRoleURL(projectID, name string) string {
+	return "https://console.cloud.google.com/iam-admin/roles/details/projects%3C" +
+		url.PathEscape(projectID) + "%3Croles%3C" + url.PathEscape(name) +
+		";returnToCustom=true?project=" + url.QueryEscape(projectID)
+}
+
 func GCPImageURL(projectID, name string) string {
 	return "https://console.cloud.google.com/compute/imagesDetail/projects/" +
 		url.PathEscape(projectID) + "/global/images/" + url.PathEscape(name) +
