@@ -8,7 +8,9 @@ shared cache. Investigation notes below; decisions at the end.
 
 ## How lazycloud couples to GCP today
 
-Verified by direct read of the code (see also
+Verified by direct read of the code before the registry refactor
+(paths below are the pre-refactor `cmd/providers` layout, now
+`pkg/providers`; see also
 `~/.jcode/scratch/nebius-arch/architecture.md`):
 
 - `cmd/providers/gcloud.go` (2150 lines): 32 exported fetchers, all
@@ -101,6 +103,42 @@ firewalls) but are out of scope for the first PR.
    (view set, console URLs, cloud picker), keeping one concern
    per PR.
 
+## Authentication
+
+Nebius auth is the same split the GCP side uses, different
+mechanics. GCP: no auth code at all, the Google client
+libraries resolve Application Default Credentials implicitly and
+refresh tokens themselves (`gcloud auth application-default`
+once, then invisible). Nebius: explicit two-step token source,
+one token per fetch run.
+
+1. `NEBIUS_IAM_TOKEN` env var, if set, wins.
+2. Otherwise a one-shot `nebius iam get-access-token` (exec of the
+   nebius CLI). On a federation profile (auth.nebius.com, Okta
+   behind it) the CLI refreshes its cached token and returns in
+   under a second, no browser; the browser dance happens once at
+   `nebius profile create` and the CLI owns it from then on.
+3. The token is passed to gosdk as a static bearer credential
+   (`gosdk.WithCredentials(gosdk.IAMToken(token))`) and captured
+   once per client. Each fetch run builds a fresh client
+   (client-per-run, via `nebiusFetchers.open`), so a refresh
+   cycle pulls a new token each time; inside a run the token
+   never rotates.
+4. Cache reads need no token; only fetching does.
+5. Errors surface as the provider error with the pointer to
+   `nebius profile create` or `NEBIUS_IAM_TOKEN` (exit code 3,
+   infrastructure).
+
+Why CLI-mediated instead of doing the OAuth ourselves: gosdk
+v0.2.87 ships a native federation flow (browser callback server,
+PKCE, authorize/token endpoints in `auth/federation/`) plus
+rotating credential interfaces (`CustomTokener`), so lazycloud
+could own the browser dance and refresh itself if the CLI
+dependency ever needs to go. Deliberately not done now: the CLI
+profile is the source of truth for federation config (endpoint,
+federation id), keeping PR #9 small and mirroring how the GCP
+side treats `gcloud` as its auth entry.
+
 ## Resource shapes verified live
 
 Tenant/project/instance/disk/cluster/node-group/network/subnet/
@@ -126,12 +164,16 @@ sampled from the real tenant on 2026-11-10 with the nebius CLI;
 
 (decisions applied above)
 
-- `cmd/providers/nebius.go`: Nebius fetchers behind the same
+- `pkg/providers/nebius/nebius.go`: Nebius fetchers behind the same
   function signatures as the GCP ones, plus Nebius flavor structs
   where the GCP struct semantics do not fit (likely VM, Network,
   IAMBinding).
-- `cmd/providers/cache.go`: chosen cache layout change.
-- `pkg/cli`: `--cloud` flag wiring into deps + registry selection.
+- `pkg/providers/cache.go`: chosen cache layout change.
+- `pkg/cloud`: provider registry. One `Provider` entry per cloud
+  (name, `Fetchers`, cache constructor); `pkg/cli` keeps only the
+  `--cloud` flag grammar and resolves everything through the
+  registry, so adding AWS later is one registration file with no
+  edits elsewhere.
 - `pkg/app`: cloud switch in run/app, same view set for Nebius
   where mapping exists, GCP-only views hidden when Nebius is active.
 - Tests: fake Nebius CLI/server responses, 100% coverage of new
@@ -140,12 +182,46 @@ sampled from the real tenant on 2026-11-10 with the nebius CLI;
 Once decisions land, implementation begins on this branch
 (`nebius-support`, stacked on `agent-cli-proposal` PR #8 head).
 
+## Layout after the registry refactor
+
+`pkg/providers` keeps the shared model structs and the cache.
+Each cloud lives in its own adapter package: `pkg/providers/gcp`,
+`pkg/providers/nebius` (package name carries the cloud, so
+`nebius.ListVMs`, no `ListNebius` prefix). `pkg/cloud` is the
+registry (one registration file per cloud), `pkg/cli` holds the
+--cloud grammar and the noun registry, `pkg/app` imports the gcp
+adapter for its GCP-only views until the TUI cloud switch (PR #10).
+Adding a cloud: shared model untouched, one adapter package, one
+registration file.
+
+Schema caveats verified for the next cloud (read at cache.go HEAD):
+
+- `vms.zone` and `disks.zone` sit in the PK with NOT NULL. A zoneless
+  cloud already works through the empty string (Nebius proves it), but
+  a cloud whose natural key is name + region + lifecycle state, not
+  name + zone, would fight the PK.
+- The networks table carries GCP vocabulary (`routing_mode`,
+  `auto_create_subnets`, `private_ip_google_access`, `mtu`, `purpose`).
+  A VPC-shaped cloud leaves these empty strings, harmless but
+  GCP-shaped; a mapper zeroes them like Nebius does.
+- `projects.project_number` is NOT NULL with no GCP meaning. Nebius
+  carries the region there with a renamed column header; a cloud with
+  neither number nor region needs a dummy value or a schema change.
+- DDL runs on every open, all `CREATE TABLE IF NOT EXISTS`, and each
+  cloud gets its own db file, so per-cloud tables or a wider schema
+  cost nothing today. Migration relies on ad-hoc `ensureColumn`, fine
+  while files stay per-cloud.
+
+None of these block a third cloud; they mark the shared schema as
+GCP-shaped optional, not cloud-neutral.
+
 ## Status (2026-11-10, PR #9)
 
-Implemented: provider (`cmd/providers/nebius.go`), per-cloud
+Implemented: provider (`pkg/providers/nebius/nebius.go`), per-cloud
 cache (`cache-nebius.db`), `--cloud` flag + `LAZYCLOUD_CLOUD` env
-(`pkg/cli/dispatch.go`), tests with fake API injection
-(`cmd/providers/nebius_test.go`, `pkg/cli/cloud_test.go`),
+(registry in `pkg/cloud`, grammar in `pkg/cli/dispatch.go`), tests
+with fake API injection
+(`pkg/providers/nebius/nebius_test.go`, `pkg/cli/cloud_test.go`),
 README CLI section. PR #9 scope ends here; TUI support remains
 PR #10.
 
