@@ -61,8 +61,9 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 	if err != nil {
 		t.Fatalf("LoadConfig() on missing file error = %v", err)
 	}
@@ -96,8 +97,9 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -133,11 +135,12 @@ func TestConfigRoundtrip(t *testing.T) {
 		Theme:      Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", ActiveRowText: "lime", ActiveRowBackground: "teal"},
 		Shortcuts:  map[string]string{"1": "clusters", "5": "ips"},
 		AutoUpdate: AutoUpdate{Enabled: false, ThresholdInMinutes: 30},
+		Infobar:    Infobar{ShowShortcuts: false},
 	}
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
-	got, err := LoadConfig(Theme{}, nil, AutoUpdate{})
+	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -149,6 +152,9 @@ func TestConfigRoundtrip(t *testing.T) {
 	}
 	if got.AutoUpdate != custom.AutoUpdate {
 		t.Fatalf("LoadConfig() autoupdate = %+v, want saved %+v", got.AutoUpdate, custom.AutoUpdate)
+	}
+	if got.Infobar != custom.Infobar {
+		t.Fatalf("LoadConfig() infobar = %+v, want saved %+v", got.Infobar, custom.Infobar)
 	}
 }
 
@@ -165,8 +171,9 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -203,8 +210,9 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 	defaultTheme := Theme{}
 	defaultShortcuts := map[string]string{}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -215,5 +223,34 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 	onDisk := readConfigFile(t, dir)
 	if onDisk.AutoUpdate != want {
 		t.Fatalf("config file autoupdate = %+v, want preserved %+v", onDisk.AutoUpdate, want)
+	}
+}
+
+func TestConfigPreservesExplicitInfobar(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	existing := "theme:\n  labels: aqua\nshortcuts:\n  1: vms\ninfobar:\n  show_shortcuts: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	defaultTheme := Theme{}
+	defaultShortcuts := map[string]string{}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
+
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	want := Infobar{ShowShortcuts: false}
+	if got.Infobar != want {
+		t.Fatalf("LoadConfig() infobar = %+v, want preserved %+v", got.Infobar, want)
+	}
+	onDisk := readConfigFile(t, dir)
+	if onDisk.Infobar != want {
+		t.Fatalf("config file infobar = %+v, want preserved %+v", onDisk.Infobar, want)
 	}
 }

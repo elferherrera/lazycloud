@@ -14,10 +14,15 @@ type AutoUpdate struct {
 	ThresholdInMinutes int  `yaml:"threshold_in_minutes"`
 }
 
+type Infobar struct {
+	ShowShortcuts bool `yaml:"show_shortcuts"`
+}
+
 type Config struct {
 	Theme      Theme             `yaml:"theme"`
 	Shortcuts  map[string]string `yaml:"shortcuts"`
 	AutoUpdate AutoUpdate        `yaml:"autoupdate"`
+	Infobar    Infobar           `yaml:"infobar"`
 }
 
 func ConfigFilePath() (string, error) {
@@ -43,7 +48,7 @@ func SaveConfig(config Config) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate) (Config, error) {
+func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar) (Config, error) {
 	path, err := ConfigFilePath()
 	if err != nil {
 		return Config{}, err
@@ -53,7 +58,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		if !os.IsNotExist(err) {
 			return Config{}, err
 		}
-		config, err := legacyConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate)
+		config, err := legacyConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 		if err != nil {
 			return Config{}, err
 		}
@@ -69,6 +74,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	}
 	var sections struct {
 		AutoUpdate *AutoUpdate `yaml:"autoupdate"`
+		Infobar    *Infobar    `yaml:"infobar"`
 	}
 	if err := yaml.Unmarshal(data, &sections); err != nil {
 		return Config{}, err
@@ -83,14 +89,18 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		config.AutoUpdate = defaultAutoUpdate
 		rewrote = true
 	}
+	if sections.Infobar == nil {
+		config.Infobar = defaultInfobar
+		rewrote = true
+	}
 	if rewrote {
 		_ = SaveConfig(config)
 	}
 	return config, nil
 }
 
-func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate) (Config, error) {
-	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate}
+func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar) (Config, error) {
+	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate, Infobar: defaultInfobar}
 	themePath, err := themePath()
 	if err != nil {
 		return Config{}, err

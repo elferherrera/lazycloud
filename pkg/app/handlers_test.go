@@ -272,6 +272,48 @@ func TestReloadConfigAppliesEditedValues(t *testing.T) {
 	}
 }
 
+func TestReloadConfigAppliesInfobarSetting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "lazycloud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	configYaml := "theme:\n  labels: orange\ninfobar:\n  show_shortcuts: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	originalInfobar := infobarEnabled
+	originalTheme := theme
+	originalShortcuts := shortcuts
+	t.Cleanup(func() {
+		infobarEnabled = originalInfobar
+		theme = originalTheme
+		shortcuts = originalShortcuts
+	})
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	infobarEnabled = true
+	a.reloadConfig()
+	if infobarEnabled {
+		t.Fatal("reloadConfig() with show_shortcuts: false left the infobar enabled")
+	}
+
+	configYaml = "theme:\n  labels: orange\ninfobar:\n  show_shortcuts: true\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("rewriting config file: %v", err)
+	}
+	a.reloadConfig()
+	if !infobarEnabled {
+		t.Fatal("reloadConfig() with show_shortcuts: true left the infobar disabled")
+	}
+	if got := a.status.GetText(false); !strings.Contains(got, "Config reloaded") {
+		t.Errorf("reloadConfig() status = %q, want Config reloaded", got)
+	}
+}
+
 func TestReloadConfigKeepsValuesOnBrokenFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

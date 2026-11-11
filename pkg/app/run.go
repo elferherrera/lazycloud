@@ -47,13 +47,14 @@ func Run() error {
 	}
 	defer logger.Close()
 
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
 	applyTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
+	infobarEnabled = config.Infobar.ShowShortcuts
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
@@ -74,6 +75,7 @@ func Run() error {
 		summary:          newSummaryPanel(),
 		status:           tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.statusTextColor()),
 		pages:            tview.NewPages(),
+		infobar:          newInfobarPanel(),
 		cache:            cache,
 		logger:           logger,
 		autoFetched:      map[string]bool{},
@@ -97,7 +99,9 @@ func Run() error {
 		AddItem(summary, 4, 1, false).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
+		AddItem(a.infobar, infobarHeight(infobarEnabled), 1, false).
 		AddItem(a.status, 1, 1, false)
+	a.mainView = mainView
 
 	a.pages.AddPage("main", mainView, true, true)
 	a.pages.AddPage("help", helpOverlay, true, false)

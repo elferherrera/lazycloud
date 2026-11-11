@@ -26,6 +26,7 @@ func newFilterTestApp(t *testing.T) *app {
 		summary:          newSummaryPanel(),
 		status:           tview.NewTextView().SetDynamicColors(true),
 		pages:            tview.NewPages(),
+		infobar:          newInfobarPanel(),
 		cache:            cache,
 		shortcuts:        newShortcutsPanel(),
 		shortcutsSummary: newShortcutsSummaryPanel(),
