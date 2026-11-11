@@ -37,15 +37,15 @@ const (
 )
 
 // ParseThemeMode maps a config value onto a ThemeMode. Unknown or empty
-// values resolve to system.
+// values resolve to dark, the safe default for a TUI on an unknown terminal.
 func ParseThemeMode(value string) ThemeMode {
 	switch ThemeMode(value) {
 	case ModeLight:
 		return ModeLight
-	case ModeDark:
-		return ModeDark
-	default:
+	case ModeSystem:
 		return ModeSystem
+	default:
+		return ModeDark
 	}
 }
 

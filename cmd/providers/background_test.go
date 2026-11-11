@@ -17,9 +17,9 @@ func TestParseThemeMode(t *testing.T) {
 		{"system", ModeSystem},
 		{"light", ModeLight},
 		{"dark", ModeDark},
-		{"", ModeSystem},
-		{"nonsense", ModeSystem},
-		{"SYSTEM", ModeSystem},
+		{"", ModeDark},
+		{"nonsense", ModeDark},
+		{"SYSTEM", ModeDark},
 	}
 	for _, tc := range cases {
 		if got := ParseThemeMode(tc.value); got != tc.want {

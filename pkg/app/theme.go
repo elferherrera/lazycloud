@@ -202,7 +202,7 @@ func applyTheme(config providers.Theme) {
 
 func defaultThemeConfig() providers.Theme {
 	return providers.Theme{
-		Mode:                string(providers.ModeSystem),
+		Mode:                string(providers.ModeDark),
 		Labels:              "yellow",
 		Text:                "white",
 		Borders:             "white",
