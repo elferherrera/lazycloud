@@ -6,9 +6,18 @@ Requires Go 1.27+ and an authenticated `gcloud` CLI. The workloads view addition
 
 ## Installation
 
-### mise (recommended)
+### Homebrew (recommended)
 
-Install [mise](https://mise.jdx.dev/installing-mise.html), with its shims directory on your `PATH`, then:
+On macOS or Linux with [Homebrew](https://brew.sh):
+
+```sh
+brew tap elferherrera/tap https://github.com/elferherrera/homebrew-tap
+brew install elferherrera/tap/lazycloud
+```
+
+The formula covers macOS (Apple Silicon and Intel) and Linux x86_64, pulls the same release binaries as `go install`, and `brew upgrade` picks up new versions: a `v*` tag push builds and tests all platforms, publishes the tarballs with `.sha256` sidecars as a GitHub release, and regenerates the formula in the tap from those sidecars.
+
+### mise
 
 ```sh
 mise use -g go:github.com/elferherrera/lazycloud
@@ -21,6 +30,10 @@ go install github.com/elferherrera/lazycloud@latest
 ```
 
 This puts the binary in `$(go env GOPATH)/bin`, so make sure that directory is on your `PATH`.
+
+### Prebuilt binaries
+
+Each release ships `lazycloud-darwin-arm64.tar.gz`, `lazycloud-darwin-x86_64.tar.gz` and `lazycloud-linux-x86_64.tar.gz` with `.sha256` sidecars on the [releases page](https://github.com/elferherrera/lazycloud/releases); unpack and put `lazycloud` on your `PATH`.
 
 ## Development
 
