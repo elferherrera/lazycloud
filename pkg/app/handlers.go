@@ -108,7 +108,10 @@ func init() {
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
-		{key: ' ', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
+		{key: ' ', desc: "show projects", run: func(a *app) {
+			a.setView(viewProjects)
+			a.startFilter()
+		}},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
 		{key: '3', desc: "show buckets", run: func(a *app) { showBuckets(a) }},
