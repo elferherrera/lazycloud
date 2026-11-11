@@ -99,7 +99,7 @@ func Run() error {
 		AddItem(summary, 4, 1, false).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
-		AddItem(a.infobar, infobarHeight(infobarEnabled), 1, false).
+		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
 		AddItem(a.status, 1, 1, false)
 	a.mainView = mainView
 
