@@ -2,21 +2,25 @@ package app
 
 import (
 	"sort"
+	"strings"
 
-	"github.com/gdamore/tcell/v2"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 	"github.com/rivo/tview"
 )
 
 var infobarEnabled = true
 
-var infobarBudget = 160
+// infobarSortOrder mirrors the config's infobar sort_order between config
+// loads: "current" keeps the built-in order, "alphabetical" sorts by key.
+var infobarSortOrder = providers.InfobarSortCurrent
 
 var infobarGlobalOrder = []string{"u", "U", "y", "v", "g", "?", "q", ":", "/", "a", "space", "b", "F1"}
 
-func newInfobarPanel() *tview.Table {
-	table := tview.NewTable().SetBorders(false).SetSelectable(false, false)
-	populateInfobarPanel(table)
-	return table
+func newInfobarPanel() *tview.TextView {
+	return tview.NewTextView().
+		SetDynamicColors(true).
+		SetWrap(false).
+		SetTextColor(theme.shortcutTextColor())
 }
 
 func infobarGlobalRank(label string) int {
@@ -28,7 +32,23 @@ func infobarGlobalRank(label string) int {
 	return len(infobarGlobalOrder)
 }
 
-func infobarShortcuts() []shortcut {
+// infobarBudgetFor returns the character budget for the infobar line. The
+// screen width is used when known so the bar fills the terminal instead of a
+// hardcoded width; one column is left for the cursor-free right edge.
+func infobarBudgetFor(screenWidth int) int {
+	budget := screenWidth - 2
+	if budget < 20 {
+		budget = 20
+	}
+	return budget
+}
+
+// infobarShortcuts picks the shortcuts shown in the infobar: panel-specific
+// keys first, then globals in a fixed order, deduped by label and fitted to
+// the budget. Dropped entries are reported so the caller can hint at them.
+// An alphabetical order flattens specific and global entries into one
+// label-sorted list instead.
+func infobarShortcuts(budget int, order string) (fitted []shortcut, dropped int) {
 	var specific, global []shortcut
 	for _, s := range shortcuts {
 		if s.key >= '0' && s.key <= '9' {
@@ -43,12 +63,20 @@ func infobarShortcuts() []shortcut {
 			specific = append(specific, s)
 		}
 	}
-	sort.SliceStable(global, func(i, j int) bool {
-		return infobarGlobalRank(global[i].label()) < infobarGlobalRank(global[j].label())
-	})
 	entries := make([]shortcut, 0, len(specific)+len(global))
-	entries = append(entries, specific...)
-	entries = append(entries, global...)
+	if order == providers.InfobarSortAlpha {
+		entries = append(entries, specific...)
+		entries = append(entries, global...)
+		sort.SliceStable(entries, func(i, j int) bool {
+			return entries[i].label() < entries[j].label()
+		})
+	} else {
+		sort.SliceStable(global, func(i, j int) bool {
+			return infobarGlobalRank(global[i].label()) < infobarGlobalRank(global[j].label())
+		})
+		entries = append(entries, specific...)
+		entries = append(entries, global...)
+	}
 	seen := make(map[string]bool, len(entries))
 	unique := make([]shortcut, 0, len(entries))
 	for _, s := range entries {
@@ -58,17 +86,18 @@ func infobarShortcuts() []shortcut {
 		seen[s.label()] = true
 		unique = append(unique, s)
 	}
-	fitted := make([]shortcut, 0, len(unique))
+	fitted = make([]shortcut, 0, len(unique))
 	width := 0
 	for _, s := range unique {
 		w := len(s.label()) + 1 + len(infobarDesc(s)) + 1
-		if width+w > infobarBudget {
+		if width+w > budget {
+			dropped++
 			continue
 		}
 		width += w
 		fitted = append(fitted, s)
 	}
-	return fitted
+	return fitted, dropped
 }
 
 func infobarDesc(s shortcut) string {
@@ -112,23 +141,56 @@ var infobarShortDesc = map[string]string{
 	"quit":                                          "quit",
 }
 
-func populateInfobarPanel(table *tview.Table) {
-	table.Clear()
-	for i, s := range infobarShortcuts() {
-		table.SetCell(0, i*2, tview.NewTableCell(s.label()).
-			SetTextColor(theme.shortcutLabelColor()).
-			SetAttributes(tcell.AttrBold))
-		table.SetCell(0, i*2+1, tview.NewTableCell(infobarDesc(s)).
-			SetTextColor(theme.shortcutTextColor()).
-			SetExpansion(1))
+// infobarLine renders the fitted shortcuts as one tview tag line. Keys are
+// colored with the shortcut label color, descriptions in the text color, and
+// the pairs are separated by two spaces so entries read as pairs.
+func infobarLine(entries []shortcut, dropped int) string {
+	if len(entries) == 0 {
+		return ""
 	}
+	parts := make([]string, 0, len(entries)+1)
+	for i, s := range entries {
+		if i > 0 {
+			parts = append(parts, "  ")
+		}
+		parts = append(parts, "["+theme.shortcutLabels+"]"+s.label()+"[-]", "["+theme.shortcutText+"]"+infobarDesc(s))
+	}
+	if dropped > 0 {
+		parts = append(parts, "  ["+theme.shortcutLabels+"]+"+itoa(dropped)+" more in ?[-]")
+	}
+	return strings.Join(parts, " ")
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
+}
+
+func (a *app) infobarWidth() int {
+	if a.screen == nil {
+		return 0
+	}
+	w, _ := a.screen.Size()
+	return w
+}
+
+func populateInfobarPanel(view *tview.TextView, screenWidth int) {
+	entries, dropped := infobarShortcuts(infobarBudgetFor(screenWidth), infobarSortOrder)
+	view.SetText(infobarLine(entries, dropped))
 }
 
 func (a *app) refreshInfobar() {
 	if !infobarEnabled {
 		return
 	}
-	populateInfobarPanel(a.infobar)
+	populateInfobarPanel(a.infobar, a.infobarWidth())
 }
 
 func (a *app) setInfobarEnabled(enabled bool) {

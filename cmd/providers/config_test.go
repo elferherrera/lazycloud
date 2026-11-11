@@ -239,13 +239,42 @@ func TestConfigPreservesExplicitInfobar(t *testing.T) {
 	defaultTheme := Theme{}
 	defaultShortcuts := map[string]string{}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
-	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfobar := Infobar{ShowShortcuts: true, SortOrder: InfobarSortCurrent}
 
 	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	want := Infobar{ShowShortcuts: false}
+	want := Infobar{ShowShortcuts: false, SortOrder: InfobarSortCurrent}
+	if got.Infobar != want {
+		t.Fatalf("LoadConfig() infobar = %+v, want preserved %+v", got.Infobar, want)
+	}
+	onDisk := readConfigFile(t, dir)
+	if onDisk.Infobar != want {
+		t.Fatalf("config file infobar = %+v, want preserved %+v", onDisk.Infobar, want)
+	}
+}
+
+func TestConfigPreservesExplicitInfobarSortOrder(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	existing := "theme:\n  labels: aqua\nshortcuts:\n  1: vms\ninfobar:\n  show_shortcuts: true\n  sort_order: alphabetical\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	defaultTheme := Theme{}
+	defaultShortcuts := map[string]string{}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true, SortOrder: InfobarSortCurrent}
+
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	want := Infobar{ShowShortcuts: true, SortOrder: InfobarSortAlpha}
 	if got.Infobar != want {
 		t.Fatalf("LoadConfig() infobar = %+v, want preserved %+v", got.Infobar, want)
 	}

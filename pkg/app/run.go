@@ -55,6 +55,7 @@ func Run() error {
 	applyTheme(config.Theme)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
+	infobarSortOrder = config.Infobar.SortOrder
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
@@ -88,6 +89,7 @@ func Run() error {
 	helpOverlay, helpRow := newHelpOverlay(shortcutsTable)
 	a.shortcuts = shortcutsTable
 	a.helpRow = helpRow
+	a.helpColumn = helpOverlay
 
 	shortcutsSummary := newShortcutsSummaryPanel()
 	a.shortcutsSummary = shortcutsSummary
