@@ -136,8 +136,12 @@ func (a *app) setInfobarEnabled(enabled bool) {
 		return
 	}
 	infobarEnabled = enabled
+	proportion := 1
+	if !enabled {
+		proportion = 0
+	}
 	if a.mainView != nil {
-		a.mainView.ResizeItem(a.infobar, infobarHeight(enabled), 1)
+		a.mainView.ResizeItem(a.infobar, infobarHeight(enabled), proportion)
 	}
 	if enabled {
 		a.refreshInfobar()
