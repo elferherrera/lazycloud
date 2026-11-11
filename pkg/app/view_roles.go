@@ -38,16 +38,16 @@ func customRoleResource(a *app, projectID, name string) (any, error) {
 	return role, nil
 }
 
-func fetchProjectRoles(a *app, projectID string) (string, error) {
+func fetchProjectRoles(a *app, projectID string) (int, string, error) {
 	roles, err := providers.ListProjectCustomRoles(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveCustomRoles(projectID, roles); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("roles", projectID, len(roles))
-	return fmt.Sprintf("Fetched %d custom roles", len(roles)), nil
+	return len(roles), fmt.Sprintf("Fetched %d custom roles", len(roles)), nil
 }
 
 func customRoleDetails(res any) string {

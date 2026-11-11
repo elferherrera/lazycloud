@@ -44,16 +44,16 @@ func serviceAccountResource(a *app, projectID, email string) (any, error) {
 	return sa, nil
 }
 
-func fetchProjectAccounts(a *app, projectID string) (string, error) {
-	accounts, err := providers.ListProjectServiceAccounts(projectID)
+func fetchProjectAccounts(a *app, projectID string) (int, string, error) {
+	accounts, err := listProjectServiceAccounts(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveServiceAccounts(projectID, accounts); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("accounts", projectID, len(accounts))
-	return fmt.Sprintf("Fetched %d service accounts", len(accounts)), nil
+	return len(accounts), fmt.Sprintf("Fetched %d service accounts", len(accounts)), nil
 }
 
 var accountsView = viewDef{
@@ -93,45 +93,7 @@ var accountsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d service accounts for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching service accounts for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("accounts", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching service accounts for %s...", p.ProjectID))
-				})
-				accounts, err := providers.ListProjectServiceAccounts(p.ProjectID)
-				if err != nil {
-					a.reportError("accounts", p.ProjectID, "Failed to fetch service accounts for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveServiceAccounts(p.ProjectID, accounts); err != nil {
-					a.reportError("accounts", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("accounts", p.ProjectID, len(accounts))
-				total += len(accounts)
-			}
-			a.markViewUpdated(viewAccountsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewAccountsAll)
-				status := fmt.Sprintf("[green]Fetched %d service accounts across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewAccountsAll, "accounts", "service accounts", "service accounts", fetchProjectAccounts),
 	resource: func(a *app, row []string) (any, error) {
 		return serviceAccountResource(a, row[5], row[0])
 	},

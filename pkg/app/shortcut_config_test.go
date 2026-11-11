@@ -12,12 +12,14 @@ func numericShortcut(key rune) *shortcut {
 }
 
 func TestApplyShortcutConfigDefaults(t *testing.T) {
+	defer applyShortcutConfig(defaultShortcutConfig())
+
 	applyShortcutConfig(map[string]string{})
-	if s := numericShortcut('1'); s == nil || s.desc != "show Projects" {
-		t.Fatalf("key 1 = %+v, want show Projects", s)
+	if s := numericShortcut('1'); s == nil || s.desc != "show projects" {
+		t.Fatalf("key 1 = %+v, want show projects", s)
 	}
-	if s := numericShortcut('0'); s == nil || s.desc != "show Firewall Rules" {
-		t.Fatalf("key 0 = %+v, want show Firewall Rules", s)
+	if s := numericShortcut('0'); s == nil || s.desc != "show firewall rules" {
+		t.Fatalf("key 0 = %+v, want show firewall rules", s)
 	}
 }
 
@@ -28,7 +30,7 @@ func TestApplyShortcutConfigOverridesAndInvalidEntries(t *testing.T) {
 	if s := numericShortcut('1'); s == nil || s.desc != "show DNS Zones" {
 		t.Fatalf("key 1 = %+v, want show DNS Zones", s)
 	}
-	if s := numericShortcut('5'); s == nil || s.desc != "show IP Addresses" {
+	if s := numericShortcut('5'); s == nil || s.desc != "show IP addresses" {
 		t.Fatalf("key 5 = %+v, want default kept for unknown view", s)
 	}
 	if s := numericShortcut('2'); s == nil || s.desc != "show VMs" {

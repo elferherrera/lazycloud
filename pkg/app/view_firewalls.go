@@ -37,16 +37,16 @@ func firewallRuleResource(a *app, projectID, name string) (any, error) {
 	return r, nil
 }
 
-func fetchProjectFirewalls(a *app, projectID string) (string, error) {
-	rules, err := providers.ListProjectFirewallRules(projectID)
+func fetchProjectFirewalls(a *app, projectID string) (int, string, error) {
+	rules, err := listProjectFirewallRules(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveFirewallRules(projectID, rules); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("firewalls", projectID, len(rules))
-	return fmt.Sprintf("Fetched %d firewall rules", len(rules)), nil
+	return len(rules), fmt.Sprintf("Fetched %d firewall rules", len(rules)), nil
 }
 
 var firewallsView = viewDef{
@@ -86,45 +86,7 @@ var firewallsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d firewall rules for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching firewall rules for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("firewalls", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching firewall rules for %s...", p.ProjectID))
-				})
-				rules, err := providers.ListProjectFirewallRules(p.ProjectID)
-				if err != nil {
-					a.reportError("firewalls", p.ProjectID, "Failed to fetch firewall rules for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveFirewallRules(p.ProjectID, rules); err != nil {
-					a.reportError("firewalls", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("firewalls", p.ProjectID, len(rules))
-				total += len(rules)
-			}
-			a.markViewUpdated(viewFirewallsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewFirewallsAll)
-				status := fmt.Sprintf("[green]Fetched %d firewall rules across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewFirewallsAll, "firewalls", "firewall rules", "firewall rules", fetchProjectFirewalls),
 	resource: func(a *app, row []string) (any, error) {
 		return firewallRuleResource(a, row[8], row[0])
 	},

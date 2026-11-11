@@ -38,16 +38,16 @@ func imageResource(a *app, projectID, name string) (any, error) {
 	return img, nil
 }
 
-func fetchProjectImages(a *app, projectID string) (string, error) {
-	images, err := providers.ListProjectImages(projectID)
+func fetchProjectImages(a *app, projectID string) (int, string, error) {
+	images, err := listProjectImages(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveImages(projectID, images); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("images", projectID, len(images))
-	return fmt.Sprintf("Fetched %d images", len(images)), nil
+	return len(images), fmt.Sprintf("Fetched %d images", len(images)), nil
 }
 
 var imagesView = viewDef{
@@ -87,45 +87,7 @@ var imagesAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d images for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching images for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("images", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching images for %s...", p.ProjectID))
-				})
-				images, err := providers.ListProjectImages(p.ProjectID)
-				if err != nil {
-					a.reportError("images", p.ProjectID, "Failed to fetch images for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveImages(p.ProjectID, images); err != nil {
-					a.reportError("images", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("images", p.ProjectID, len(images))
-				total += len(images)
-			}
-			a.markViewUpdated(viewImagesAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewImagesAll)
-				status := fmt.Sprintf("[green]Fetched %d images across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewImagesAll, "images", "images", "images", fetchProjectImages),
 	resource: func(a *app, row []string) (any, error) {
 		return imageResource(a, row[9], row[0])
 	},

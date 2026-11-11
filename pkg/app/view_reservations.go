@@ -38,16 +38,16 @@ func reservationResource(a *app, projectID, zone, name string) (any, error) {
 	return r, nil
 }
 
-func fetchProjectReservations(a *app, projectID string) (string, error) {
-	reservations, err := providers.ListProjectReservations(projectID)
+func fetchProjectReservations(a *app, projectID string) (int, string, error) {
+	reservations, err := listProjectReservations(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveReservations(projectID, reservations); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("reservations", projectID, len(reservations))
-	return fmt.Sprintf("Fetched %d reservations", len(reservations)), nil
+	return len(reservations), fmt.Sprintf("Fetched %d reservations", len(reservations)), nil
 }
 
 var reservationsView = viewDef{
@@ -87,45 +87,7 @@ var reservationsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d reservations for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching reservations for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("reservations", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching reservations for %s...", p.ProjectID))
-				})
-				reservations, err := providers.ListProjectReservations(p.ProjectID)
-				if err != nil {
-					a.reportError("reservations", p.ProjectID, "Failed to fetch reservations for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveReservations(p.ProjectID, reservations); err != nil {
-					a.reportError("reservations", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("reservations", p.ProjectID, len(reservations))
-				total += len(reservations)
-			}
-			a.markViewUpdated(viewReservationsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewReservationsAll)
-				status := fmt.Sprintf("[green]Fetched %d reservations across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewReservationsAll, "reservations", "reservations", "reservations", fetchProjectReservations),
 	resource: func(a *app, row []string) (any, error) {
 		return reservationResource(a, row[9], row[1], row[0])
 	},

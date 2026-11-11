@@ -81,6 +81,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `q` / `Ctrl-C` | Quit |
 | `:` | Command mode (e.g. `:vms`, `:sort asc name`, or type an IP address to jump to it) |
 | `/` | Filter the current list (see [Filtering](#filtering)) |
+| `S` / `:search` | Search side panel across every view and project (see [Search](#search)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
 | `U` | Refresh every view of the current project, one after another (the status bar shows the view being fetched) |
 | `y` | Copy focused row (JSON) to clipboard |
@@ -152,6 +153,23 @@ Anything with arguments or not matching a view name is treated as a command; unk
 | `s` | SSH to VM via IAP | VM views |
 | `r` | Restore last deleted project | projects view |
 | `x` | Delete project from cache | projects view |
+
+## Search
+
+Press `S` (not in the VMs view) or run `:search` to open a search side panel that searches every indexed view across every project. `/` stays the per-view filter.
+
+The index is built over the local cache in the background, most-used views first (VMs, IPs, VPCs, buckets, ...), so results appear progressively while the rest indexes. Views with nothing cached are pulled from the GCP API in the background while the search is open, and results keep updating as the data arrives.
+
+Results group by resource kind, and each group lists its projects as indented subrows with per-project match counts. Moving the selector previews in the main view: a kind header switches the main panel to that resource with the query as the live filter, and a project subrow also adds the project to the filter.
+
+| Key | Action |
+|---|---|
+| type | Live results, rows capped at 100 per kind (the header shows `Kind (N)` with the total) |
+| `Tab` | Toggle focus between the panel and the main view (the panel border highlights while focused) |
+| `Enter` | Land the previewed view and filter, keeping the panel open as the sidebar |
+| `Esc` | Close the search (the query is kept for the next open) |
+
+Terms work like the filter: space-separated substrings, all of which must match, `-x` excludes. Matching is case-insensitive across the whole row.
 
 ## Filtering
 

@@ -59,10 +59,10 @@ var workloadsView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching workloads for %s...", appState.Cluster))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
-			workloads, err := providers.ListClusterWorkloads(projectID, cl.Location, clusterName)
+			workloads, err := listClusterWorkloads(projectID, cl.Location, clusterName)
 			if err != nil {
 				a.reportError("workloads", projectID+"/"+clusterName, "Failed to fetch workloads", err)
 				return
@@ -73,11 +73,11 @@ var workloadsView = viewDef{
 			}
 			a.logger.Update("workloads", projectID+"/"+clusterName, len(workloads))
 			a.markViewUpdated(viewWorkloads, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewWorkloads)
 				a.statusText(fmt.Sprintf("[green]Fetched %d workloads[-]", len(workloads)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return workloadResource(a, appState.ClusterProject, appState.Cluster, row[1], row[0], row[2])

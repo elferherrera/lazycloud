@@ -37,16 +37,16 @@ func snapshotResource(a *app, projectID, name string) (any, error) {
 	return snapshot, nil
 }
 
-func fetchProjectSnapshots(a *app, projectID string) (string, error) {
-	snapshots, err := providers.ListProjectSnapshots(projectID)
+func fetchProjectSnapshots(a *app, projectID string) (int, string, error) {
+	snapshots, err := listProjectSnapshots(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveSnapshots(projectID, snapshots); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("snapshots", projectID, len(snapshots))
-	return fmt.Sprintf("Fetched %d snapshots", len(snapshots)), nil
+	return len(snapshots), fmt.Sprintf("Fetched %d snapshots", len(snapshots)), nil
 }
 
 var snapshotsView = viewDef{
@@ -86,45 +86,7 @@ var snapshotsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d snapshots for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching snapshots for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("snapshots", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching snapshots for %s...", p.ProjectID))
-				})
-				snapshots, err := providers.ListProjectSnapshots(p.ProjectID)
-				if err != nil {
-					a.reportError("snapshots", p.ProjectID, "Failed to fetch snapshots for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveSnapshots(p.ProjectID, snapshots); err != nil {
-					a.reportError("snapshots", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("snapshots", p.ProjectID, len(snapshots))
-				total += len(snapshots)
-			}
-			a.markViewUpdated(viewSnapshotsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewSnapshotsAll)
-				status := fmt.Sprintf("[green]Fetched %d snapshots across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewSnapshotsAll, "snapshots", "snapshots", "snapshots", fetchProjectSnapshots),
 	resource: func(a *app, row []string) (any, error) {
 		return snapshotResource(a, row[7], row[0])
 	},

@@ -38,16 +38,16 @@ func diskResource(a *app, projectID, zone, name string) (any, error) {
 	return disk, nil
 }
 
-func fetchProjectDisks(a *app, projectID string) (string, error) {
-	disks, err := providers.ListProjectDisks(projectID)
+func fetchProjectDisks(a *app, projectID string) (int, string, error) {
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveDisks(projectID, disks); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("disks", projectID, len(disks))
-	return fmt.Sprintf("Fetched %d disks", len(disks)), nil
+	return len(disks), fmt.Sprintf("Fetched %d disks", len(disks)), nil
 }
 
 var disksView = viewDef{
@@ -87,45 +87,7 @@ var disksAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d disks for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching disks for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("disks", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching disks for %s...", p.ProjectID))
-				})
-				disks, err := providers.ListProjectDisks(p.ProjectID)
-				if err != nil {
-					a.reportError("disks", p.ProjectID, "Failed to fetch disks for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveDisks(p.ProjectID, disks); err != nil {
-					a.reportError("disks", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("disks", p.ProjectID, len(disks))
-				total += len(disks)
-			}
-			a.markViewUpdated(viewDisksAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewDisksAll)
-				status := fmt.Sprintf("[green]Fetched %d disks across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewDisksAll, "disks", "disks", "disks", fetchProjectDisks),
 	resource: func(a *app, row []string) (any, error) {
 		return diskResource(a, row[8], row[1], row[0])
 	},

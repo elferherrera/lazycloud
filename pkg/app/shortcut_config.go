@@ -8,6 +8,10 @@ import (
 
 var numericShortcutKeys = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}
 
+// builtinNumericShortcuts holds the shipped entries, captured the first
+// time a config is applied, so later reloads can restore them verbatim.
+var builtinNumericShortcuts map[string]shortcut
+
 var defaultNumericShortcuts = map[string]viewKind{
 	"1": viewProjects,
 	"2": viewVMs,
@@ -121,6 +125,14 @@ func defaultShortcutConfig() map[string]string {
 }
 
 func applyShortcutConfig(config map[string]string) {
+	if builtinNumericShortcuts == nil {
+		builtinNumericShortcuts = make(map[string]shortcut, len(defaultNumericShortcuts))
+		for _, s := range shortcuts {
+			if s.key >= '0' && s.key <= '9' {
+				builtinNumericShortcuts[string(s.key)] = s
+			}
+		}
+	}
 	kinds := make(map[string]viewKind, len(defaultNumericShortcuts))
 	for key, kind := range defaultNumericShortcuts {
 		kinds[key] = kind
@@ -147,6 +159,14 @@ func applyShortcutConfig(config map[string]string) {
 	for _, key := range numericShortcutKeys {
 		kind, ok := kinds[key]
 		if !ok {
+			continue
+		}
+		// A key keeping its default view also keeps the built-in entry, so
+		// desc and actions stay identical to a config-less boot.
+		if kind == defaultNumericShortcuts[key] {
+			if s, ok := builtinNumericShortcuts[key]; ok {
+				kept = append(kept, s)
+			}
 			continue
 		}
 		kept = append(kept, shortcut{

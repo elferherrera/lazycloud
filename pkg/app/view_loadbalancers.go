@@ -69,19 +69,19 @@ func resolveLB(a *app, projectID, region, name string) (*providers.LoadBalancer,
 }
 
 func refreshProjectLBs(a *app, projectID string) (int, error) {
-	rules, err := providers.ListProjectForwardingRules(projectID)
+	rules, err := listProjectForwardingRules(projectID)
 	if err != nil {
 		return 0, err
 	}
-	proxies, err := providers.ListProjectTargetProxies(projectID)
+	proxies, err := listProjectTargetProxies(projectID)
 	if err != nil {
 		return 0, err
 	}
-	urlMaps, err := providers.ListProjectURLMaps(projectID)
+	urlMaps, err := listProjectURLMaps(projectID)
 	if err != nil {
 		return 0, err
 	}
-	services, err := providers.ListProjectBackendServices(projectID)
+	services, err := listProjectBackendServices(projectID)
 	if err != nil {
 		return 0, err
 	}
@@ -101,12 +101,12 @@ func refreshProjectLBs(a *app, projectID string) (int, error) {
 	return len(rules), nil
 }
 
-func fetchProjectLBs(a *app, projectID string) (string, error) {
+func fetchProjectLBs(a *app, projectID string) (int, string, error) {
 	count, err := refreshProjectLBs(a, projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	return fmt.Sprintf("Fetched %d load balancers", count), nil
+	return count, fmt.Sprintf("Fetched %d load balancers", count), nil
 }
 
 var lbsView = viewDef{
@@ -146,39 +146,7 @@ var lbsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d load balancers for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching load balancers for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("lbs", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching load balancers for %s...", p.ProjectID))
-				})
-				count, err := refreshProjectLBs(a, p.ProjectID)
-				if err != nil {
-					a.reportError("lbs", p.ProjectID, "Failed to fetch load balancers for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				total += count
-			}
-			a.markViewUpdated(viewLBsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewLBsAll)
-				status := fmt.Sprintf("[green]Fetched %d load balancers across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewLBsAll, "lbs", "load balancers", "load balancers", fetchProjectLBs),
 	resource: func(a *app, row []string) (any, error) {
 		return resolveLB(a, row[7], row[2], row[0])
 	},

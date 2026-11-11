@@ -43,16 +43,16 @@ func iamBindingResource(a *app, projectID, member, role string) (any, error) {
 	return binding, nil
 }
 
-func fetchProjectIAM(a *app, projectID string) (string, error) {
-	bindings, err := providers.ListProjectIAMPolicy(projectID)
+func fetchProjectIAM(a *app, projectID string) (int, string, error) {
+	bindings, err := listProjectIAMPolicy(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveIAMBindings(projectID, bindings); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("iam", projectID, len(bindings))
-	return fmt.Sprintf("Fetched %d IAM bindings", len(bindings)), nil
+	return len(bindings), fmt.Sprintf("Fetched %d IAM bindings", len(bindings)), nil
 }
 
 var iamView = viewDef{
@@ -92,45 +92,7 @@ var iamAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d IAM bindings for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching IAM policy for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("iam", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching IAM policy for %s...", p.ProjectID))
-				})
-				bindings, err := providers.ListProjectIAMPolicy(p.ProjectID)
-				if err != nil {
-					a.reportError("iam", p.ProjectID, "Failed to fetch IAM policy for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveIAMBindings(p.ProjectID, bindings); err != nil {
-					a.reportError("iam", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("iam", p.ProjectID, len(bindings))
-				total += len(bindings)
-			}
-			a.markViewUpdated(viewIAMAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewIAMAll)
-				status := fmt.Sprintf("[green]Fetched %d IAM bindings across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewIAMAll, "iam", "IAM policy", "IAM bindings", fetchProjectIAM),
 	resource: func(a *app, row []string) (any, error) {
 		return iamBindingResource(a, row[5], row[0], row[2])
 	},

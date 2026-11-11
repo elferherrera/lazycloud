@@ -35,16 +35,16 @@ func bucketResource(a *app, projectID, name string) (any, error) {
 	return b, nil
 }
 
-func fetchProjectBuckets(a *app, projectID string) (string, error) {
-	buckets, err := providers.ListProjectBuckets(projectID)
+func fetchProjectBuckets(a *app, projectID string) (int, string, error) {
+	buckets, err := listProjectBuckets(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveBuckets(projectID, buckets); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("buckets", projectID, len(buckets))
-	return fmt.Sprintf("Fetched %d buckets", len(buckets)), nil
+	return len(buckets), fmt.Sprintf("Fetched %d buckets", len(buckets)), nil
 }
 
 func (a *app) showBucketIAM() {
@@ -98,45 +98,7 @@ var bucketsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d buckets for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching buckets for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("buckets", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching buckets for %s...", p.ProjectID))
-				})
-				buckets, err := providers.ListProjectBuckets(p.ProjectID)
-				if err != nil {
-					a.reportError("buckets", p.ProjectID, "Failed to fetch buckets for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveBuckets(p.ProjectID, buckets); err != nil {
-					a.reportError("buckets", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("buckets", p.ProjectID, len(buckets))
-				total += len(buckets)
-			}
-			a.markViewUpdated(viewBucketsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewBucketsAll)
-				status := fmt.Sprintf("[green]Fetched %d buckets across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewBucketsAll, "buckets", "buckets", "buckets", fetchProjectBuckets),
 	resource: func(a *app, row []string) (any, error) {
 		return bucketResource(a, row[6], row[0])
 	},

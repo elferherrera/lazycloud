@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -17,6 +19,8 @@ import (
 
 type app struct {
 	tapp             *tview.Application
+	uiMu             sync.Mutex
+	bg               sync.WaitGroup
 	cmd              *tview.InputField
 	info             *tview.Table
 	summary          *tview.TextView
@@ -31,6 +35,7 @@ type app struct {
 	helpColumn       *tview.Flex
 	shortcutsSummary *tview.Table
 	screen           tcell.Screen
+	uiRunning        atomic.Bool
 
 	viewHeaders      []string
 	allRows          [][]string
@@ -41,6 +46,19 @@ type app struct {
 	filterStashed    bool
 	autoFetched      map[string]bool
 	staleAutoRefresh bool
+
+	searchIndex      *searchIndex
+	searchQuery      string
+	searchHits       []searchEntry
+	searchInput      *tview.InputField
+	searchResults    *tview.Table
+	searchPanel      *tview.Flex
+	searchColumn     *tview.Flex
+	searchGroupRows  []searchGroupRow
+	searchRowGroups  []int
+	searchRowProjects []string
+	searchPanelFocus bool
+	searchOpen       atomic.Bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -111,8 +129,10 @@ func (a *app) statusInfo(text string) {
 }
 
 func (a *app) reportError(view, projectID, message string, err error) {
-	a.logger.Error(view, projectID, message+": "+err.Error())
-	a.tapp.QueueUpdateDraw(func() {
+	if a.logger != nil {
+		a.logger.Error(view, projectID, message+": "+err.Error())
+	}
+	a.queueUpdateDraw(func() {
 		a.summary.SetText("[red]" + message + ": [-]" + err.Error())
 		a.statusText("[red]" + message + "[-]")
 	})
@@ -210,6 +230,12 @@ func (a *app) applyThemeToWidgets() {
 	a.info.SetTitleColor(theme.titleColor())
 	a.shortcuts.SetBorderColor(theme.borderColor())
 	a.shortcuts.SetTitleColor(theme.titleColor())
+	if a.searchInput != nil {
+		a.searchInput.SetBorderColor(theme.borderColor())
+		a.searchResults.SetBorderColor(theme.borderColor())
+		a.searchResults.SetTitleColor(theme.titleColor())
+		a.searchResults.SetSeparator('│')
+	}
 	a.summary.SetTextColor(theme.summaryTextColor())
 	a.status.SetTextColor(theme.statusTextColor())
 	renderSummary(a.summary)
@@ -343,6 +369,12 @@ func (a *app) markViewAutoFetched(kind viewKind) {
 func (a *app) markViewUpdated(kind viewKind, projectID string) {
 	if err := a.cache.SaveViewUpdate(string(kind), projectID); err != nil {
 		a.reportError(string(kind), projectID, "Failed to record view update", err)
+	}
+	if a.searchIndex != nil {
+		a.searchIndex.invalidate(searchIndexedKind(kind))
+		if a.searchOpen.Load() {
+			a.ensureSearchIndex(false)
+		}
 	}
 }
 
