@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func cloudRouterASN(asn uint32) string {

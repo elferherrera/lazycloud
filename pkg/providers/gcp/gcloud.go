@@ -1,10 +1,11 @@
-package providers
+package gcp
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,127 +24,7 @@ import (
 	"google.golang.org/api/storage/v1"
 )
 
-type Project struct {
-	ProjectID     string
-	Name          string
-	ProjectNumber string
-}
-
-type Network struct {
-	ProjectID             string
-	Name                  string
-	Description           string
-	RoutingMode           string
-	AutoCreateSubnetworks bool
-	MTU                   int32
-	UpdatedAt             string
-}
-
-type NetworkPeering struct {
-	ProjectID            string
-	Network              string
-	Name                 string
-	PeerNetwork          string
-	PeerProject          string
-	State                string
-	StateDetails         string
-	AutoCreateRoutes     bool
-	ExchangeSubnetRoutes bool
-	ExportCustomRoutes   bool
-	ImportCustomRoutes   bool
-	UpdatedAt            string
-}
-
-type Subnetwork struct {
-	ProjectID             string
-	Name                  string
-	Region                string
-	Network               string
-	IPRange               string
-	SecondaryRanges       []string
-	PrivateIPGoogleAccess bool
-	Purpose               string
-	Description           string
-	Status                string
-	UpdatedAt             string
-}
-
-type IPAddress struct {
-	ProjectID   string
-	Name        string
-	Address     string
-	AddressType string
-	Status      string
-	Region      string
-	Subnetwork  string
-	Network     string
-	UpdatedAt   string
-}
-
-type VMInterface struct {
-	Network    string
-	Subnetwork string
-	InternalIP string
-	ExternalIP string
-}
-
-type VMDisk struct {
-	Name       string
-	DeviceName string
-	Mode       string
-	AutoDelete bool
-	SizeGB     int64
-}
-
-type VMServiceAccount struct {
-	Email  string
-	Scopes []string
-}
-
-type VM struct {
-	ProjectID        string
-	Name             string
-	InstanceID       string
-	Zone             string
-	MachineType      string
-	Status           string
-	Labels           map[string]string
-	NetworkTags      []string
-	ServiceAccounts  []VMServiceAccount
-	InstanceTemplate string
-	Interfaces       []VMInterface
-	BootDisk         *VMDisk
-	DataDisks        []VMDisk
-	UpdatedAt        string
-}
-
-type Disk struct {
-	ProjectID   string
-	Name        string
-	Zone        string
-	SizeGB      int64
-	Type        string
-	Status      string
-	SourceImage string
-	Users       []string
-	UpdatedAt   string
-}
-
-type Snapshot struct {
-	ProjectID       string
-	Name            string
-	Description     string
-	Status          string
-	SourceDisk      string
-	SizeGB          int64
-	StorageBytes    int64
-	CreatedAt       string
-	StorageLocation string
-	Labels          map[string]string
-	UpdatedAt       string
-}
-
-func ListGcloudProjects() ([]Project, error) {
+func ListGcloudProjects() ([]providers.Project, error) {
 	ctx := context.Background()
 	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
@@ -151,7 +32,7 @@ func ListGcloudProjects() ([]Project, error) {
 	}
 	defer client.Close()
 
-	var projects []Project
+	var projects []providers.Project
 	it := client.SearchProjects(ctx, &resourcemanagerpb.SearchProjectsRequest{})
 	for {
 		p, err := it.Next()
@@ -165,7 +46,7 @@ func ListGcloudProjects() ([]Project, error) {
 		if parts := strings.Split(projectNumber, "/"); len(parts) > 1 {
 			projectNumber = parts[len(parts)-1]
 		}
-		projects = append(projects, Project{
+		projects = append(projects, providers.Project{
 			ProjectID:     p.GetProjectId(),
 			Name:          p.GetDisplayName(),
 			ProjectNumber: projectNumber,
@@ -194,7 +75,7 @@ func ResourceProjectName(resourceURL string) string {
 	return ""
 }
 
-func ListProjectNetworks(projectID string) ([]Network, error) {
+func ListProjectNetworks(projectID string) ([]providers.Network, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewNetworksRESTClient(ctx)
@@ -203,7 +84,7 @@ func ListProjectNetworks(projectID string) ([]Network, error) {
 	}
 	defer client.Close()
 
-	var networks []Network
+	var networks []providers.Network
 	it := client.List(ctx, &computepb.ListNetworksRequest{Project: projectID})
 	for {
 		n, err := it.Next()
@@ -213,7 +94,7 @@ func ListProjectNetworks(projectID string) ([]Network, error) {
 		if err != nil {
 			return nil, err
 		}
-		networks = append(networks, Network{
+		networks = append(networks, providers.Network{
 			ProjectID:             projectID,
 			Name:                  n.GetName(),
 			Description:           n.GetDescription(),
@@ -225,7 +106,7 @@ func ListProjectNetworks(projectID string) ([]Network, error) {
 	return networks, nil
 }
 
-func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
+func ListProjectPeerings(projectID string) ([]providers.NetworkPeering, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewNetworksRESTClient(ctx)
@@ -234,7 +115,7 @@ func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
 	}
 	defer client.Close()
 
-	var peerings []NetworkPeering
+	var peerings []providers.NetworkPeering
 	it := client.List(ctx, &computepb.ListNetworksRequest{Project: projectID})
 	for {
 		n, err := it.Next()
@@ -245,7 +126,7 @@ func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
 			return nil, err
 		}
 		for _, p := range n.GetPeerings() {
-			peerings = append(peerings, NetworkPeering{
+			peerings = append(peerings, providers.NetworkPeering{
 				ProjectID:            projectID,
 				Network:              n.GetName(),
 				Name:                 p.GetName(),
@@ -263,7 +144,7 @@ func ListProjectPeerings(projectID string) ([]NetworkPeering, error) {
 	return peerings, nil
 }
 
-func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {
+func ListProjectSubnetworks(projectID string) ([]providers.Subnetwork, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewSubnetworksRESTClient(ctx)
@@ -272,7 +153,7 @@ func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {
 	}
 	defer client.Close()
 
-	var subnetworks []Subnetwork
+	var subnetworks []providers.Subnetwork
 	it := client.AggregatedList(ctx, &computepb.AggregatedListSubnetworksRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -287,7 +168,7 @@ func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {
 			for _, r := range sn.GetSecondaryIpRanges() {
 				secondary = append(secondary, fmt.Sprintf("%s=%s", r.GetRangeName(), r.GetIpCidrRange()))
 			}
-			subnetworks = append(subnetworks, Subnetwork{
+			subnetworks = append(subnetworks, providers.Subnetwork{
 				ProjectID:             projectID,
 				Name:                  sn.GetName(),
 				Region:                resourceShortName(sn.GetRegion(), ""),
@@ -302,18 +183,6 @@ func ListProjectSubnetworks(projectID string) ([]Subnetwork, error) {
 		}
 	}
 	return subnetworks, nil
-}
-
-type Route struct {
-	ProjectID   string
-	Name        string
-	Network     string
-	DestRange   string
-	Priority    int64
-	NextHopKind string
-	NextHop     string
-	Description string
-	UpdatedAt   string
 }
 
 func routeNextHop(r *computepb.Route) (kind, hop string) {
@@ -334,7 +203,7 @@ func routeNextHop(r *computepb.Route) (kind, hop string) {
 	return "", ""
 }
 
-func ListProjectRoutes(projectID string) ([]Route, error) {
+func ListProjectRoutes(projectID string) ([]providers.Route, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewRoutesRESTClient(ctx)
@@ -343,7 +212,7 @@ func ListProjectRoutes(projectID string) ([]Route, error) {
 	}
 	defer client.Close()
 
-	var routes []Route
+	var routes []providers.Route
 	it := client.List(ctx, &computepb.ListRoutesRequest{Project: projectID})
 	for {
 		r, err := it.Next()
@@ -354,7 +223,7 @@ func ListProjectRoutes(projectID string) ([]Route, error) {
 			return nil, err
 		}
 		kind, hop := routeNextHop(r)
-		routes = append(routes, Route{
+		routes = append(routes, providers.Route{
 			ProjectID:   projectID,
 			Name:        r.GetName(),
 			Network:     resourceShortName(r.GetNetwork(), ""),
@@ -366,20 +235,6 @@ func ListProjectRoutes(projectID string) ([]Route, error) {
 		})
 	}
 	return routes, nil
-}
-
-type FirewallRule struct {
-	ProjectID   string
-	Name        string
-	Network     string
-	Direction   string
-	Priority    int64
-	Action      string
-	Source      string
-	Targets     string
-	Disabled    bool
-	Description string
-	UpdatedAt   string
 }
 
 func firewallAction(f *computepb.Firewall) string {
@@ -412,7 +267,7 @@ func firewallSource(f *computepb.Firewall) string {
 	return strings.Join(sources, ",")
 }
 
-func ListProjectFirewallRules(projectID string) ([]FirewallRule, error) {
+func ListProjectFirewallRules(projectID string) ([]providers.FirewallRule, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewFirewallsRESTClient(ctx)
@@ -421,7 +276,7 @@ func ListProjectFirewallRules(projectID string) ([]FirewallRule, error) {
 	}
 	defer client.Close()
 
-	var rules []FirewallRule
+	var rules []providers.FirewallRule
 	it := client.List(ctx, &computepb.ListFirewallsRequest{Project: projectID})
 	for {
 		f, err := it.Next()
@@ -431,7 +286,7 @@ func ListProjectFirewallRules(projectID string) ([]FirewallRule, error) {
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, FirewallRule{
+		rules = append(rules, providers.FirewallRule{
 			ProjectID:   projectID,
 			Name:        f.GetName(),
 			Network:     resourceShortName(f.GetNetwork(), ""),
@@ -447,17 +302,7 @@ func ListProjectFirewallRules(projectID string) ([]FirewallRule, error) {
 	return rules, nil
 }
 
-type ServiceAccount struct {
-	ProjectID   string
-	Email       string
-	DisplayName string
-	UniqueID    string
-	Description string
-	Disabled    bool
-	UpdatedAt   string
-}
-
-func ListProjectServiceAccounts(projectID string) ([]ServiceAccount, error) {
+func ListProjectServiceAccounts(projectID string) ([]providers.ServiceAccount, error) {
 	ctx := context.Background()
 
 	svc, err := iam.NewService(ctx)
@@ -465,10 +310,10 @@ func ListProjectServiceAccounts(projectID string) ([]ServiceAccount, error) {
 		return nil, err
 	}
 
-	var accounts []ServiceAccount
+	var accounts []providers.ServiceAccount
 	err = svc.Projects.ServiceAccounts.List("projects/"+projectID).Pages(ctx, func(page *iam.ListServiceAccountsResponse) error {
 		for _, sa := range page.Accounts {
-			accounts = append(accounts, ServiceAccount{
+			accounts = append(accounts, providers.ServiceAccount{
 				ProjectID:   projectID,
 				Email:       sa.Email,
 				DisplayName: sa.DisplayName,
@@ -485,8 +330,8 @@ func ListProjectServiceAccounts(projectID string) ([]ServiceAccount, error) {
 	return accounts, nil
 }
 
-func vmDisk(d *computepb.AttachedDisk) *VMDisk {
-	return &VMDisk{
+func vmDisk(d *computepb.AttachedDisk) *providers.VMDisk {
+	return &providers.VMDisk{
 		Name:       resourceShortName(d.GetSource(), d.GetDeviceName()),
 		DeviceName: d.GetDeviceName(),
 		Mode:       d.GetMode(),
@@ -495,7 +340,7 @@ func vmDisk(d *computepb.AttachedDisk) *VMDisk {
 	}
 }
 
-func ListProjectVMs(projectID string) ([]VM, error) {
+func ListProjectVMs(projectID string) ([]providers.VM, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewInstancesRESTClient(ctx)
@@ -517,8 +362,8 @@ type zoneEntryIterator interface {
 
 // collectZoneVMs drains it, mapping each zone entry through zoneVMs. The
 // iterator ends with iterator.Done; any other error stops the walk.
-func collectZoneVMs(projectID string, it zoneEntryIterator) ([]VM, error) {
-	var vms []VM
+func collectZoneVMs(projectID string, it zoneEntryIterator) ([]providers.VM, error) {
+	var vms []providers.VM
 	for {
 		entry, err := it.Next()
 		if err == iterator.Done {
@@ -534,8 +379,8 @@ func collectZoneVMs(projectID string, it zoneEntryIterator) ([]VM, error) {
 
 // zoneVMs maps the instances of one aggregated-list zone entry, skipping
 // instances without a zone.
-func zoneVMs(projectID string, instances []*computepb.Instance) []VM {
-	var vms []VM
+func zoneVMs(projectID string, instances []*computepb.Instance) []providers.VM {
+	var vms []providers.VM
 	for _, inst := range instances {
 		if inst.GetZone() == "" {
 			continue
@@ -547,8 +392,8 @@ func zoneVMs(projectID string, instances []*computepb.Instance) []VM {
 
 // instanceToVM maps one compute instance API object to the cache VM row.
 // Metadata carries the instance template name under a fixed key.
-func instanceToVM(projectID string, inst *computepb.Instance) VM {
-	vm := VM{
+func instanceToVM(projectID string, inst *computepb.Instance) providers.VM {
+	vm := providers.VM{
 		ProjectID:   projectID,
 		Name:        inst.GetName(),
 		InstanceID:  strconv.FormatUint(inst.GetId(), 10),
@@ -559,7 +404,7 @@ func instanceToVM(projectID string, inst *computepb.Instance) VM {
 		NetworkTags: inst.GetTags().GetItems(),
 	}
 	for _, sa := range inst.GetServiceAccounts() {
-		vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+		vm.ServiceAccounts = append(vm.ServiceAccounts, providers.VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
 	}
 	for _, m := range inst.GetMetadata().GetItems() {
 		if m.GetKey() == "instance-template" {
@@ -568,7 +413,7 @@ func instanceToVM(projectID string, inst *computepb.Instance) VM {
 		}
 	}
 	for _, iface := range inst.GetNetworkInterfaces() {
-		vmi := VMInterface{
+		vmi := providers.VMInterface{
 			Network:    resourceShortName(iface.GetNetwork(), ""),
 			Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
 			InternalIP: iface.GetNetworkIP(),
@@ -592,7 +437,7 @@ func instanceToVM(projectID string, inst *computepb.Instance) VM {
 	return vm
 }
 
-func ListProjectDisks(projectID string) ([]Disk, error) {
+func ListProjectDisks(projectID string) ([]providers.Disk, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewDisksRESTClient(ctx)
@@ -601,7 +446,7 @@ func ListProjectDisks(projectID string) ([]Disk, error) {
 	}
 	defer client.Close()
 
-	var disks []Disk
+	var disks []providers.Disk
 	it := client.AggregatedList(ctx, &computepb.AggregatedListDisksRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -619,7 +464,7 @@ func ListProjectDisks(projectID string) ([]Disk, error) {
 			for _, u := range d.GetUsers() {
 				users = append(users, resourceShortName(u, ""))
 			}
-			disks = append(disks, Disk{
+			disks = append(disks, providers.Disk{
 				ProjectID:   projectID,
 				Name:        d.GetName(),
 				Zone:        resourceShortName(d.GetZone(), ""),
@@ -634,7 +479,7 @@ func ListProjectDisks(projectID string) ([]Disk, error) {
 	return disks, nil
 }
 
-func ListProjectSnapshots(projectID string) ([]Snapshot, error) {
+func ListProjectSnapshots(projectID string) ([]providers.Snapshot, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewSnapshotsRESTClient(ctx)
@@ -643,7 +488,7 @@ func ListProjectSnapshots(projectID string) ([]Snapshot, error) {
 	}
 	defer client.Close()
 
-	var snapshots []Snapshot
+	var snapshots []providers.Snapshot
 	it := client.List(ctx, &computepb.ListSnapshotsRequest{Project: projectID})
 	for {
 		s, err := it.Next()
@@ -653,7 +498,7 @@ func ListProjectSnapshots(projectID string) ([]Snapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		snapshots = append(snapshots, Snapshot{
+		snapshots = append(snapshots, providers.Snapshot{
 			ProjectID:       projectID,
 			Name:            s.GetName(),
 			Description:     s.GetDescription(),
@@ -669,18 +514,7 @@ func ListProjectSnapshots(projectID string) ([]Snapshot, error) {
 	return snapshots, nil
 }
 
-type Bucket struct {
-	ProjectID     string
-	Name          string
-	Location      string
-	StorageClass  string
-	Versioning    bool
-	UniformAccess bool
-	CreatedAt     string
-	UpdatedAt     string
-}
-
-func ListProjectBuckets(projectID string) ([]Bucket, error) {
+func ListProjectBuckets(projectID string) ([]providers.Bucket, error) {
 	ctx := context.Background()
 
 	svc, err := storage.NewService(ctx)
@@ -688,14 +522,14 @@ func ListProjectBuckets(projectID string) ([]Bucket, error) {
 		return nil, err
 	}
 
-	var buckets []Bucket
+	var buckets []providers.Bucket
 	err = svc.Buckets.List(projectID).Pages(ctx, func(page *storage.Buckets) error {
 		for _, b := range page.Items {
 			versioning := b.Versioning != nil && b.Versioning.Enabled
 			uniform := b.IamConfiguration != nil &&
 				b.IamConfiguration.UniformBucketLevelAccess != nil &&
 				b.IamConfiguration.UniformBucketLevelAccess.Enabled
-			buckets = append(buckets, Bucket{
+			buckets = append(buckets, providers.Bucket{
 				ProjectID:     projectID,
 				Name:          b.Name,
 				Location:      b.Location,
@@ -711,76 +545,6 @@ func ListProjectBuckets(projectID string) ([]Bucket, error) {
 		return nil, err
 	}
 	return buckets, nil
-}
-
-type ForwardingRule struct {
-	ProjectID  string
-	Name       string
-	Region     string
-	IPAddress  string
-	PortRange  string
-	Protocol   string
-	Scheme     string
-	TargetKind string
-	Target     string
-	TargetURL  string
-	UpdatedAt  string
-}
-
-type TargetProxy struct {
-	ProjectID      string
-	Kind           string
-	Name           string
-	URLMap         string
-	BackendService string
-	UpdatedAt      string
-}
-
-type PathRule struct {
-	Paths   []string
-	Service string
-}
-
-type URLMap struct {
-	ProjectID      string
-	Name           string
-	DefaultService string
-	PathRules      []PathRule
-	UpdatedAt      string
-}
-
-type Backend struct {
-	Group         string
-	BalancingMode string
-}
-
-type BackendService struct {
-	ProjectID    string
-	Name         string
-	Region       string
-	Protocol     string
-	PortName     string
-	Backends     []Backend
-	HealthChecks []string
-	UpdatedAt    string
-}
-
-type PSCConnection struct {
-	Endpoint string
-	Project  string
-	Network  string
-	Status   string
-}
-
-type ServiceAttachment struct {
-	ProjectID     string
-	Name          string
-	Region        string
-	TargetService string
-	Preference    string
-	Description   string
-	Connections   []PSCConnection
-	UpdatedAt     string
 }
 
 func targetRef(targetURL string) (string, string) {
@@ -806,13 +570,13 @@ func ResourcePath(resourceURL string) string {
 	return resourceURL
 }
 
-func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) ForwardingRule {
+func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) providers.ForwardingRule {
 	targetURL := r.GetTarget()
 	if targetURL == "" {
 		targetURL = r.GetBackendService()
 	}
 	kind, target := targetRef(targetURL)
-	return ForwardingRule{
+	return providers.ForwardingRule{
 		ProjectID:  projectID,
 		Name:       r.GetName(),
 		Region:     region,
@@ -826,7 +590,7 @@ func forwardingRuleFrom(projectID, region string, r *computepb.ForwardingRule) F
 	}
 }
 
-func ListProjectForwardingRules(projectID string) ([]ForwardingRule, error) {
+func ListProjectForwardingRules(projectID string) ([]providers.ForwardingRule, error) {
 	ctx := context.Background()
 
 	globalClient, err := computev1.NewGlobalForwardingRulesRESTClient(ctx)
@@ -841,7 +605,7 @@ func ListProjectForwardingRules(projectID string) ([]ForwardingRule, error) {
 	}
 	defer regionalClient.Close()
 
-	var rules []ForwardingRule
+	var rules []providers.ForwardingRule
 	globalIt := globalClient.List(ctx, &computepb.ListGlobalForwardingRulesRequest{Project: projectID})
 	for {
 		r, err := globalIt.Next()
@@ -873,7 +637,7 @@ func ListProjectForwardingRules(projectID string) ([]ForwardingRule, error) {
 	return rules, nil
 }
 
-func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
+func ListProjectTargetProxies(projectID string) ([]providers.TargetProxy, error) {
 	ctx := context.Background()
 
 	httpClient, err := computev1.NewTargetHttpProxiesRESTClient(ctx)
@@ -906,7 +670,7 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 	}
 	defer grpcClient.Close()
 
-	var proxies []TargetProxy
+	var proxies []providers.TargetProxy
 	httpIt := httpClient.List(ctx, &computepb.ListTargetHttpProxiesRequest{Project: projectID})
 	for {
 		p, err := httpIt.Next()
@@ -916,7 +680,7 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		proxies = append(proxies, TargetProxy{ProjectID: projectID, Kind: "targetHttpProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
+		proxies = append(proxies, providers.TargetProxy{ProjectID: projectID, Kind: "targetHttpProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
 	}
 	httpsIt := httpsClient.List(ctx, &computepb.ListTargetHttpsProxiesRequest{Project: projectID})
 	for {
@@ -927,7 +691,7 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		proxies = append(proxies, TargetProxy{ProjectID: projectID, Kind: "targetHttpsProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
+		proxies = append(proxies, providers.TargetProxy{ProjectID: projectID, Kind: "targetHttpsProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
 	}
 	tcpIt := tcpClient.List(ctx, &computepb.ListTargetTcpProxiesRequest{Project: projectID})
 	for {
@@ -938,7 +702,7 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		proxies = append(proxies, TargetProxy{ProjectID: projectID, Kind: "targetTcpProxies", Name: p.GetName(), BackendService: resourceShortName(p.GetService(), "")})
+		proxies = append(proxies, providers.TargetProxy{ProjectID: projectID, Kind: "targetTcpProxies", Name: p.GetName(), BackendService: resourceShortName(p.GetService(), "")})
 	}
 	sslIt := sslClient.List(ctx, &computepb.ListTargetSslProxiesRequest{Project: projectID})
 	for {
@@ -949,7 +713,7 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		proxies = append(proxies, TargetProxy{ProjectID: projectID, Kind: "targetSslProxies", Name: p.GetName(), BackendService: resourceShortName(p.GetService(), "")})
+		proxies = append(proxies, providers.TargetProxy{ProjectID: projectID, Kind: "targetSslProxies", Name: p.GetName(), BackendService: resourceShortName(p.GetService(), "")})
 	}
 	grpcIt := grpcClient.List(ctx, &computepb.ListTargetGrpcProxiesRequest{Project: projectID})
 	for {
@@ -960,12 +724,12 @@ func ListProjectTargetProxies(projectID string) ([]TargetProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		proxies = append(proxies, TargetProxy{ProjectID: projectID, Kind: "targetGrpcProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
+		proxies = append(proxies, providers.TargetProxy{ProjectID: projectID, Kind: "targetGrpcProxies", Name: p.GetName(), URLMap: resourceShortName(p.GetUrlMap(), "")})
 	}
 	return proxies, nil
 }
 
-func ListProjectURLMaps(projectID string) ([]URLMap, error) {
+func ListProjectURLMaps(projectID string) ([]providers.URLMap, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewUrlMapsRESTClient(ctx)
@@ -974,7 +738,7 @@ func ListProjectURLMaps(projectID string) ([]URLMap, error) {
 	}
 	defer client.Close()
 
-	var maps []URLMap
+	var maps []providers.URLMap
 	it := client.List(ctx, &computepb.ListUrlMapsRequest{Project: projectID})
 	for {
 		m, err := it.Next()
@@ -984,14 +748,14 @@ func ListProjectURLMaps(projectID string) ([]URLMap, error) {
 		if err != nil {
 			return nil, err
 		}
-		um := URLMap{
+		um := providers.URLMap{
 			ProjectID:      projectID,
 			Name:           m.GetName(),
 			DefaultService: resourceShortName(m.GetDefaultService(), ""),
 		}
 		for _, pm := range m.GetPathMatchers() {
 			for _, pr := range pm.GetPathRules() {
-				um.PathRules = append(um.PathRules, PathRule{Paths: pr.GetPaths(), Service: resourceShortName(pr.GetService(), "")})
+				um.PathRules = append(um.PathRules, providers.PathRule{Paths: pr.GetPaths(), Service: resourceShortName(pr.GetService(), "")})
 			}
 		}
 		maps = append(maps, um)
@@ -999,8 +763,8 @@ func ListProjectURLMaps(projectID string) ([]URLMap, error) {
 	return maps, nil
 }
 
-func backendServiceFrom(projectID, region string, b *computepb.BackendService) BackendService {
-	svc := BackendService{
+func backendServiceFrom(projectID, region string, b *computepb.BackendService) providers.BackendService {
+	svc := providers.BackendService{
 		ProjectID: projectID,
 		Name:      b.GetName(),
 		Region:    region,
@@ -1008,7 +772,7 @@ func backendServiceFrom(projectID, region string, b *computepb.BackendService) B
 		PortName:  b.GetPortName(),
 	}
 	for _, be := range b.GetBackends() {
-		svc.Backends = append(svc.Backends, Backend{Group: resourceShortName(be.GetGroup(), ""), BalancingMode: be.GetBalancingMode()})
+		svc.Backends = append(svc.Backends, providers.Backend{Group: resourceShortName(be.GetGroup(), ""), BalancingMode: be.GetBalancingMode()})
 	}
 	for _, hc := range b.GetHealthChecks() {
 		svc.HealthChecks = append(svc.HealthChecks, resourceShortName(hc, ""))
@@ -1016,7 +780,7 @@ func backendServiceFrom(projectID, region string, b *computepb.BackendService) B
 	return svc
 }
 
-func ListProjectBackendServices(projectID string) ([]BackendService, error) {
+func ListProjectBackendServices(projectID string) ([]providers.BackendService, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewBackendServicesRESTClient(ctx)
@@ -1025,7 +789,7 @@ func ListProjectBackendServices(projectID string) ([]BackendService, error) {
 	}
 	defer client.Close()
 
-	var services []BackendService
+	var services []providers.BackendService
 	it := client.List(ctx, &computepb.ListBackendServicesRequest{Project: projectID})
 	for {
 		s, err := it.Next()
@@ -1057,27 +821,7 @@ func ListProjectBackendServices(projectID string) ([]BackendService, error) {
 	return services, nil
 }
 
-type ClusterNodePool struct {
-	Name      string
-	Version   string
-	NodeCount int64
-}
-
-type Cluster struct {
-	ProjectID   string
-	Name        string
-	Description string
-	Location    string
-	Status      string
-	Version     string
-	Endpoint    string
-	Labels      map[string]string
-	NodePools   []ClusterNodePool
-	CreatedAt   string
-	UpdatedAt   string
-}
-
-func ListProjectClusters(projectID string) ([]Cluster, error) {
+func ListProjectClusters(projectID string) ([]providers.Cluster, error) {
 	ctx := context.Background()
 
 	svc, err := container.NewService(ctx)
@@ -1090,9 +834,9 @@ func ListProjectClusters(projectID string) ([]Cluster, error) {
 		return nil, err
 	}
 
-	var clusters []Cluster
+	var clusters []providers.Cluster
 	for _, c := range resp.Clusters {
-		cluster := Cluster{
+		cluster := providers.Cluster{
 			ProjectID:   projectID,
 			Name:        c.Name,
 			Description: c.Description,
@@ -1104,22 +848,11 @@ func ListProjectClusters(projectID string) ([]Cluster, error) {
 			CreatedAt:   c.CreateTime,
 		}
 		for _, np := range c.NodePools {
-			cluster.NodePools = append(cluster.NodePools, ClusterNodePool{Name: np.Name, Version: np.Version, NodeCount: np.InitialNodeCount})
+			cluster.NodePools = append(cluster.NodePools, providers.ClusterNodePool{Name: np.Name, Version: np.Version, NodeCount: np.InitialNodeCount})
 		}
 		clusters = append(clusters, cluster)
 	}
 	return clusters, nil
-}
-
-type Workload struct {
-	ProjectID string
-	Cluster   string
-	Kind      string
-	Namespace string
-	Name      string
-	Replicas  string
-	Images    []string
-	UpdatedAt string
 }
 
 type k8sWorkload struct {
@@ -1149,7 +882,7 @@ type k8sWorkloadList struct {
 	Items []k8sWorkload `json:"items"`
 }
 
-func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) {
+func ListClusterWorkloads(projectID, location, name string) ([]providers.Workload, error) {
 	scopeFlag := "--region"
 	if strings.Count(location, "-") > 1 {
 		scopeFlag = "--zone"
@@ -1185,9 +918,9 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 		return nil, err
 	}
 
-	var workloads []Workload
+	var workloads []providers.Workload
 	for _, item := range list.Items {
-		w := Workload{
+		w := providers.Workload{
 			ProjectID: projectID,
 			Cluster:   name,
 			Kind:      item.Kind,
@@ -1213,16 +946,6 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 	return workloads, nil
 }
 
-type ClusterNode struct {
-	ProjectID  string
-	Cluster    string
-	Name       string
-	NodePool   string
-	Status     string
-	InternalIP string
-	UpdatedAt  string
-}
-
 type k8sNode struct {
 	Metadata struct {
 		Name   string            `json:"name"`
@@ -1244,7 +967,7 @@ type k8sNodeList struct {
 	Items []k8sNode `json:"items"`
 }
 
-func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
+func ListClusterNodes(projectID, location, name string) ([]providers.ClusterNode, error) {
 	scopeFlag := "--region"
 	if strings.Count(location, "-") > 1 {
 		scopeFlag = "--zone"
@@ -1280,7 +1003,7 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 
 // parseClusterNodeList decodes kubectl node output into cache rows. Split
 // from ListClusterNodes so the decode path is testable without kubectl.
-func parseClusterNodeList(out []byte, projectID, name string) ([]ClusterNode, error) {
+func parseClusterNodeList(out []byte, projectID, name string) ([]providers.ClusterNode, error) {
 	var list k8sNodeList
 	if err := json.Unmarshal(out, &list); err != nil {
 		return nil, err
@@ -1290,10 +1013,10 @@ func parseClusterNodeList(out []byte, projectID, name string) ([]ClusterNode, er
 
 // parseClusterNodes maps kubectl node objects to cache rows. Nodes start
 // NotReady until a Ready condition says otherwise.
-func parseClusterNodes(projectID, name string, items []k8sNode) []ClusterNode {
-	nodes := make([]ClusterNode, 0, len(items))
+func parseClusterNodes(projectID, name string, items []k8sNode) []providers.ClusterNode {
+	nodes := make([]providers.ClusterNode, 0, len(items))
 	for _, item := range items {
-		node := ClusterNode{
+		node := providers.ClusterNode{
 			ProjectID: projectID,
 			Cluster:   name,
 			Name:      item.Metadata.Name,
@@ -1319,26 +1042,7 @@ func parseClusterNodes(projectID, name string, items []k8sNode) []ClusterNode {
 	return nodes
 }
 
-type DNSZone struct {
-	ProjectID   string
-	Name        string
-	DNSName     string
-	Visibility  string
-	Description string
-	UpdatedAt   string
-}
-
-type DNSRecord struct {
-	ProjectID string
-	Zone      string
-	Name      string
-	Type      string
-	TTL       int64
-	Data      []string
-	UpdatedAt string
-}
-
-func ListProjectDNSZones(projectID string) ([]DNSZone, error) {
+func ListProjectDNSZones(projectID string) ([]providers.DNSZone, error) {
 	ctx := context.Background()
 
 	svc, err := dns.NewService(ctx)
@@ -1346,10 +1050,10 @@ func ListProjectDNSZones(projectID string) ([]DNSZone, error) {
 		return nil, err
 	}
 
-	var zones []DNSZone
+	var zones []providers.DNSZone
 	err = svc.ManagedZones.List(projectID).Pages(ctx, func(page *dns.ManagedZonesListResponse) error {
 		for _, z := range page.ManagedZones {
-			zones = append(zones, DNSZone{
+			zones = append(zones, providers.DNSZone{
 				ProjectID:   projectID,
 				Name:        z.Name,
 				DNSName:     z.DnsName,
@@ -1365,7 +1069,7 @@ func ListProjectDNSZones(projectID string) ([]DNSZone, error) {
 	return zones, nil
 }
 
-func ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
+func ListZoneDNSRecords(projectID, zone string) ([]providers.DNSRecord, error) {
 	ctx := context.Background()
 
 	svc, err := dns.NewService(ctx)
@@ -1373,10 +1077,10 @@ func ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
 		return nil, err
 	}
 
-	var records []DNSRecord
+	var records []providers.DNSRecord
 	err = svc.ResourceRecordSets.List(projectID, zone).Pages(ctx, func(page *dns.ResourceRecordSetsListResponse) error {
 		for _, r := range page.Rrsets {
-			records = append(records, DNSRecord{
+			records = append(records, providers.DNSRecord{
 				ProjectID: projectID,
 				Zone:      zone,
 				Name:      r.Name,
@@ -1393,7 +1097,7 @@ func ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
 	return records, nil
 }
 
-func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
+func ListProjectIPAddresses(projectID string) ([]providers.IPAddress, error) {
 	ctx := context.Background()
 
 	addressesClient, err := computev1.NewAddressesRESTClient(ctx)
@@ -1408,7 +1112,7 @@ func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
 	}
 	defer globalClient.Close()
 
-	var addresses []IPAddress
+	var addresses []providers.IPAddress
 
 	globalIt := globalClient.List(ctx, &computepb.ListGlobalAddressesRequest{Project: projectID})
 	for {
@@ -1419,7 +1123,7 @@ func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
 		if err != nil {
 			return nil, err
 		}
-		addresses = append(addresses, IPAddress{
+		addresses = append(addresses, providers.IPAddress{
 			Name:        addr.GetName(),
 			Address:     addr.GetAddress(),
 			AddressType: addr.GetAddressType(),
@@ -1444,7 +1148,7 @@ func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
 				continue
 			}
 			region := resourceShortName(addr.GetRegion(), "global")
-			addresses = append(addresses, IPAddress{
+			addresses = append(addresses, providers.IPAddress{
 				Name:        addr.GetName(),
 				Address:     addr.GetAddress(),
 				AddressType: addr.GetAddressType(),
@@ -1458,29 +1162,7 @@ func ListProjectIPAddresses(projectID string) ([]IPAddress, error) {
 	return addresses, nil
 }
 
-type CloudRouterPeer struct {
-	Name      string
-	Interface string
-	IPAddress string
-	PeerIP    string
-	PeerASN   uint32
-	Priority  uint32
-}
-
-type CloudRouter struct {
-	ProjectID   string
-	Name        string
-	Region      string
-	Network     string
-	Description string
-	BGPASN      uint32
-	Peers       []CloudRouterPeer
-	NATs        []string
-	CreatedAt   string
-	UpdatedAt   string
-}
-
-func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
+func ListProjectCloudRouters(projectID string) ([]providers.CloudRouter, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewRoutersRESTClient(ctx)
@@ -1489,7 +1171,7 @@ func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
 	}
 	defer client.Close()
 
-	var routers []CloudRouter
+	var routers []providers.CloudRouter
 	it := client.AggregatedList(ctx, &computepb.AggregatedListRoutersRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -1503,9 +1185,9 @@ func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
 			if r.GetRegion() == "" {
 				continue
 			}
-			peers := make([]CloudRouterPeer, 0, len(r.GetBgpPeers()))
+			peers := make([]providers.CloudRouterPeer, 0, len(r.GetBgpPeers()))
 			for _, p := range r.GetBgpPeers() {
-				peers = append(peers, CloudRouterPeer{
+				peers = append(peers, providers.CloudRouterPeer{
 					Name:      p.GetName(),
 					Interface: p.GetInterfaceName(),
 					IPAddress: p.GetIpAddress(),
@@ -1518,7 +1200,7 @@ func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
 			for _, n := range r.GetNats() {
 				nats = append(nats, n.GetName())
 			}
-			routers = append(routers, CloudRouter{
+			routers = append(routers, providers.CloudRouter{
 				ProjectID:   projectID,
 				Name:        r.GetName(),
 				Region:      resourceShortName(r.GetRegion(), ""),
@@ -1534,29 +1216,7 @@ func ListProjectCloudRouters(projectID string) ([]CloudRouter, error) {
 	return routers, nil
 }
 
-type VPNTunnel struct {
-	Name      string
-	Interface int32
-	PeerIP    string
-	IKE       int32
-	Status    string
-	Router    string
-}
-
-type VPNGateway struct {
-	ProjectID   string
-	Name        string
-	Type        string
-	Region      string
-	Network     string
-	IPs         []string
-	Description string
-	Tunnels     []VPNTunnel
-	CreatedAt   string
-	UpdatedAt   string
-}
-
-func ListProjectServiceAttachments(projectID string) ([]ServiceAttachment, error) {
+func ListProjectServiceAttachments(projectID string) ([]providers.ServiceAttachment, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewServiceAttachmentsRESTClient(ctx)
@@ -1565,7 +1225,7 @@ func ListProjectServiceAttachments(projectID string) ([]ServiceAttachment, error
 	}
 	defer client.Close()
 
-	var attachments []ServiceAttachment
+	var attachments []providers.ServiceAttachment
 	it := client.AggregatedList(ctx, &computepb.AggregatedListServiceAttachmentsRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -1579,16 +1239,16 @@ func ListProjectServiceAttachments(projectID string) ([]ServiceAttachment, error
 			if sa.GetRegion() == "" {
 				continue
 			}
-			conns := make([]PSCConnection, 0, len(sa.GetConnectedEndpoints()))
+			conns := make([]providers.PSCConnection, 0, len(sa.GetConnectedEndpoints()))
 			for _, e := range sa.GetConnectedEndpoints() {
-				conns = append(conns, PSCConnection{
+				conns = append(conns, providers.PSCConnection{
 					Endpoint: resourceShortName(e.GetEndpoint(), ""),
 					Project:  ResourceProjectName(e.GetEndpoint()),
 					Network:  resourceShortName(e.GetConsumerNetwork(), ""),
 					Status:   e.GetStatus(),
 				})
 			}
-			attachments = append(attachments, ServiceAttachment{
+			attachments = append(attachments, providers.ServiceAttachment{
 				ProjectID:     projectID,
 				Name:          sa.GetName(),
 				Region:        resourceShortName(sa.GetRegion(), ""),
@@ -1602,7 +1262,7 @@ func ListProjectServiceAttachments(projectID string) ([]ServiceAttachment, error
 	return attachments, nil
 }
 
-func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
+func ListProjectVPNGateways(projectID string) ([]providers.VPNGateway, error) {
 	ctx := context.Background()
 
 	haClient, err := computev1.NewVpnGatewaysRESTClient(ctx)
@@ -1623,7 +1283,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 	}
 	defer tunnelsClient.Close()
 
-	tunnelsByGateway := map[string][]VPNTunnel{}
+	tunnelsByGateway := map[string][]providers.VPNTunnel{}
 	tunnelsIt := tunnelsClient.AggregatedList(ctx, &computepb.AggregatedListVpnTunnelsRequest{Project: projectID})
 	for {
 		entry, err := tunnelsIt.Next()
@@ -1638,7 +1298,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 			if gateway == "" {
 				gateway = t.GetTargetVpnGateway()
 			}
-			tunnelsByGateway[gateway] = append(tunnelsByGateway[gateway], VPNTunnel{
+			tunnelsByGateway[gateway] = append(tunnelsByGateway[gateway], providers.VPNTunnel{
 				Name:      t.GetName(),
 				Interface: t.GetVpnGatewayInterface(),
 				PeerIP:    t.GetPeerIp(),
@@ -1649,7 +1309,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 		}
 	}
 
-	var gateways []VPNGateway
+	var gateways []providers.VPNGateway
 	haIt := haClient.AggregatedList(ctx, &computepb.AggregatedListVpnGatewaysRequest{Project: projectID})
 	for {
 		entry, err := haIt.Next()
@@ -1667,7 +1327,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 			for _, i := range g.GetVpnInterfaces() {
 				ips = append(ips, i.GetIpAddress())
 			}
-			gateways = append(gateways, VPNGateway{
+			gateways = append(gateways, providers.VPNGateway{
 				ProjectID:   projectID,
 				Name:        g.GetName(),
 				Type:        "ha",
@@ -1693,7 +1353,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 			if g.GetRegion() == "" {
 				continue
 			}
-			gateways = append(gateways, VPNGateway{
+			gateways = append(gateways, providers.VPNGateway{
 				ProjectID:   projectID,
 				Name:        g.GetName(),
 				Type:        "classic",
@@ -1708,20 +1368,7 @@ func ListProjectVPNGateways(projectID string) ([]VPNGateway, error) {
 	return gateways, nil
 }
 
-type InstanceGroup struct {
-	ProjectID   string
-	Name        string
-	Zone        string
-	Type        string
-	Size        int32
-	Network     string
-	Subnetwork  string
-	Template    string
-	Description string
-	UpdatedAt   string
-}
-
-func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
+func ListProjectInstanceGroups(projectID string) ([]providers.InstanceGroup, error) {
 	ctx := context.Background()
 
 	groupsClient, err := computev1.NewInstanceGroupsRESTClient(ctx)
@@ -1736,7 +1383,7 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 	}
 	defer managersClient.Close()
 
-	unmanaged := make(map[string]InstanceGroup)
+	unmanaged := make(map[string]providers.InstanceGroup)
 	groupsIt := groupsClient.AggregatedList(ctx, &computepb.AggregatedListInstanceGroupsRequest{Project: projectID})
 	for {
 		entry, err := groupsIt.Next()
@@ -1754,7 +1401,7 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 			if location == "" {
 				location = resourceShortName(g.GetRegion(), "")
 			}
-			unmanaged[location+"/"+g.GetName()] = InstanceGroup{
+			unmanaged[location+"/"+g.GetName()] = providers.InstanceGroup{
 				ProjectID:   projectID,
 				Name:        g.GetName(),
 				Zone:        location,
@@ -1767,7 +1414,7 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 		}
 	}
 
-	var groups []InstanceGroup
+	var groups []providers.InstanceGroup
 	managed := make(map[string]bool)
 	managersIt := managersClient.AggregatedList(ctx, &computepb.AggregatedListInstanceGroupManagersRequest{Project: projectID})
 	for {
@@ -1788,7 +1435,7 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 			}
 			key := location + "/" + m.GetName()
 			managed[key] = true
-			group := InstanceGroup{
+			group := providers.InstanceGroup{
 				ProjectID:   projectID,
 				Name:        m.GetName(),
 				Zone:        location,
@@ -1813,11 +1460,6 @@ func ListProjectInstanceGroups(projectID string) ([]InstanceGroup, error) {
 	return groups, nil
 }
 
-type InstanceGroupMember struct {
-	Zone string
-	Name string
-}
-
 func instanceRefFromLink(link string) (string, string) {
 	parts := strings.Split(link, "/")
 	zone := ""
@@ -1833,8 +1475,8 @@ func instanceRefFromLink(link string) (string, string) {
 	return zone, name
 }
 
-func instanceGroupMembers(it *computev1.InstanceWithNamedPortsIterator) ([]InstanceGroupMember, error) {
-	var members []InstanceGroupMember
+func instanceGroupMembers(it *computev1.InstanceWithNamedPortsIterator) ([]providers.InstanceGroupMember, error) {
+	var members []providers.InstanceGroupMember
 	for {
 		item, err := it.Next()
 		if err == iterator.Done {
@@ -1847,12 +1489,12 @@ func instanceGroupMembers(it *computev1.InstanceWithNamedPortsIterator) ([]Insta
 		if zone == "" || name == "" {
 			continue
 		}
-		members = append(members, InstanceGroupMember{Zone: zone, Name: name})
+		members = append(members, providers.InstanceGroupMember{Zone: zone, Name: name})
 	}
 	return members, nil
 }
 
-func ListInstanceGroupVMs(projectID, location, name string) ([]InstanceGroupMember, error) {
+func ListInstanceGroupVMs(projectID, location, name string) ([]providers.InstanceGroupMember, error) {
 	ctx := context.Background()
 	if strings.Count(location, "-") > 1 {
 		client, err := computev1.NewInstanceGroupsRESTClient(ctx)
@@ -1878,22 +1520,7 @@ func ListInstanceGroupVMs(projectID, location, name string) ([]InstanceGroupMemb
 	}))
 }
 
-type Reservation struct {
-	ProjectID   string
-	Name        string
-	Zone        string
-	MachineType string
-	Count       int64
-	InUseCount  int64
-	ShareType   string
-	Required    bool
-	Status      string
-	Description string
-	Commitment  string
-	UpdatedAt   string
-}
-
-func ListProjectReservations(projectID string) ([]Reservation, error) {
+func ListProjectReservations(projectID string) ([]providers.Reservation, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewReservationsRESTClient(ctx)
@@ -1902,7 +1529,7 @@ func ListProjectReservations(projectID string) ([]Reservation, error) {
 	}
 	defer client.Close()
 
-	var reservations []Reservation
+	var reservations []providers.Reservation
 	it := client.AggregatedList(ctx, &computepb.AggregatedListReservationsRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -1916,7 +1543,7 @@ func ListProjectReservations(projectID string) ([]Reservation, error) {
 			if r.GetZone() == "" {
 				continue
 			}
-			reservations = append(reservations, Reservation{
+			reservations = append(reservations, providers.Reservation{
 				ProjectID:   projectID,
 				Name:        r.GetName(),
 				Zone:        resourceShortName(r.GetZone(), ""),
@@ -1934,20 +1561,6 @@ func ListProjectReservations(projectID string) ([]Reservation, error) {
 	return reservations, nil
 }
 
-type Image struct {
-	ProjectID       string
-	Name            string
-	Family          string
-	Status          string
-	SizeGB          int64
-	StorageLocation string
-	Source          string
-	CreatedAt       string
-	Description     string
-	Deprecated      string
-	UpdatedAt       string
-}
-
 func imageSource(img *computepb.Image) string {
 	for _, source := range []string{img.GetSourceDisk(), img.GetSourceImage(), img.GetSourceSnapshot()} {
 		if source != "" {
@@ -1957,7 +1570,7 @@ func imageSource(img *computepb.Image) string {
 	return ""
 }
 
-func ListProjectImages(projectID string) ([]Image, error) {
+func ListProjectImages(projectID string) ([]providers.Image, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewImagesRESTClient(ctx)
@@ -1966,7 +1579,7 @@ func ListProjectImages(projectID string) ([]Image, error) {
 	}
 	defer client.Close()
 
-	var images []Image
+	var images []providers.Image
 	it := client.List(ctx, &computepb.ListImagesRequest{Project: projectID})
 	for {
 		img, err := it.Next()
@@ -1976,7 +1589,7 @@ func ListProjectImages(projectID string) ([]Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, Image{
+		images = append(images, providers.Image{
 			ProjectID:       projectID,
 			Name:            img.GetName(),
 			Family:          img.GetFamily(),
@@ -1992,52 +1605,7 @@ func ListProjectImages(projectID string) ([]Image, error) {
 	return images, nil
 }
 
-var PublicImageProjects = []string{
-	"almalinux-cloud",
-	"centos-cloud",
-	"cos-cloud",
-	"debian-cloud",
-	"opensuse-cloud",
-	"oracle-linux-cloud",
-	"rhel-cloud",
-	"rocky-linux-cloud",
-	"suse-cloud",
-	"suse-sap-cloud",
-	"ubuntu-os-cloud",
-	"windows-cloud",
-	"windows-sql-cloud",
-}
-
-type InstanceTemplateDisk struct {
-	DeviceName  string
-	SourceImage string
-	DiskSizeGB  int64
-	DiskType    string
-	AutoDelete  bool
-	Boot        bool
-}
-
-type InstanceTemplateInterface struct {
-	Network    string
-	Subnetwork string
-	NetworkIP  string
-	ExternalIP string
-}
-
-type InstanceTemplate struct {
-	ProjectID   string
-	Name        string
-	Location    string
-	MachineType string
-	Disks       []InstanceTemplateDisk
-	Interfaces  []InstanceTemplateInterface
-	Labels      map[string]string
-	Description string
-	CreatedAt   string
-	UpdatedAt   string
-}
-
-func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) {
+func ListProjectInstanceTemplates(projectID string) ([]providers.InstanceTemplate, error) {
 	ctx := context.Background()
 
 	client, err := computev1.NewInstanceTemplatesRESTClient(ctx)
@@ -2046,7 +1614,7 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 	}
 	defer client.Close()
 
-	var templates []InstanceTemplate
+	var templates []providers.InstanceTemplate
 	it := client.AggregatedList(ctx, &computepb.AggregatedListInstanceTemplatesRequest{Project: projectID})
 	for {
 		entry, err := it.Next()
@@ -2061,7 +1629,7 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 			if location == "" {
 				location = "global"
 			}
-			template := InstanceTemplate{
+			template := providers.InstanceTemplate{
 				ProjectID:   projectID,
 				Name:        t.GetName(),
 				Location:    location,
@@ -2071,7 +1639,7 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 				CreatedAt:   t.GetCreationTimestamp(),
 			}
 			for _, d := range t.GetProperties().GetDisks() {
-				template.Disks = append(template.Disks, InstanceTemplateDisk{
+				template.Disks = append(template.Disks, providers.InstanceTemplateDisk{
 					DeviceName:  d.GetDeviceName(),
 					SourceImage: resourceShortName(d.GetInitializeParams().GetSourceImage(), ""),
 					DiskSizeGB:  d.GetInitializeParams().GetDiskSizeGb(),
@@ -2081,7 +1649,7 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 				})
 			}
 			for _, iface := range t.GetProperties().GetNetworkInterfaces() {
-				ti := InstanceTemplateInterface{
+				ti := providers.InstanceTemplateInterface{
 					Network:    resourceShortName(iface.GetNetwork(), ""),
 					Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
 					NetworkIP:  iface.GetNetworkIP(),
@@ -2100,15 +1668,7 @@ func ListProjectInstanceTemplates(projectID string) ([]InstanceTemplate, error) 
 	return templates, nil
 }
 
-type IAMBinding struct {
-	ProjectID string
-	Member    string
-	Role      string
-	Condition string
-	UpdatedAt string
-}
-
-func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
+func ListProjectIAMPolicy(projectID string) ([]providers.IAMBinding, error) {
 	ctx := context.Background()
 
 	client, err := resourcemanager.NewProjectsClient(ctx)
@@ -2125,14 +1685,14 @@ func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
 		return nil, err
 	}
 
-	var bindings []IAMBinding
+	var bindings []providers.IAMBinding
 	for _, b := range policy.GetBindings() {
 		condition := b.GetCondition().GetTitle()
 		if condition == "" {
 			condition = b.GetCondition().GetExpression()
 		}
 		for _, member := range b.GetMembers() {
-			bindings = append(bindings, IAMBinding{
+			bindings = append(bindings, providers.IAMBinding{
 				ProjectID: projectID,
 				Member:    member,
 				Role:      b.GetRole(),
@@ -2143,18 +1703,7 @@ func ListProjectIAMPolicy(projectID string) ([]IAMBinding, error) {
 	return bindings, nil
 }
 
-type CustomRole struct {
-	ProjectID   string
-	Name        string
-	Title       string
-	Description string
-	Stage       string
-	Permissions []string
-	Deleted     bool
-	UpdatedAt   string
-}
-
-func ListProjectCustomRoles(projectID string) ([]CustomRole, error) {
+func ListProjectCustomRoles(projectID string) ([]providers.CustomRole, error) {
 	ctx := context.Background()
 
 	svc, err := iam.NewService(ctx)
@@ -2162,10 +1711,10 @@ func ListProjectCustomRoles(projectID string) ([]CustomRole, error) {
 		return nil, err
 	}
 
-	var roles []CustomRole
-	err = svc.Projects.Roles.List("projects/" + projectID).View("FULL").Pages(ctx, func(page *iam.ListRolesResponse) error {
+	var roles []providers.CustomRole
+	err = svc.Projects.Roles.List("projects/"+projectID).View("FULL").Pages(ctx, func(page *iam.ListRolesResponse) error {
 		for _, r := range page.Roles {
-			roles = append(roles, CustomRole{
+			roles = append(roles, providers.CustomRole{
 				ProjectID:   projectID,
 				Name:        resourceShortName(r.Name, ""),
 				Title:       r.Title,
@@ -2183,16 +1732,7 @@ func ListProjectCustomRoles(projectID string) ([]CustomRole, error) {
 	return roles, nil
 }
 
-type BucketIAMBinding struct {
-	ProjectID string
-	Bucket    string
-	Member    string
-	Role      string
-	Condition string
-	UpdatedAt string
-}
-
-func ListBucketIAMPolicy(projectID, bucket string) ([]BucketIAMBinding, error) {
+func ListBucketIAMPolicy(projectID, bucket string) ([]providers.BucketIAMBinding, error) {
 	ctx := context.Background()
 
 	svc, err := storage.NewService(ctx)
@@ -2205,7 +1745,7 @@ func ListBucketIAMPolicy(projectID, bucket string) ([]BucketIAMBinding, error) {
 		return nil, err
 	}
 
-	var bindings []BucketIAMBinding
+	var bindings []providers.BucketIAMBinding
 	for _, b := range policy.Bindings {
 		condition := ""
 		if b.Condition != nil {
@@ -2215,7 +1755,7 @@ func ListBucketIAMPolicy(projectID, bucket string) ([]BucketIAMBinding, error) {
 			}
 		}
 		for _, member := range b.Members {
-			bindings = append(bindings, BucketIAMBinding{
+			bindings = append(bindings, providers.BucketIAMBinding{
 				ProjectID: projectID,
 				Bucket:    bucket,
 				Member:    member,

@@ -9,7 +9,7 @@ No TUI code is touched. The CLI reads the same cache and calls the same fetchers
 ## Why
 
 - **Agents cannot use the TUI.** `app.Run()` opens `/dev/tty`; inside an agent shell there is no TTY, so today the only agent path is raw `gcloud` with per-resource flag archaeology. The value of lazycloud, one consistent view over 30+ resource types with a local cache, is exactly what an agent needs but cannot reach.
-- **The layer separation already exists.** `cmd/providers` has zero `tview`/`tcell` imports: 31 `List*` functions (gcloud.go, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
+- **The layer separation already exists.** `pkg/providers` (previously `cmd/providers`) has zero `tview`/`tcell` imports: 31 `List*` functions (gcloud.go, grammar support `--cloud`, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
 - **JSON is already half-implemented.** The `y` copy key serializes any row's cached resource (handlers.go `rowCopyPayload`), and `:write` dumps whole views as JSON/YAML/CSV. The CLI generalizes what already exists.
 
 ## Non-goals
