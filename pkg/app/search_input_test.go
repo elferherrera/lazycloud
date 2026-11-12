@@ -29,7 +29,7 @@ func resetAppState() {
 	appState.AllProjects = false
 }
 
-func TestInputCaptureTabTogglesSearchFocusFromPanel(t *testing.T) {
+func TestInputCaptureTabCyclesSearchFocusThroughSections(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -41,27 +41,32 @@ func TestInputCaptureTabTogglesSearchFocusFromPanel(t *testing.T) {
 		t.Fatalf("focus after open = %T, want search input", got)
 	}
 
-	// Tab from the input moves focus to the main view and back, keeping the
-	// panel open both times.
+	// Tab cycles input → results → main view, Backtab walks it backwards.
 	if ev := a.inputCapture(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)); ev != nil {
-		t.Fatal("Tab from panel should be consumed")
+		t.Fatal("Tab from input should be consumed")
 	}
-	if got := a.tapp.GetFocus(); got != a.info {
-		t.Fatalf("focus after Tab = %T, want info table", got)
+	if got := a.tapp.GetFocus(); got != a.searchResults {
+		t.Fatalf("focus after Tab = %T, want results table", got)
 	}
 	if !a.searchOpen.Load() {
 		t.Fatal("panel closed by Tab")
 	}
+	if ev := a.inputCapture(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)); ev != nil {
+		t.Fatal("Tab from results should be consumed")
+	}
+	if got := a.tapp.GetFocus(); got != a.info {
+		t.Fatalf("focus after second Tab = %T, want info table", got)
+	}
 	if ev := a.inputCapture(tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)); ev != nil {
 		t.Fatal("Backtab from main view should be consumed")
 	}
-	if got := a.tapp.GetFocus(); got != a.searchInput {
-		t.Fatalf("focus after Backtab = %T, want search input", got)
+	if got := a.tapp.GetFocus(); got != a.searchResults {
+		t.Fatalf("focus after Backtab = %T, want results table", got)
 	}
 	a.closeSearch()
 }
 
-func TestInputCaptureTabKeepsFilterCompletionInFilterMode(t *testing.T) {
+func TestInputCaptureTabCyclesInFilterModeAndCompletesOnCmdInput(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -69,18 +74,24 @@ func TestInputCaptureTabKeepsFilterCompletionInFilterMode(t *testing.T) {
 	resetAppState()
 
 	a.openSearch()
-	// Move focus to the main view while the panel stays open.
-	a.inputCapture(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone))
-
-	// In filter mode, Tab on the main view cycles detail paths instead of
-	// toggling the panel: the filter input is where typing happens.
 	appState.CmdMode = modeFilter
 	a.cmd.SetText("")
+
+	// With the panel open, Tab on the main view cycles to the query input
+	// even in filter mode.
+	a.tapp.SetFocus(a.info)
 	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)); got != nil {
-		t.Fatal("Tab in filter mode should be consumed by detail completion")
+		t.Fatal("Tab in filter mode should be consumed by the focus cycle")
 	}
-	if a.tapp.GetFocus() == a.searchInput {
-		t.Fatal("Tab in filter mode toggled panel focus, want detail completion")
+	if got := a.tapp.GetFocus(); got != a.searchInput {
+		t.Fatalf("focus after Tab = %T, want search input", got)
+	}
+
+	// Filter-mode Tab keeps its detail-path completion while the bottom
+	// filter input itself is focused.
+	a.tapp.SetFocus(a.cmd)
+	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)); got != nil {
+		t.Fatal("Tab on the filter input should be consumed by detail completion")
 	}
 	if text := a.cmd.GetText(); text == "" {
 		t.Fatal("detail completion did not preset a path")
@@ -149,11 +160,11 @@ func TestSearchOpenWithoutColumnIsNoop(t *testing.T) {
 	}
 }
 
-func TestToggleSearchFocusIgnoredWhenClosed(t *testing.T) {
+func TestCycleSearchFocusIgnoredWhenClosed(t *testing.T) {
 	a := newSearchTestApp(t)
-	a.toggleSearchFocus()
+	a.cycleSearchFocus(false)
 	if a.searchPanelFocus {
-		t.Fatal("toggleSearchFocus with panel closed changed focus state")
+		t.Fatal("cycleSearchFocus with panel closed changed focus state")
 	}
 }
 
@@ -371,7 +382,7 @@ func TestSearchPanelWidthScalesWithTerminal(t *testing.T) {
 	}
 }
 
-func TestUpdateSearchPanelStyleFollowsFocus(t *testing.T) {
+func TestUpdateSearchPanelStyleUsesThemeBorder(t *testing.T) {
 	a := newSearchTestApp(t)
 	resetAppState()
 
@@ -381,11 +392,11 @@ func TestUpdateSearchPanelStyleFollowsFocus(t *testing.T) {
 	}
 
 	a.openSearch()
-	if got := a.searchInput.GetBorderColor(); got == theme.borderColor() {
-		t.Fatal("focused panel border matches the plain theme border")
+	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("focused panel border = %v, want theme border", got)
 	}
 
-	a.toggleSearchFocus()
+	a.cycleSearchFocus(false)
 	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
 		t.Fatalf("unfocused panel border = %v, want theme border", got)
 	}

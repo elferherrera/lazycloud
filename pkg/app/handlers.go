@@ -406,18 +406,21 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		a.escapePressed()
 		return nil
 	case tcell.KeyTab, tcell.KeyBacktab:
-		// While the search panel is open, Tab moves focus between the panel
-		// and the main view; the panel stays open either way. In filter mode
-		// Tab keeps its older job of cycling detail paths, since the filter
-		// input is where the user is typing.
+		// While the search panel is open, Tab cycles focus through its
+		// query input, its results table and the main view, Backtab
+		// backwards; the panel stays open the whole way. Filter-mode Tab
+		// keeps its older job of cycling detail paths while the bottom
+		// filter input itself is focused, since that is where the user
+		// is typing.
 		if a.searchOpen.Load() {
 			focus := a.tapp.GetFocus()
-			if focus == a.searchInput || focus == a.searchResults {
-				a.toggleSearchFocus()
+			backward := event.Key() == tcell.KeyBacktab
+			if focus == a.searchInput || focus == a.searchResults || focus == a.info {
+				a.cycleSearchFocus(backward)
 				return nil
 			}
 			if appState.CmdMode != modeFilter {
-				a.toggleSearchFocus()
+				a.cycleSearchFocus(backward)
 				return nil
 			}
 		}

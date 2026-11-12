@@ -277,12 +277,3 @@ func TestSearchCommandOpensPanel(t *testing.T) {
 	}
 	a.closeSearch()
 }
-
-func TestSearchFocusBorderColorFallsBackToBorder(t *testing.T) {
-	original := theme
-	t.Cleanup(func() { theme = original })
-	theme = themeColors{}
-	if got := theme.searchFocusBorderColor(); got != theme.borderColor() {
-		t.Fatalf("fallback = %v, want border color", got)
-	}
-}

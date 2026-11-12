@@ -28,6 +28,7 @@ type app struct {
 	pages            *tview.Pages
 	infobar          *tview.TextView
 	mainView         *tview.Flex
+	rootView         *tview.Flex
 	cache            *providers.Cache
 	logger           *providers.Logger
 	shortcuts        *tview.Table
@@ -36,6 +37,7 @@ type app struct {
 	shortcutsSummary *tview.Table
 	screen           tcell.Screen
 	uiRunning        atomic.Bool
+	infobarRenderedWidth int
 
 	viewHeaders      []string
 	allRows          [][]string
@@ -231,6 +233,7 @@ func (a *app) applyThemeToWidgets() {
 	a.shortcuts.SetBorderColor(theme.borderColor())
 	a.shortcuts.SetTitleColor(theme.titleColor())
 	if a.searchInput != nil {
+		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 		a.searchInput.SetBorderColor(theme.borderColor())
 		a.searchResults.SetBorderColor(theme.borderColor())
 		a.searchResults.SetTitleColor(theme.titleColor())

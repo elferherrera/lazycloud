@@ -191,7 +191,8 @@ func (a *app) refreshInfobar() {
 	if !infobarEnabled {
 		return
 	}
-	populateInfobarPanel(a.infobar, a.infobarWidth())
+	a.infobarRenderedWidth = a.infobarWidth()
+	populateInfobarPanel(a.infobar, a.infobarRenderedWidth)
 }
 
 func (a *app) setInfobarEnabled(enabled bool) {
@@ -199,8 +200,8 @@ func (a *app) setInfobarEnabled(enabled bool) {
 		return
 	}
 	infobarEnabled = enabled
-	if a.mainView != nil {
-		a.mainView.ResizeItem(a.infobar, infobarHeight(enabled), infobarProportion(enabled))
+	if a.rootView != nil {
+		a.rootView.ResizeItem(a.infobar, infobarHeight(enabled), infobarProportion(enabled))
 	}
 	if enabled {
 		a.refreshInfobar()

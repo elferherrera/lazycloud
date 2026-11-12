@@ -17,6 +17,35 @@ func infobarFittedAt(t *testing.T, budget int) []shortcut {
 	return fitted
 }
 
+func TestRefreshInfobarRefillsWhenScreenKnown(t *testing.T) {
+	original := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = original })
+
+	infobarEnabled = true
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+
+	a.refreshInfobar()
+	if !strings.Contains(a.infobar.GetText(true), "more in ?") {
+		t.Fatal("screenless render does not mark dropped entries")
+	}
+
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer sim.Fini()
+	sim.SetSize(200, 40)
+	a.screen = sim
+	a.refreshInfobar()
+	if strings.Contains(a.infobar.GetText(true), "more in ?") {
+		t.Fatal("wide-screen render still truncated")
+	}
+	if a.infobarRenderedWidth != 200 {
+		t.Fatalf("infobarRenderedWidth = %d, want 200", a.infobarRenderedWidth)
+	}
+}
+
 func TestInfobarShowsVisibleShortcutsPerView(t *testing.T) {
 	appState.ViewKind = viewProjects
 	projects, dropped := infobarShortcuts(infobarBudgetFor(200), "")
@@ -220,14 +249,14 @@ func TestInfobarDisabledHidesPanel(t *testing.T) {
 
 	infobarEnabled = false
 	a := newFilterTestApp(t)
-	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
+	rootView := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
 		AddItem(a.infobar, infobarHeight(infobarEnabled), 1, false).
 		AddItem(a.status, 1, 1, false)
-	a.mainView = mainView
-	mainView.SetRect(0, 0, 80, 24)
-	mainView.Draw(tcell.NewSimulationScreen("UTF-8"))
+	a.rootView = rootView
+	rootView.SetRect(0, 0, 80, 24)
+	rootView.Draw(tcell.NewSimulationScreen("UTF-8"))
 
 	a.setInfobarEnabled(true)
 	if !infobarEnabled {
@@ -260,7 +289,7 @@ func TestSetInfobarEnabledNoOpWhenUnchanged(t *testing.T) {
 	}
 }
 
-func TestSetInfobarEnabledWithoutMainView(t *testing.T) {
+func TestSetInfobarEnabledWithoutRootView(t *testing.T) {
 	original := infobarEnabled
 	t.Cleanup(func() { infobarEnabled = original })
 
@@ -268,11 +297,11 @@ func TestSetInfobarEnabledWithoutMainView(t *testing.T) {
 	infobarEnabled = true
 	a.setInfobarEnabled(false)
 	if infobarEnabled {
-		t.Fatal("setInfobarEnabled(false) with nil mainView did not disable the infobar")
+		t.Fatal("setInfobarEnabled(false) with nil rootView did not disable the infobar")
 	}
 	a.setInfobarEnabled(true)
 	if !infobarEnabled {
-		t.Fatal("setInfobarEnabled(true) with nil mainView did not enable the infobar")
+		t.Fatal("setInfobarEnabled(true) with nil rootView did not enable the infobar")
 	}
 }
 

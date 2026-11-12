@@ -322,7 +322,8 @@ const searchPanelWidth = 46
 // lives in searchColumn next to the main view; opening search resizes that
 // column so the main view shrinks.
 func (a *app) buildSearchPanel() {
-	input := tview.NewInputField().SetLabel(" search: ").SetFieldWidth(0)
+	input := tview.NewInputField().SetLabel(" / ").SetFieldWidth(0)
+	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	input.SetBorder(true)
 	results := tview.NewTable().SetBorders(false).SetSelectable(true, false)
 	results.SetBorder(true)
@@ -346,9 +347,9 @@ func (a *app) buildSearchPanel() {
 
 // buildMainLayout wires the shared widget tree run() mounts: the header row
 // on top spanning the full width, below it the search side panel next to the
-// main view in a zero-width column, and both pages. It exists apart from
-// run() so tests can exercise the real wiring without starting the terminal
-// loop.
+// main view in a zero-width column, then the infobar and status bar spanning
+// the full width. It exists apart from run() so tests can exercise the real
+// wiring without starting the terminal loop.
 func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 	a.buildSearchPanel()
 
@@ -360,9 +361,7 @@ func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 
 	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.cmd, 0, 0, false).
-		AddItem(a.info, 0, 1, false).
-		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
-		AddItem(a.status, 1, 1, false)
+		AddItem(a.info, 0, 1, false)
 	a.mainView = mainView
 
 	// The search column stays zero-width until search opens, then takes a
@@ -374,7 +373,10 @@ func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(summary, 4, 1, false).
-		AddItem(searchColumn, 0, 1, true)
+		AddItem(searchColumn, 0, 1, true).
+		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
+		AddItem(a.status, 1, 1, false)
+	a.rootView = root
 
 	a.pages.AddPage("main", root, true, true)
 	a.pages.AddPage("help", helpOverlay, true, false)
@@ -433,33 +435,38 @@ func (a *app) closeSearch() {
 	a.tapp.SetFocus(a.info)
 }
 
-// toggleSearchFocus moves focus between the search panel and the main view,
-// keeping the panel open either way.
-func (a *app) toggleSearchFocus() {
+// cycleSearchFocus walks Tab through the three sections while the search
+// panel is open — query input, results table, main view — and Backtab runs
+// the same cycle backwards. The panel stays open the whole way.
+func (a *app) cycleSearchFocus(backward bool) {
 	if !a.searchOpen.Load() {
 		return
 	}
-	a.searchPanelFocus = !a.searchPanelFocus
-	if a.searchPanelFocus {
-		a.tapp.SetFocus(a.searchInput)
-	} else {
-		a.tapp.SetFocus(a.info)
+	sections := []tview.Primitive{a.searchInput, a.searchResults, a.info}
+	current := 0
+	switch a.tapp.GetFocus() {
+	case a.searchResults:
+		current = 1
+	case a.info:
+		current = 2
 	}
+	step := 1
+	if backward {
+		step = len(sections) - 1
+	}
+	next := sections[(current+step)%len(sections)]
+	a.searchPanelFocus = next != a.info
+	a.tapp.SetFocus(next)
 	a.updateSearchPanelStyle()
 }
 
-// updateSearchPanelStyle colors the search panel border while the panel holds
-// focus and restores the theme border while focus sits on the main view, so
-// Tab's effect is visible before any typing.
+// updateSearchPanelStyle keeps the search panel border on the theme border
+// colour, the same as the info table, including after a theme reload.
 func (a *app) updateSearchPanelStyle() {
 	if a.searchInput == nil || a.searchResults == nil {
 		return
 	}
-	focused := a.searchOpen.Load() && a.searchPanelFocus
 	border := theme.borderColor()
-	if focused {
-		border = theme.searchFocusBorderColor()
-	}
 	a.searchInput.SetBorderColor(border)
 	a.searchResults.SetBorderColor(border)
 }
@@ -593,9 +600,10 @@ func searchKindSummary(shown []searchEntry, kind viewKind) (count int, projects 
 }
 
 // searchSelect acts on one results row: header or project subrow both resolve
-// to their group and open its All view with the filter preset to the query, so
-// the main view lands on exactly the rows the group counted. The panel stays
-// open as the sidebar: S returns to it, Esc closes it.
+// to their group and open its All view with the filter preset to the query —
+// a project subrow additionally keeps its project term, so the main view
+// lands on exactly the rows the selection counted. The panel stays open as
+// the sidebar: S returns to it, Esc closes it.
 func (a *app) searchSelect(row int) {
 	if row < 0 || row >= len(a.searchRowGroups) {
 		return
@@ -611,12 +619,22 @@ func (a *app) searchSelect(row int) {
 	appState.CmdMode = modeFilter
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")
-	a.cmd.SetText(group.query)
+	a.cmd.SetText(a.searchRowQuery(row))
 	a.applyFilter()
 	a.tapp.SetFocus(a.info)
 	a.searchPanelFocus = false
 	a.updateSearchPanelStyle()
-	a.statusInfo(fmt.Sprintf("%s: %s (Esc closes panel or clears filter)", views[group.kind].title, group.query))
+	a.statusInfo(fmt.Sprintf("%s: %s (Esc closes panel or clears filter)", views[group.kind].title, a.searchRowQuery(row)))
+}
+
+// searchRowQuery composes the filter one results row lands: the group's query
+// alone for a kind header, plus the project term for a project subrow.
+func (a *app) searchRowQuery(row int) string {
+	query := a.searchGroupRows[a.searchRowGroups[row]].query
+	if project := a.searchRowProjects[row]; project != "" {
+		query = strings.TrimSpace(query + " + " + project)
+	}
+	return query
 }
 
 // searchPreview mirrors the main view onto the results selection as it moves:
@@ -642,11 +660,7 @@ func (a *app) searchPreview(row int) {
 	appState.CmdMode = modeFilter
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")
-	query := group.query
-	if project := a.searchRowProjects[row]; project != "" {
-		query = strings.TrimSpace(query + " + " + project)
-	}
-	a.cmd.SetText(query)
+	a.cmd.SetText(a.searchRowQuery(row))
 	a.applyFilter()
 }
 

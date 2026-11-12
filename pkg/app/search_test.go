@@ -69,7 +69,6 @@ func newSearchTestApp(t *testing.T) *app {
 	a := newFetchTestApp(t)
 	a.buildSearchPanel()
 	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.summary, 4, 1, false).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
 		AddItem(a.status, 1, 1, false)
@@ -267,6 +266,46 @@ func TestSearchGroupSelectKeepsPanelFocusStateConsistent(t *testing.T) {
 	}
 }
 
+func TestSearchProjectSubrowSelectKeepsProjectFilter(t *testing.T) {
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+	resetAppState()
+
+	a.openSearch()
+	// "e" matches alpha-web (p1) and beta-db (p2), so the VMs group spans
+	// two projects: row 0 its header, row 1 the p1 subrow, row 2 the p2
+	// subrow.
+	a.searchInput.SetText("e")
+	a.runSearch()
+
+	a.searchSelect(2)
+	if appState.ViewKind != viewVMsAll {
+		t.Fatalf("ViewKind = %q, want vms-all", appState.ViewKind)
+	}
+	if got := a.cmd.GetText(); got != "e + p2" {
+		t.Fatalf("filter text = %q, want %q", got, "e + p2")
+	}
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows = %d, want 1 (beta-db)", len(a.visibleRows))
+	}
+	if a.visibleRows[0][0] != "beta-db" {
+		t.Errorf("visible row = %q, want beta-db", a.visibleRows[0][0])
+	}
+
+	a.searchSelect(1)
+	if got := a.cmd.GetText(); got != "e + p1" {
+		t.Fatalf("filter text = %q, want %q", got, "e + p1")
+	}
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows = %d, want 1 (alpha-web)", len(a.visibleRows))
+	}
+	if a.visibleRows[0][0] != "alpha-web" {
+		t.Errorf("visible row = %q, want alpha-web", a.visibleRows[0][0])
+	}
+	a.closeSearch()
+}
+
 func TestSearchGroupSelectBucketsOpensBucketsAll(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
@@ -420,25 +459,51 @@ func TestSearchGroupQuerySurvivesRefresh(t *testing.T) {
 	a.closeSearch()
 }
 
-func TestSearchTabTogglesFocus(t *testing.T) {
+func TestSearchTabCyclesFocus(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
+	wireSearchApp(a)
 
 	a.openSearch()
+	if got := a.tapp.GetFocus(); got != a.searchInput {
+		t.Fatalf("focus after open = %T, want search input", got)
+	}
 	if !a.searchPanelFocus {
 		t.Fatal("panel focus not set after openSearch")
 	}
-	a.toggleSearchFocus()
+
+	// Tab walks input → results → main view, then back to the input.
+	a.cycleSearchFocus(false)
+	if got := a.tapp.GetFocus(); got != a.searchResults {
+		t.Fatalf("focus after first cycle = %T, want results table", got)
+	}
+	if !a.searchPanelFocus {
+		t.Fatal("panel focus lost on the results table")
+	}
+	a.cycleSearchFocus(false)
+	if got := a.tapp.GetFocus(); got != a.info {
+		t.Fatalf("focus after second cycle = %T, want info table", got)
+	}
 	if a.searchPanelFocus {
-		t.Fatal("panel focus still set after toggleSearchFocus")
+		t.Fatal("panel focus still set on the main view")
+	}
+	a.cycleSearchFocus(false)
+	if got := a.tapp.GetFocus(); got != a.searchInput {
+		t.Fatalf("focus after third cycle = %T, want search input", got)
 	}
 	if !a.searchOpen.Load() {
-		t.Fatal("panel closed by focus toggle")
+		t.Fatal("panel closed by focus cycle")
 	}
-	a.toggleSearchFocus()
-	if !a.searchPanelFocus {
-		t.Fatal("panel focus not restored by second toggle")
+
+	// Backtab walks the same cycle backwards: input → info → results.
+	a.cycleSearchFocus(true)
+	if got := a.tapp.GetFocus(); got != a.info {
+		t.Fatalf("focus after backtab = %T, want info table", got)
+	}
+	a.cycleSearchFocus(true)
+	if got := a.tapp.GetFocus(); got != a.searchResults {
+		t.Fatalf("focus after second backtab = %T, want results table", got)
 	}
 	a.closeSearch()
 }

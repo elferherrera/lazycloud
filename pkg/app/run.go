@@ -144,12 +144,18 @@ func bootApp() (*app, func(), error) {
 }
 
 // runUI marks the app live and enters the event loop. The before-draw hook
-// records the screen so panel sizing can read terminal dimensions.
+// records the screen so panel sizing can read terminal dimensions, and
+// refills the infobar whenever the width it was fitted for changes — the
+// startup render runs before the loop, with the screen still unknown, and
+// terminal resizes change the fitting budget.
 func (a *app) runUI() error {
 	a.tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		a.uiMu.Lock()
 		a.screen = screen
 		a.uiMu.Unlock()
+		if w, _ := screen.Size(); w != a.infobarRenderedWidth {
+			a.refreshInfobar()
+		}
 		return false
 	})
 	a.uiRunning.Store(true)
