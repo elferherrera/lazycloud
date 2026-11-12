@@ -18,6 +18,10 @@ func checkNestedExecution() error {
 	return errors.New("Detected nested lazycloud execution. Exit this context to start lazycloud")
 }
 
+// newTApp builds the tview application. A package var so tests can hand
+// run() an application already wired to a simulation screen.
+var newTApp = tview.NewApplication
+
 func Run() error {
 	if err := checkNestedExecution(); err != nil {
 		return err
@@ -32,24 +36,44 @@ func Run() error {
 	appState.CmdMode = modeCmd
 	appState.ViewKind = viewProjects
 
+	a, cleanup, err := bootApp()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	return a.runUI()
+}
+
+// bootApp builds the app: cache, logger, config, widgets and layout. The
+// returned cleanup closes the cache and log; the caller runs it after the UI
+// loop ends. Split from Run so tests can boot the same app and drive the
+// loop against a simulation screen.
+func bootApp() (*app, func(), error) {
 	cache, err := providers.NewCache()
 	if err != nil {
-		return fmt.Errorf("opening cache: %w", err)
+		return nil, nil, fmt.Errorf("opening cache: %w", err)
 	}
 	if err := cache.SeedViewUpdates(viewKindNames()); err != nil {
-		return fmt.Errorf("seeding view updates: %w", err)
+		cache.Close()
+		return nil, nil, fmt.Errorf("seeding view updates: %w", err)
 	}
-	defer cache.Close()
 
 	logger, err := providers.NewLogger()
 	if err != nil {
-		return fmt.Errorf("opening log file: %w", err)
+		cache.Close()
+		return nil, nil, fmt.Errorf("opening log file: %w", err)
 	}
-	defer logger.Close()
+
+	cleanup := func() {
+		cache.Close()
+		logger.Close()
+	}
 
 	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
 	applyTheme(config.Theme)
@@ -59,7 +83,8 @@ func Run() error {
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
-		return fmt.Errorf("loading last project: %w", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("loading last project: %w", err)
 	}
 	if lastProject.ProjectID != "" {
 		appState.ProjectID = lastProject.ProjectID
@@ -67,7 +92,7 @@ func Run() error {
 		appState.ProjectNumber = lastProject.ProjectNumber
 	}
 
-	tapp := tview.NewApplication()
+	tapp := newTApp()
 
 	a := &app{
 		tapp:             tapp,
@@ -91,31 +116,18 @@ func Run() error {
 	a.helpRow = helpRow
 	a.helpColumn = helpOverlay
 
-	shortcutsSummary := newShortcutsSummaryPanel()
-	a.shortcutsSummary = shortcutsSummary
-	summary := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(a.summary, 0, 1, false).
-		AddItem(shortcutsSummary, 0, 1, false)
+	a.shortcutsSummary = newShortcutsSummaryPanel()
 
-	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(summary, 4, 1, false).
-		AddItem(a.cmd, 0, 0, false).
-		AddItem(a.info, 0, 1, false).
-		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
-		AddItem(a.status, 1, 1, false)
-	a.mainView = mainView
-
-	a.pages.AddPage("main", mainView, true, true)
-	a.pages.AddPage("help", helpOverlay, true, false)
+	a.buildMainLayout(helpOverlay)
 
 	a.cmd.SetDoneFunc(a.done)
 	a.cmd.SetChangedFunc(a.changed)
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetFocusFunc(func() {
-		mainView.ResizeItem(a.cmd, 3, 1)
+		a.mainView.ResizeItem(a.cmd, 3, 1)
 	})
 	a.cmd.SetBlurFunc(func() {
-		mainView.ResizeItem(a.cmd, 0, 0)
+		a.mainView.ResizeItem(a.cmd, 0, 0)
 	})
 
 	a.info.SetSelectedFunc(a.selected)
@@ -127,10 +139,23 @@ func Run() error {
 	tapp.SetRoot(a.pages, true)
 	tapp.SetInputCapture(a.inputCapture)
 	tapp.SetFocus(a.info)
-	tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+
+	return a, cleanup, nil
+}
+
+// runUI marks the app live and enters the event loop. The before-draw hook
+// records the screen so panel sizing can read terminal dimensions.
+func (a *app) runUI() error {
+	a.tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		a.uiMu.Lock()
 		a.screen = screen
+		a.uiMu.Unlock()
 		return false
 	})
-
-	return tapp.Run()
+	a.uiRunning.Store(true)
+	err := a.tapp.Run()
+	// Back to inline mode once the loop is gone, so a late queued callback
+	// cannot block forever on a dead event loop.
+	a.uiRunning.Store(false)
+	return err
 }

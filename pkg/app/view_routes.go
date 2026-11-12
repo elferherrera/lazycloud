@@ -43,16 +43,16 @@ func routeResource(a *app, projectID, name string) (any, error) {
 	return r, nil
 }
 
-func fetchProjectRoutes(a *app, projectID string) (string, error) {
-	routes, err := providers.ListProjectRoutes(projectID)
+func fetchProjectRoutes(a *app, projectID string) (int, string, error) {
+	routes, err := listProjectRoutes(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveRoutes(projectID, routes); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("routes", projectID, len(routes))
-	return fmt.Sprintf("Fetched %d routes", len(routes)), nil
+	return len(routes), fmt.Sprintf("Fetched %d routes", len(routes)), nil
 }
 
 var routesView = viewDef{
@@ -92,45 +92,7 @@ var routesAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d routes for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching routes for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("routes", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching routes for %s...", p.ProjectID))
-				})
-				routes, err := providers.ListProjectRoutes(p.ProjectID)
-				if err != nil {
-					a.reportError("routes", p.ProjectID, "Failed to fetch routes for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveRoutes(p.ProjectID, routes); err != nil {
-					a.reportError("routes", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("routes", p.ProjectID, len(routes))
-				total += len(routes)
-			}
-			a.markViewUpdated(viewRoutesAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewRoutesAll)
-				status := fmt.Sprintf("[green]Fetched %d routes across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewRoutesAll, "routes", "routes", "routes", fetchProjectRoutes),
 	resource: func(a *app, row []string) (any, error) {
 		return routeResource(a, row[8], row[0])
 	},

@@ -101,20 +101,20 @@ type VMServiceAccount struct {
 }
 
 type VM struct {
-	ProjectID       string
-	Name            string
-	InstanceID      string
-	Zone            string
-	MachineType     string
-	Status          string
-	Labels          map[string]string
-	NetworkTags     []string
-	ServiceAccounts []VMServiceAccount
+	ProjectID        string
+	Name             string
+	InstanceID       string
+	Zone             string
+	MachineType      string
+	Status           string
+	Labels           map[string]string
+	NetworkTags      []string
+	ServiceAccounts  []VMServiceAccount
 	InstanceTemplate string
-	Interfaces      []VMInterface
-	BootDisk        *VMDisk
-	DataDisks       []VMDisk
-	UpdatedAt       string
+	Interfaces       []VMInterface
+	BootDisk         *VMDisk
+	DataDisks        []VMDisk
+	UpdatedAt        string
 }
 
 type Disk struct {
@@ -504,8 +504,21 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 	}
 	defer client.Close()
 
-	var vms []VM
 	it := client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{Project: projectID})
+	return collectZoneVMs(projectID, it)
+}
+
+// zoneEntryIterator is the slice of the aggregated-list iterator the VM
+// collection needs: entries of zone to instances. Keeping it an interface
+// lets the collector run against a canned iterator in tests.
+type zoneEntryIterator interface {
+	Next() (computev1.InstancesScopedListPair, error)
+}
+
+// collectZoneVMs drains it, mapping each zone entry through zoneVMs. The
+// iterator ends with iterator.Done; any other error stops the walk.
+func collectZoneVMs(projectID string, it zoneEntryIterator) ([]VM, error) {
+	var vms []VM
 	for {
 		entry, err := it.Next()
 		if err == iterator.Done {
@@ -514,55 +527,69 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, inst := range entry.Value.GetInstances() {
-			if inst.GetZone() == "" {
-				continue
-			}
-vm := VM{
-			ProjectID:   projectID,
-			Name:        inst.GetName(),
-			InstanceID:  strconv.FormatUint(inst.GetId(), 10),
-			Zone:        resourceShortName(inst.GetZone(), ""),
-			MachineType: resourceShortName(inst.GetMachineType(), ""),
-			Status:      inst.GetStatus(),
-			Labels:      inst.GetLabels(),
-			NetworkTags: inst.GetTags().GetItems(),
+		vms = append(vms, zoneVMs(projectID, entry.Value.GetInstances())...)
+	}
+	return vms, nil
+}
+
+// zoneVMs maps the instances of one aggregated-list zone entry, skipping
+// instances without a zone.
+func zoneVMs(projectID string, instances []*computepb.Instance) []VM {
+	var vms []VM
+	for _, inst := range instances {
+		if inst.GetZone() == "" {
+			continue
 		}
-		for _, sa := range inst.GetServiceAccounts() {
-			vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+		vms = append(vms, instanceToVM(projectID, inst))
+	}
+	return vms
+}
+
+// instanceToVM maps one compute instance API object to the cache VM row.
+// Metadata carries the instance template name under a fixed key.
+func instanceToVM(projectID string, inst *computepb.Instance) VM {
+	vm := VM{
+		ProjectID:   projectID,
+		Name:        inst.GetName(),
+		InstanceID:  strconv.FormatUint(inst.GetId(), 10),
+		Zone:        resourceShortName(inst.GetZone(), ""),
+		MachineType: resourceShortName(inst.GetMachineType(), ""),
+		Status:      inst.GetStatus(),
+		Labels:      inst.GetLabels(),
+		NetworkTags: inst.GetTags().GetItems(),
+	}
+	for _, sa := range inst.GetServiceAccounts() {
+		vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+	}
+	for _, m := range inst.GetMetadata().GetItems() {
+		if m.GetKey() == "instance-template" {
+			vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
+			break
 		}
-		for _, m := range inst.GetMetadata().GetItems() {
-			if m.GetKey() == "instance-template" {
-				vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
+	}
+	for _, iface := range inst.GetNetworkInterfaces() {
+		vmi := VMInterface{
+			Network:    resourceShortName(iface.GetNetwork(), ""),
+			Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
+			InternalIP: iface.GetNetworkIP(),
+		}
+		for _, ac := range iface.GetAccessConfigs() {
+			if natIP := ac.GetNatIP(); natIP != "" {
+				vmi.ExternalIP = natIP
 				break
 			}
 		}
-			for _, iface := range inst.GetNetworkInterfaces() {
-				vmi := VMInterface{
-					Network:    resourceShortName(iface.GetNetwork(), ""),
-					Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
-					InternalIP: iface.GetNetworkIP(),
-				}
-				for _, ac := range iface.GetAccessConfigs() {
-					if natIP := ac.GetNatIP(); natIP != "" {
-						vmi.ExternalIP = natIP
-						break
-					}
-				}
-				vm.Interfaces = append(vm.Interfaces, vmi)
-			}
-			for _, d := range inst.GetDisks() {
-				disk := vmDisk(d)
-				if d.GetBoot() {
-					vm.BootDisk = disk
-				} else {
-					vm.DataDisks = append(vm.DataDisks, *disk)
-				}
-			}
-			vms = append(vms, vm)
+		vm.Interfaces = append(vm.Interfaces, vmi)
+	}
+	for _, d := range inst.GetDisks() {
+		disk := vmDisk(d)
+		if d.GetBoot() {
+			vm.BootDisk = disk
+		} else {
+			vm.DataDisks = append(vm.DataDisks, *disk)
 		}
 	}
-	return vms, nil
+	return vm
 }
 
 func ListProjectDisks(projectID string) ([]Disk, error) {
@@ -1248,19 +1275,30 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 		return nil, fmt.Errorf("kubectl get: %s", strings.TrimSpace(message))
 	}
 
+	return parseClusterNodeList(out, projectID, name)
+}
+
+// parseClusterNodeList decodes kubectl node output into cache rows. Split
+// from ListClusterNodes so the decode path is testable without kubectl.
+func parseClusterNodeList(out []byte, projectID, name string) ([]ClusterNode, error) {
 	var list k8sNodeList
 	if err := json.Unmarshal(out, &list); err != nil {
 		return nil, err
 	}
+	return parseClusterNodes(projectID, name, list.Items), nil
+}
 
-	nodes := make([]ClusterNode, 0, len(list.Items))
-	for _, item := range list.Items {
+// parseClusterNodes maps kubectl node objects to cache rows. Nodes start
+// NotReady until a Ready condition says otherwise.
+func parseClusterNodes(projectID, name string, items []k8sNode) []ClusterNode {
+	nodes := make([]ClusterNode, 0, len(items))
+	for _, item := range items {
 		node := ClusterNode{
 			ProjectID: projectID,
-			Cluster:    name,
-			Name:       item.Metadata.Name,
-			NodePool:   item.Metadata.Labels["cloud.google.com/gke-nodepool"],
-			Status:     "NotReady",
+			Cluster:   name,
+			Name:      item.Metadata.Name,
+			NodePool:  item.Metadata.Labels["cloud.google.com/gke-nodepool"],
+			Status:    "NotReady",
 		}
 		for _, c := range item.Status.Conditions {
 			if c.Type == "Ready" {
@@ -1278,7 +1316,7 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 		}
 		nodes = append(nodes, node)
 	}
-	return nodes, nil
+	return nodes
 }
 
 type DNSZone struct {

@@ -108,6 +108,7 @@ func infobarDesc(s shortcut) string {
 }
 
 var infobarShortDesc = map[string]string{
+	"search side panel (Tab toggle, Esc close)": "search",
 	"focus command": "commands",
 	"filter list ('- x' excludes, Tab details)":     "filter",
 	"toggle all projects":                           "all projects",

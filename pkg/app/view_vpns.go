@@ -40,16 +40,16 @@ func vpnGatewayResource(a *app, projectID, region, name string) (any, error) {
 	return g, nil
 }
 
-func fetchProjectVPNs(a *app, projectID string) (string, error) {
-	gateways, err := providers.ListProjectVPNGateways(projectID)
+func fetchProjectVPNs(a *app, projectID string) (int, string, error) {
+	gateways, err := listProjectVPNGateways(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveVPNGateways(projectID, gateways); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("vpns", projectID, len(gateways))
-	return fmt.Sprintf("Fetched %d VPN gateways", len(gateways)), nil
+	return len(gateways), fmt.Sprintf("Fetched %d VPN gateways", len(gateways)), nil
 }
 
 var vpnsView = viewDef{
@@ -89,45 +89,7 @@ var vpnsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d VPN gateways for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching VPN gateways for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("vpns", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching VPN gateways for %s...", p.ProjectID))
-				})
-				gateways, err := providers.ListProjectVPNGateways(p.ProjectID)
-				if err != nil {
-					a.reportError("vpns", p.ProjectID, "Failed to fetch VPN gateways for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveVPNGateways(p.ProjectID, gateways); err != nil {
-					a.reportError("vpns", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("vpns", p.ProjectID, len(gateways))
-				total += len(gateways)
-			}
-			a.markViewUpdated(viewVPNsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewVPNsAll)
-				status := fmt.Sprintf("[green]Fetched %d VPN gateways across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewVPNsAll, "vpns", "VPN gateways", "VPN gateways", fetchProjectVPNs),
 	resource: func(a *app, row []string) (any, error) {
 		return vpnGatewayResource(a, row[8], row[2], row[1])
 	},

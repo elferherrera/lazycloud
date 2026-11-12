@@ -35,16 +35,16 @@ func dnsZoneResource(a *app, projectID, name string) (any, error) {
 	return z, nil
 }
 
-func fetchProjectDNSZones(a *app, projectID string) (string, error) {
-	zones, err := providers.ListProjectDNSZones(projectID)
+func fetchProjectDNSZones(a *app, projectID string) (int, string, error) {
+	zones, err := listProjectDNSZones(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveDNSZones(projectID, zones); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("dns-zones", projectID, len(zones))
-	return fmt.Sprintf("Fetched %d dns zones", len(zones)), nil
+	return len(zones), fmt.Sprintf("Fetched %d dns zones", len(zones)), nil
 }
 
 var dnsZonesView = viewDef{
@@ -84,45 +84,7 @@ var dnsZonesAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d dns zones for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching dns zones for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("dns-zones", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching dns zones for %s...", p.ProjectID))
-				})
-				zones, err := providers.ListProjectDNSZones(p.ProjectID)
-				if err != nil {
-					a.reportError("dns-zones", p.ProjectID, "Failed to fetch dns zones for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveDNSZones(p.ProjectID, zones); err != nil {
-					a.reportError("dns-zones", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("dns-zones", p.ProjectID, len(zones))
-				total += len(zones)
-			}
-			a.markViewUpdated(viewDNSZonesAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewDNSZonesAll)
-				status := fmt.Sprintf("[green]Fetched %d dns zones across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewDNSZonesAll, "dns-zones", "dns zones", "dns zones", fetchProjectDNSZones),
 	resource: func(a *app, row []string) (any, error) {
 		return dnsZoneResource(a, row[5], row[0])
 	},

@@ -78,10 +78,10 @@ var nodePoolsView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching nodes for %s...", appState.Cluster))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
-			nodes, err := providers.ListClusterNodes(projectID, cl.Location, clusterName)
+			nodes, err := listClusterNodes(projectID, cl.Location, clusterName)
 			if err != nil {
 				a.reportError("cluster-nodes", projectID+"/"+clusterName, "Failed to fetch nodes", err)
 				return
@@ -92,11 +92,11 @@ var nodePoolsView = viewDef{
 			}
 			a.logger.Update("cluster-nodes", projectID+"/"+clusterName, len(nodes))
 			a.markViewUpdated(viewNodePools, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewNodePools)
 				a.statusText(fmt.Sprintf("[green]Fetched %d nodes[-]", len(nodes)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return nodePoolResource(a, appState.ClusterProject, appState.Cluster, row[0])
@@ -149,7 +149,7 @@ func (a *app) applyNodePoolVMFilter(pool string) {
 
 func (a *app) fetchNodePoolVMs(pool string) {
 	projectID := appState.ProjectID
-	vms, err := providers.ListProjectVMs(projectID)
+	vms, err := listProjectVMs(projectID)
 	if err != nil {
 		a.reportError("vms", projectID, "Failed to fetch VMs", err)
 		return
@@ -159,7 +159,7 @@ func (a *app) fetchNodePoolVMs(pool string) {
 		return
 	}
 	a.logger.Update("vms", projectID, len(vms))
-	disks, err := providers.ListProjectDisks(projectID)
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
 		a.reportError("disks", projectID, "Failed to fetch disks", err)
 	} else if err := a.cache.SaveDisks(projectID, disks); err != nil {
@@ -167,7 +167,7 @@ func (a *app) fetchNodePoolVMs(pool string) {
 	} else {
 		a.logger.Update("disks", projectID, len(disks))
 	}
-	a.tapp.QueueUpdateDraw(func() {
+	a.queueUpdateDraw(func() {
 		a.setView(viewVMs)
 		a.applyNodePoolVMFilter(pool)
 	})
@@ -189,7 +189,7 @@ func (a *app) showNodePoolVMs() {
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
 		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
-		go a.fetchNodePoolVMs(pool)
+		a.goBackground(func() { a.fetchNodePoolVMs(pool) })
 		return
 	}
 	a.applyNodePoolVMFilter(pool)

@@ -17,8 +17,9 @@ import (
 type commandFunc func(a *app, args []string)
 
 var commands = map[string]commandFunc{
-	"sort":  runSortCommand,
-	"write": runWriteCommand,
+	"sort":   runSortCommand,
+	"write":  runWriteCommand,
+	"search": func(a *app, _ []string) { a.openSearch() },
 }
 
 func (a *app) runCommand(fields []string) {

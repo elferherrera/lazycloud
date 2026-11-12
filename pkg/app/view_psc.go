@@ -87,23 +87,25 @@ func pscResource(a *app, projectID, kind, region, name string) (any, error) {
 	}
 }
 
-func fetchProjectPSC(a *app, projectID string) (string, error) {
-	attachments, err := providers.ListProjectServiceAttachments(projectID)
+func fetchProjectPSC(a *app, projectID string) (int, string, error) {
+	attachments, err := listProjectServiceAttach(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	rules, err := providers.ListProjectForwardingRules(projectID)
+	rules, err := listProjectForwardingRules(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveServiceAttachments(projectID, attachments); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveForwardingRules(projectID, rules); err != nil {
-		return "", err
+		return 0, "", err
 	}
-	a.logger.Update("psc", projectID, len(attachments)+len(pscEndpoints(rules)))
-	return fmt.Sprintf("Fetched %d PSC attachments and %d endpoints", len(attachments), len(pscEndpoints(rules))), nil
+	endpoints := pscEndpoints(rules)
+	total := len(attachments) + len(endpoints)
+	a.logger.Update("psc", projectID, total)
+	return total, fmt.Sprintf("Fetched %d PSC attachments and %d endpoints", len(attachments), len(endpoints)), nil
 }
 
 var pscView = viewDef{
@@ -154,56 +156,7 @@ var pscAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d PSC resources for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching PSC resources for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("psc", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching PSC resources for %s...", p.ProjectID))
-				})
-				attachments, err := providers.ListProjectServiceAttachments(p.ProjectID)
-				if err != nil {
-					a.reportError("psc", p.ProjectID, "Failed to fetch PSC resources for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				rules, err := providers.ListProjectForwardingRules(p.ProjectID)
-				if err != nil {
-					a.reportError("psc", p.ProjectID, "Failed to fetch PSC resources for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveServiceAttachments(p.ProjectID, attachments); err != nil {
-					a.reportError("psc", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveForwardingRules(p.ProjectID, rules); err != nil {
-					a.reportError("psc", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("psc", p.ProjectID, len(attachments)+len(pscEndpoints(rules)))
-				total += len(attachments) + len(pscEndpoints(rules))
-			}
-			a.markViewUpdated(viewPSCAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewPSCAll)
-				status := fmt.Sprintf("[green]Fetched %d PSC resources across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewPSCAll, "psc", "PSC resources", "PSC resources", fetchProjectPSC),
 	resource: func(a *app, row []string) (any, error) {
 		return pscResource(a, row[9], row[0], row[2], row[1])
 	},

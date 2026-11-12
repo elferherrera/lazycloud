@@ -61,16 +61,16 @@ func ipAddressRows(ips []providers.IPAddress) [][]string {
 	return rows
 }
 
-func fetchProjectIPs(a *app, projectID string) (string, error) {
-	ips, err := providers.ListProjectIPAddresses(projectID)
+func fetchProjectIPs(a *app, projectID string) (int, string, error) {
+	ips, err := listProjectIPAddresses(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveIPAddresses(projectID, ips); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("ips", projectID, len(ips))
-	return fmt.Sprintf("Fetched %d IP addresses", len(ips)), nil
+	return len(ips), fmt.Sprintf("Fetched %d IP addresses", len(ips)), nil
 }
 
 var ipsView = viewDef{
@@ -158,45 +158,7 @@ var ipsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d IP addresses for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching IP addresses for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("ips", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching IPs for %s...", p.ProjectID))
-				})
-				ips, err := providers.ListProjectIPAddresses(p.ProjectID)
-				if err != nil {
-					a.reportError("ips", p.ProjectID, "Failed to fetch IPs for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveIPAddresses(p.ProjectID, ips); err != nil {
-					a.reportError("ips", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("ips", p.ProjectID, len(ips))
-				total += len(ips)
-			}
-			a.markViewUpdated(viewIPsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewIPsAll)
-				status := fmt.Sprintf("[green]Fetched %d IP addresses across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewIPsAll, "ips", "IPs", "IP addresses", fetchProjectIPs),
 	resource: func(a *app, row []string) (any, error) {
 		return ipAddressResource(a, row[8], row[0], row[1])
 	},

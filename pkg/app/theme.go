@@ -49,6 +49,16 @@ func (t themeColors) borderColor() tcell.Color {
 	return tcell.GetColor(t.borders)
 }
 
+// searchFocusBorderColor marks the search panel while it holds focus. Same
+// hue family as labels so the highlight reads as this app's accent, not a
+// new color.
+func (t themeColors) searchFocusBorderColor() tcell.Color {
+	if c := tcell.GetColor(t.shortcutLabels); c != tcell.ColorDefault {
+		return c
+	}
+	return t.borderColor()
+}
+
 func (t themeColors) titleColor() tcell.Color {
 	return tcell.GetColor(t.title)
 }

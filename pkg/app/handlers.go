@@ -108,6 +108,11 @@ func init() {
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
+		{
+			key:  'S',
+			desc: "search side panel (Tab toggle, Esc close)",
+			run:  (*app).openSearch,
+		},
 		{key: ' ', desc: "show projects", run: func(a *app) {
 			a.setView(viewProjects)
 			a.startFilter()
@@ -401,6 +406,21 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		a.escapePressed()
 		return nil
 	case tcell.KeyTab, tcell.KeyBacktab:
+		// While the search panel is open, Tab moves focus between the panel
+		// and the main view; the panel stays open either way. In filter mode
+		// Tab keeps its older job of cycling detail paths, since the filter
+		// input is where the user is typing.
+		if a.searchOpen.Load() {
+			focus := a.tapp.GetFocus()
+			if focus == a.searchInput || focus == a.searchResults {
+				a.toggleSearchFocus()
+				return nil
+			}
+			if appState.CmdMode != modeFilter {
+				a.toggleSearchFocus()
+				return nil
+			}
+		}
 		if appState.CmdMode == modeFilter && (a.tapp.GetFocus() == a.cmd || a.tapp.GetFocus() == a.info) {
 			a.completeFilterDetail(event.Key() == tcell.KeyTab)
 			return nil
@@ -408,6 +428,15 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		if appState.CmdMode == modeCmd && a.tapp.GetFocus() == a.cmd {
 			a.completeCommand(event.Key() == tcell.KeyTab)
 			return nil
+		}
+	}
+	// While the search panel has focus, runes are query text or results
+	// navigation: only Esc (close) and Tab (focus toggle) act, both handled
+	// above, so everything else reaches the panel widgets untouched.
+	if a.searchOpen.Load() {
+		focus := a.tapp.GetFocus()
+		if focus == a.searchInput || focus == a.searchResults {
+			return event
 		}
 	}
 	if a.tapp.GetFocus() == a.cmd {
@@ -812,21 +841,28 @@ func (a *app) refreshProjectViews() {
 	for _, kind := range projectViewKinds {
 		a.markAutoFetched(autoFetchKey(kind, projectID))
 	}
-	go func() {
+	a.goBackground(func() {
+		p := newProgress(len(projectViewKinds))
+		stop := a.startProgressTicker(p)
+		defer stop()
 		failed := 0
-		for i, kind := range projectViewKinds {
+		for _, kind := range projectViewKinds {
 			def := views[kind]
-			a.tapp.QueueUpdateDraw(func() {
-				a.statusInfo(fmt.Sprintf("Fetching %s (%d/%d)...", def.title, i+1, len(projectViewKinds)))
+			p.advance("Fetching " + def.title)
+			a.queueUpdateDraw(func() {
+				if cur, ok := p.current(); ok {
+					a.statusInfo(cur)
+				}
 			})
-			if _, err := def.fetch(a, projectID); err != nil {
+			if _, _, err := def.fetch(a, projectID); err != nil {
 				a.reportError(string(kind), projectID, "Failed to fetch "+def.title, err)
 				failed++
 			} else {
 				a.markViewUpdated(kind, projectID)
 			}
 		}
-		a.tapp.QueueUpdateDraw(func() {
+		p.finish()
+		a.queueUpdateDraw(func() {
 			a.setView(appState.ViewKind)
 			status := fmt.Sprintf("[green]Updated %d views for %s[-]", len(projectViewKinds)-failed, projectID)
 			if failed > 0 {
@@ -834,7 +870,7 @@ func (a *app) refreshProjectViews() {
 			}
 			a.statusText(status)
 		})
-	}()
+	})
 }
 
 func (a *app) tableRowCells(row int) []string {
@@ -1174,6 +1210,10 @@ func (a *app) quit() {
 func (a *app) escapePressed() {
 	if name, _ := a.pages.GetFrontPage(); name == "help" {
 		a.toggleHelp()
+		return
+	}
+	if a.searchOpen.Load() {
+		a.closeSearch()
 		return
 	}
 	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {

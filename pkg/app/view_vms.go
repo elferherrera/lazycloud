@@ -46,16 +46,16 @@ func vmResource(a *app, projectID, zone, name string) (any, error) {
 	return vm, nil
 }
 
-func fetchProjectVMs(a *app, projectID string) (string, error) {
-	vms, err := providers.ListProjectVMs(projectID)
+func fetchProjectVMs(a *app, projectID string) (int, string, error) {
+	vms, err := listProjectVMs(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveVMs(projectID, vms); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("vms", projectID, len(vms))
-	disks, err := providers.ListProjectDisks(projectID)
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
 		a.reportError("disks", projectID, "Failed to fetch disks", err)
 	} else if err := a.cache.SaveDisks(projectID, disks); err != nil {
@@ -63,7 +63,7 @@ func fetchProjectVMs(a *app, projectID string) (string, error) {
 	} else {
 		a.logger.Update("disks", projectID, len(disks))
 	}
-	return fmt.Sprintf("Fetched %d VMs", len(vms)), nil
+	return len(vms), fmt.Sprintf("Fetched %d VMs", len(vms)), nil
 }
 
 var vmsView = viewDef{
@@ -103,57 +103,7 @@ var vmsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d VMs for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching VMs for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("vms", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", p.ProjectID))
-				})
-				vms, err := providers.ListProjectVMs(p.ProjectID)
-				if err != nil {
-					a.reportError("vms", p.ProjectID, "Failed to fetch VMs for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveVMs(p.ProjectID, vms); err != nil {
-					a.reportError("vms", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("vms", p.ProjectID, len(vms))
-				disks, err := providers.ListProjectDisks(p.ProjectID)
-				if err != nil {
-					a.reportError("disks", p.ProjectID, "Failed to fetch disks for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveDisks(p.ProjectID, disks); err != nil {
-					a.reportError("disks", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("disks", p.ProjectID, len(disks))
-				total += len(vms)
-			}
-			a.markViewUpdated(viewVMsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewVMsAll)
-				status := fmt.Sprintf("[green]Fetched %d VMs across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewVMsAll, "vms", "VMs", "VMs", fetchProjectVMs),
 	resource: func(a *app, row []string) (any, error) {
 		return vmResource(a, row[6], row[1], row[0])
 	},

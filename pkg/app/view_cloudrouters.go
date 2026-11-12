@@ -45,16 +45,16 @@ func cloudRouterResource(a *app, projectID, region, name string) (any, error) {
 	return r, nil
 }
 
-func fetchProjectCloudRouters(a *app, projectID string) (string, error) {
-	routers, err := providers.ListProjectCloudRouters(projectID)
+func fetchProjectCloudRouters(a *app, projectID string) (int, string, error) {
+	routers, err := listProjectCloudRouters(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveCloudRouters(projectID, routers); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("cloud-routers", projectID, len(routers))
-	return fmt.Sprintf("Fetched %d cloud routers", len(routers)), nil
+	return len(routers), fmt.Sprintf("Fetched %d cloud routers", len(routers)), nil
 }
 
 var cloudRoutersView = viewDef{
@@ -94,45 +94,7 @@ var cloudRoutersAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d cloud routers for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching cloud routers for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("cloud-routers", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching cloud routers for %s...", p.ProjectID))
-				})
-				routers, err := providers.ListProjectCloudRouters(p.ProjectID)
-				if err != nil {
-					a.reportError("cloud-routers", p.ProjectID, "Failed to fetch cloud routers for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveCloudRouters(p.ProjectID, routers); err != nil {
-					a.reportError("cloud-routers", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("cloud-routers", p.ProjectID, len(routers))
-				total += len(routers)
-			}
-			a.markViewUpdated(viewCloudRoutersAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewCloudRoutersAll)
-				status := fmt.Sprintf("[green]Fetched %d cloud routers across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewCloudRoutersAll, "cloud-routers", "cloud routers", "cloud routers", fetchProjectCloudRouters),
 	resource: func(a *app, row []string) (any, error) {
 		return cloudRouterResource(a, row[8], row[1], row[0])
 	},

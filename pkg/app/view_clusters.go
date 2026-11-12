@@ -49,16 +49,16 @@ func clusterResource(a *app, projectID, name string) (any, error) {
 	return cl, nil
 }
 
-func fetchProjectClusters(a *app, projectID string) (string, error) {
-	clusters, err := providers.ListProjectClusters(projectID)
+func fetchProjectClusters(a *app, projectID string) (int, string, error) {
+	clusters, err := listProjectClusters(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveClusters(projectID, clusters); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("clusters", projectID, len(clusters))
-	return fmt.Sprintf("Fetched %d clusters", len(clusters)), nil
+	return len(clusters), fmt.Sprintf("Fetched %d clusters", len(clusters)), nil
 }
 
 var clustersView = viewDef{
@@ -98,45 +98,7 @@ var clustersAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d clusters for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching clusters for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("clusters", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching clusters for %s...", p.ProjectID))
-				})
-				clusters, err := providers.ListProjectClusters(p.ProjectID)
-				if err != nil {
-					a.reportError("clusters", p.ProjectID, "Failed to fetch clusters for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveClusters(p.ProjectID, clusters); err != nil {
-					a.reportError("clusters", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("clusters", p.ProjectID, len(clusters))
-				total += len(clusters)
-			}
-			a.markViewUpdated(viewClustersAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewClustersAll)
-				status := fmt.Sprintf("[green]Fetched %d clusters across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewClustersAll, "clusters", "clusters", "clusters", fetchProjectClusters),
 	resource: func(a *app, row []string) (any, error) {
 		return clusterResource(a, row[7], row[0])
 	},

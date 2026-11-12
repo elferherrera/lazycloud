@@ -53,16 +53,16 @@ func peeringResource(a *app, projectID, network, name string) (any, error) {
 	return p, nil
 }
 
-func fetchProjectPeerings(a *app, projectID string) (string, error) {
-	peerings, err := providers.ListProjectPeerings(projectID)
+func fetchProjectPeerings(a *app, projectID string) (int, string, error) {
+	peerings, err := listProjectPeerings(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveNetworkPeerings(projectID, peerings); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("peerings", projectID, len(peerings))
-	return fmt.Sprintf("Fetched %d network peerings", len(peerings)), nil
+	return len(peerings), fmt.Sprintf("Fetched %d network peerings", len(peerings)), nil
 }
 
 var peeringsView = viewDef{
@@ -102,45 +102,7 @@ var peeringsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d network peerings for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching network peerings for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("peerings", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching network peerings for %s...", p.ProjectID))
-				})
-				peerings, err := providers.ListProjectPeerings(p.ProjectID)
-				if err != nil {
-					a.reportError("peerings", p.ProjectID, "Failed to fetch network peerings for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveNetworkPeerings(p.ProjectID, peerings); err != nil {
-					a.reportError("peerings", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("peerings", p.ProjectID, len(peerings))
-				total += len(peerings)
-			}
-			a.markViewUpdated(viewPeeringsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewPeeringsAll)
-				status := fmt.Sprintf("[green]Fetched %d network peerings across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewPeeringsAll, "peerings", "network peerings", "network peerings", fetchProjectPeerings),
 	resource: func(a *app, row []string) (any, error) {
 		return peeringResource(a, row[7], row[0], row[1])
 	},
