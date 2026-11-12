@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func TestExecuteResources(t *testing.T) {
