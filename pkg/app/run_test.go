@@ -49,21 +49,20 @@ func TestRunAppliesConfigThemeBeforeFailure(t *testing.T) {
 	}
 }
 
-// TestResolveThemeMissingPalette keeps resolveTheme total when a palette
-// lookup misses: system mode must fall back to the dark section. Light
-// and dark modes never consult palettes, so they stay total by construction.
-func TestResolveThemeMissingPalette(t *testing.T) {
-	original := palettes
-	palettes = map[providers.BackgroundKind]providers.Theme{}
-	t.Cleanup(func() { palettes = original })
-
-	light := providers.CompleteLightTheme(providers.Theme{})
+// TestResolveThemeUnknownBackground pins the system-mode fallback: a
+// background kind the detection cannot classify keeps the dark section,
+// and a light terminal paints with the configured light section.
+func TestResolveThemeUnknownBackground(t *testing.T) {
+	light := providers.CompleteLightTheme(providers.Theme{Labels: "orange"})
 	config := providers.Theme{Mode: "light", Labels: "orange", Text: "aqua"}
 	if got := resolveTheme(config, light, providers.BackgroundLight); got != light {
-		t.Errorf("resolveTheme(light) = %+v, want the light section without palette lookup", got)
+		t.Errorf("resolveTheme(light) = %+v, want the light section", got)
 	}
 	config.Mode = "system"
-	if got := resolveTheme(config, light, providers.BackgroundLight); got != config {
-		t.Errorf("resolveTheme(system, missing palette) = %+v, want the configured theme", got)
+	if got := resolveTheme(config, light, providers.BackgroundLight); got != light {
+		t.Errorf("resolveTheme(system, light background) = %+v, want the configured light section", got)
+	}
+	if got := resolveTheme(config, light, providers.BackgroundDark); got != config {
+		t.Errorf("resolveTheme(system, dark background) = %+v, want the configured theme section", got)
 	}
 }

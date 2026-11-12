@@ -121,8 +121,10 @@ var detectBackground = providers.DetectBackground
 // resolveTheme returns the palette the UI should paint with. Dark mode keeps
 // the theme section, light mode keeps themeLight (falling back to the
 // built-in light palette per key when unset), and system mode resolves from
-// the detected terminal background. Customizations in either section
-// survive mode switches because both sections are kept in the config.
+// the detected terminal background: a light terminal paints with themeLight
+// too, so customizing it retunes both light mode and system-on-light.
+// Customizations in either section survive mode switches because both
+// sections are kept in the config.
 func resolveTheme(dark, light providers.Theme, background providers.BackgroundKind) providers.Theme {
 	switch providers.ParseThemeMode(dark.Mode) {
 	case providers.ModeLight:
@@ -130,17 +132,11 @@ func resolveTheme(dark, light providers.Theme, background providers.BackgroundKi
 	case providers.ModeDark:
 		return dark
 	default:
-		if palette, ok := palettes[background]; ok {
-			return palette
+		if background == providers.BackgroundLight {
+			return light
 		}
 		return dark
 	}
-}
-
-// palettes holds the built-in palettes keyed by terminal background kind.
-// A new palette is a data addition here, nothing else to touch.
-var palettes = map[providers.BackgroundKind]providers.Theme{
-	providers.BackgroundLight: providers.DefaultLightTheme(),
 }
 
 // applyConfigTheme resolves the configured theme mode against the current

@@ -54,8 +54,8 @@ func ParseThemeMode(value string) ThemeMode {
 // defaults a partial themeLight config section merges against, so an empty
 // key falls back to the built-in value instead of the dark palette.
 // Labels use a dark bronze hex rather than the olive name because terminals
-// render olive too light for the white background (2.8:1 measured, below
-// the 4.5:1 AA floor; the bronze reads 5.9:1 on the same background).
+// render olive too light for the white background (4.2:1 measured, below
+// the 4.5:1 AA floor; the bronze reads 7.1:1 on the same background).
 func DefaultLightTheme() Theme {
 	return Theme{
 		Mode:                string(ModeLight),

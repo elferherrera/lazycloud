@@ -251,8 +251,13 @@ func TestResolveTheme(t *testing.T) {
 	if got := resolveTheme(config, light, providers.BackgroundDark); got.Labels != "orange" {
 		t.Errorf("resolveTheme(system, dark) = %q, want configured palette", got.Labels)
 	}
-	if got := resolveTheme(config, light, providers.BackgroundLight); got.Labels != light.Labels || got.Text != light.Text {
-		t.Errorf("resolveTheme(system, light) = %q %q, want light palette", got.Labels, got.Text)
+	// The light section passed in is the configured themeLight, so a light
+	// terminal must paint with it, not the built-in palette.
+	custom := providers.DefaultLightTheme()
+	custom.Labels = "orange"
+	custom.Text = "navy"
+	if got := resolveTheme(config, custom, providers.BackgroundLight); got.Labels != "orange" || got.Text != "navy" {
+		t.Errorf("resolveTheme(system, light) = %q %q, want the customized light section", got.Labels, got.Text)
 	}
 	customLight := providers.Theme{Mode: "light", Labels: "orange"}
 	if got := resolveTheme(customLight, providers.CompleteLightTheme(customLight), providers.BackgroundDark); got.Labels != "orange" {
