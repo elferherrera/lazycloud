@@ -229,10 +229,13 @@ func (a *app) rebuildSettingsForm() {
 
 // cycleThemeColor moves the section value for one key through the curated
 // list and writes it into the field, which re-fires the changed callback so
-// the preview repaints. Values outside the list enter the cycle at the
-// first entry.
+// the preview repaints. Values outside the list enter at the first entry in
+// the move direction, so an unknown value always cycles somewhere sensible.
 func cycleThemeColor(section *providers.Theme, key themeColorKey, dir int, field *tview.InputField) {
 	idx := 0
+	if dir > 0 {
+		idx = len(themeColorCycle) - 1
+	}
 	for i, c := range themeColorCycle {
 		if c == key.get(*section) {
 			idx = (i + dir + len(themeColorCycle)) % len(themeColorCycle)
@@ -304,9 +307,12 @@ func isLightColor(color tcell.Color) bool {
 }
 
 // previewThemeColors applies the edited colors to the running UI without
-// writing the config, so the user sees each keystroke take effect.
+// writing the config, so the user sees each keystroke take effect. It
+// resolves the mode against the real terminal background, so in system mode
+// on a light terminal the preview paints the light section that closing
+// will save, not the dark one.
 func (a *app) previewThemeColors() {
-	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, providers.BackgroundDark))
+	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, detectBackground()))
 	a.applyThemeToWidgets()
 }
 
@@ -320,6 +326,10 @@ func (a *app) applySettings() {
 	}
 	config.Theme = configuredThemesDark
 	config.ThemeLight = configuredThemesLight
+	// themeLight.mode round-trips as a copy of theme.mode so the file never
+	// carries a value that looks like it selects the mode: only theme.mode
+	// does, and a hand-edited themeLight.mode is ignored on load.
+	config.ThemeLight.Mode = configuredTheme.Mode
 	config.Infobar.ShowShortcuts = infobarEnabled
 	config.AutoUpdate.Enabled = a.staleAutoRefresh
 	config.Theme.Mode = configuredTheme.Mode

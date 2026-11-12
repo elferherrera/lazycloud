@@ -68,7 +68,6 @@ type app struct {
 	settingsForm   *tview.Form
 	settingsRow    *tview.Flex
 	settingsColumn *tview.Flex
-	settingsOpen   atomic.Bool
 }
 
 func newSummaryPanel() *tview.TextView {

@@ -103,12 +103,18 @@ func TestCycleThemeColorStepsThroughTheList(t *testing.T) {
 	if got := field.GetText(); got != "yellow" {
 		t.Errorf("prev after blue = %q, want yellow", got)
 	}
-	// Unknown values enter the cycle at the first entry.
+	// Unknown values enter the cycle at the first entry in the move direction.
 	field.SetText("#ff9900")
 	section.Labels = "#ff9900"
 	cycleThemeColor(&section, key, 1, field)
+	if got := field.GetText(); got != "navy" {
+		t.Errorf("cycle from unknown forward = %q, want navy (after the last entry)", got)
+	}
+	field.SetText("#ff9900")
+	section.Labels = "#ff9900"
+	cycleThemeColor(&section, key, -1, field)
 	if got := field.GetText(); got != "black" {
-		t.Errorf("cycle from unknown = %q, want black", got)
+		t.Errorf("cycle from unknown backward = %q, want black (before the first entry)", got)
 	}
 	// Wrap around the list edges.
 	field.SetText("navy")
