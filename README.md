@@ -157,6 +157,12 @@ Anything with arguments or not matching a view name is treated as a command; unk
 | `r` | Restore last deleted project | projects view |
 | `x` | Delete project from cache | projects view |
 
+### Shortcut bar
+
+A one-line bar above the status bar shows the keys available in the current view: panel-specific keys first, then the global ones (`u U y v g ? q : / a space b F1`), fitted to the terminal width. When the terminal is too narrow to show everything it ends with `+N more in ?`, and the full list always lives in the `?` help overlay.
+
+Two ways to tune it: `F1` in the settings panel toggles it (`Shortcut bar`), or set `infobar.show_shortcuts: false` in `config.yaml`. `infobar.sort_order` picks the order: `current` (panel keys first, then globals, the default) or `alphabetical` (every key by name).
+
 ## Search
 
 Press `S` (not in the VMs view) or run `:search` to open a search side panel that searches every indexed view across every project. `/` stays the per-view filter.
