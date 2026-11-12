@@ -262,10 +262,17 @@ func TestConfigThemeModeDefaultsToSystem(t *testing.T) {
 }
 
 func TestMergeThemeFillsEveryEmptyKey(t *testing.T) {
-	defaults := Theme{Mode: "system", Labels: "yellow", Text: "white"}
+	defaults := Theme{Mode: "system", Background: "black", Labels: "yellow", Text: "white"}
 	merged := mergeTheme(Theme{}, defaults)
 	if merged.Labels != "yellow" {
 		t.Errorf("mergeTheme() labels = %q, want default yellow", merged.Labels)
+	}
+	if merged.Background != "black" {
+		t.Errorf("mergeTheme() background = %q, want default black", merged.Background)
+	}
+	kept := mergeTheme(Theme{Background: "white"}, defaults)
+	if kept.Background != "white" {
+		t.Errorf("mergeTheme() background = %q, want configured white kept", kept.Background)
 	}
 }
 

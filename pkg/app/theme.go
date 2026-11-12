@@ -8,6 +8,7 @@ import (
 )
 
 type themeColors struct {
+	background          string
 	labels              string
 	text                string
 	borders             string
@@ -26,6 +27,7 @@ type themeColors struct {
 }
 
 var theme = themeColors{
+	background:         "black",
 	labels:              "yellow",
 	text:                "white",
 	borders:             "white",
@@ -141,6 +143,7 @@ func resolveTheme(config providers.Theme, background providers.BackgroundKind) p
 // A new palette is a data addition here, nothing else to touch.
 var palettes = map[providers.BackgroundKind]providers.Theme{
 	providers.BackgroundLight: {
+		Background:         "white",
 		Labels:              "olive",
 		Text:                "black",
 		Borders:             "black",
@@ -165,11 +168,13 @@ func applyConfigTheme(config providers.Theme) {
 }
 
 func applyTheme(config providers.Theme) {
+	background := themeColor(config.Background, theme.background)
 	labels := themeColor(config.Labels, theme.labels)
 	text := themeColor(config.Text, theme.text)
 	shortcutLabels := themeColor(config.ShortcutLabels, labels)
 	shortcutText := themeColor(config.ShortcutText, text)
 	theme = themeColors{
+		background:         background,
 		labels:              labels,
 		text:                text,
 		borders:             themeColor(config.Borders, theme.borders),
@@ -198,11 +203,15 @@ func applyTheme(config providers.Theme) {
 	if c := tcell.GetColor(theme.title); c != tcell.ColorDefault {
 		tview.Styles.TitleColor = c
 	}
+	if c := tcell.GetColor(theme.background); c != tcell.ColorDefault {
+		tview.Styles.PrimitiveBackgroundColor = c
+	}
 }
 
 func defaultThemeConfig() providers.Theme {
 	return providers.Theme{
 		Mode:                string(providers.ModeDark),
+		Background:          "black",
 		Labels:              "yellow",
 		Text:                "white",
 		Borders:             "white",

@@ -7,6 +7,7 @@ import (
 
 type Theme struct {
 	Mode                string `json:"mode" yaml:"mode"`
+	Background          string `json:"background" yaml:"background"`
 	Labels              string `json:"labels" yaml:"labels"`
 	Text                string `json:"text" yaml:"text"`
 	Borders             string `json:"borders" yaml:"borders"`
@@ -60,6 +61,9 @@ func themePath() (string, error) {
 func mergeTheme(theme, defaults Theme) Theme {
 	if theme.Mode == "" {
 		theme.Mode = defaults.Mode
+	}
+	if theme.Background == "" {
+		theme.Background = defaults.Background
 	}
 	if theme.Labels == "" {
 		theme.Labels = defaults.Labels

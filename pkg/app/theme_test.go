@@ -30,16 +30,18 @@ func TestThemeColor(t *testing.T) {
 
 func TestApplyTheme(t *testing.T) {
 	secondary, primary, border, title := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor, tview.Styles.BorderColor, tview.Styles.TitleColor
+	primitive := tview.Styles.PrimitiveBackgroundColor
 	original := theme
 	t.Cleanup(func() {
 		tview.Styles.SecondaryTextColor = secondary
 		tview.Styles.PrimaryTextColor = primary
 		tview.Styles.BorderColor = border
 		tview.Styles.TitleColor = title
+		tview.Styles.PrimitiveBackgroundColor = primitive
 		theme = original
 	})
 
-	applyTheme(providers.Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange"})
+	applyTheme(providers.Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", Background: "white"})
 	if theme.labels != "aqua" || theme.text != "gray" || theme.borders != "green" || theme.title != "orange" {
 		t.Errorf("applyTheme() = %+v, want custom colors", theme)
 	}
@@ -73,10 +75,21 @@ func TestApplyTheme(t *testing.T) {
 	if tview.Styles.TitleColor != tcell.ColorOrange {
 		t.Errorf("applyTheme() TitleColor = %v, want orange", tview.Styles.TitleColor)
 	}
+	if theme.background != "white" || tview.Styles.PrimitiveBackgroundColor != tcell.ColorWhite {
+		t.Errorf("applyTheme() background = %q style %v, want white", theme.background, tview.Styles.PrimitiveBackgroundColor)
+	}
 
 	applyTheme(providers.Theme{Labels: "not-a-color"})
 	if theme.labels != "aqua" {
 		t.Errorf("applyTheme() invalid labels = %q, want aqua fallback", theme.labels)
+	}
+	if theme.background != "white" {
+		t.Errorf("applyTheme() background = %q, want white kept", theme.background)
+	}
+
+	applyTheme(providers.Theme{Background: "not-a-color"})
+	if theme.background != "white" {
+		t.Errorf("applyTheme() invalid background = %q, want white fallback", theme.background)
 	}
 
 	applyTheme(providers.Theme{Labels: "#ff9900", Borders: "#00aa55"})
@@ -250,10 +263,12 @@ func TestResolveTheme(t *testing.T) {
 func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	original := theme
 	secondary, primary := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor
+	primitive := tview.Styles.PrimitiveBackgroundColor
 	t.Cleanup(func() {
 		theme = original
 		tview.Styles.SecondaryTextColor = secondary
 		tview.Styles.PrimaryTextColor = primary
+		tview.Styles.PrimitiveBackgroundColor = primitive
 	})
 
 	originalDetect := detectBackground
@@ -263,6 +278,9 @@ func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"})
 	if theme.labels != "olive" || theme.text != "black" {
 		t.Errorf("applyConfigTheme(light bg) = %q %q, want light palette", theme.labels, theme.text)
+	}
+	if theme.background != "white" || tview.Styles.PrimitiveBackgroundColor != tcell.ColorWhite {
+		t.Errorf("applyConfigTheme(light bg) background = %q style %v, want white", theme.background, tview.Styles.PrimitiveBackgroundColor)
 	}
 
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
