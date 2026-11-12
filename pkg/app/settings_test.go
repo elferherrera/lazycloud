@@ -146,8 +146,9 @@ func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
 	// Find the Labels input field and type into it the way the form does.
 	var field *tview.InputField
 	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
-		if f, ok := a.settingsForm.GetFormItem(i).(*tview.InputField); ok && a.settingsForm.GetFormItem(i).(*tview.InputField).GetLabel() == "Labels" {
-			field = f
+		item := a.settingsForm.GetFormItem(i)
+		if pf, ok := item.(*colorPreviewField); ok && pf.GetLabel() == "Labels" {
+			field = pf.InputField
 			break
 		}
 	}

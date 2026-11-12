@@ -56,6 +56,33 @@ func TestSettingsFormShowsEveryRowAndButtons(t *testing.T) {
 	}
 }
 
+// TestColorPreviewFieldPaintsSwatch pins the swatch behavior: the field
+// background takes the configured color, the value text flips to black or
+// white by luma, and the form restyle that Form.Draw performs on every
+// redraw cannot wash the preview out.
+func TestColorPreviewFieldPaintsSwatch(t *testing.T) {
+	f := newColorPreviewField()
+	f.SetText("#705400")
+	fg, bg, _ := f.GetFieldStyle().Decompose() // dark bronze swatch, white value text
+	if bg != tcell.GetColor("#705400") {
+		t.Errorf("background = %v, want the configured bronze", bg)
+	}
+	if fg != tcell.ColorWhite {
+		t.Errorf("foreground = %v, want white on the dark bronze", fg)
+	}
+	f.SetText("navy")
+	_, bg, _ = f.GetFieldStyle().Decompose()
+	if bg != tcell.GetColor("navy") {
+		t.Errorf("background = %v, want navy", bg)
+	}
+	// Form.Draw restyles every item on each draw; the preview must survive it.
+	f.SetFormAttributes(22, tcell.ColorDefault, tcell.ColorDefault, tcell.ColorDefault, tcell.ColorDefault)
+	_, bg, _ = f.GetFieldStyle().Decompose()
+	if bg != tcell.GetColor("navy") {
+		t.Errorf("background after form restyle = %v, want navy kept", bg)
+	}
+}
+
 // TestCycleThemeColorStepsThroughTheList pins the arrow cycling: a value in
 // the list moves to its neighbor with wraparound, an unknown value enters
 // at the first entry. The field text is what cycling writes; the section

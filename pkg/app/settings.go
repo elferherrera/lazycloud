@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
@@ -195,26 +197,25 @@ func (a *app) rebuildSettingsForm() {
 	section := activeThemeSection()
 	for _, key := range themeColorKeys {
 		key := key
-		form.AddInputField(key.label, key.get(*section), 12, nil,
-			func(text string) {
-				key.set(section, text)
-				a.previewThemeColors()
+		field := newColorPreviewField()
+		form.AddFormItem(field)
+		field.SetLabel(key.label)
+		field.SetFieldWidth(12)
+		field.SetText(key.get(*section))
+		field.SetChangedFunc(func(text string) {
+			key.set(section, text)
+			a.previewThemeColors()
 		})
-		idx := form.GetFormItemCount() - 1
-		field, ok := form.GetFormItem(idx).(*tview.InputField)
-		if !ok {
-			continue
-		}
 		// Up and down cycle the curated color list so the palette is
 		// reachable without typing; the field stays open for hex and
 		// tcell names. Tab and shift-tab still move between fields.
 		field.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 			switch event.Key() {
 			case tcell.KeyDown:
-				cycleThemeColor(section, key, 1, field)
+				cycleThemeColor(section, key, 1, field.InputField)
 				return nil
 			case tcell.KeyUp:
-				cycleThemeColor(section, key, -1, field)
+				cycleThemeColor(section, key, -1, field.InputField)
 				return nil
 			}
 			return event
@@ -239,6 +240,67 @@ func cycleThemeColor(section *providers.Theme, key themeColorKey, dir int, field
 		}
 	}
 	field.SetText(themeColorCycle[idx])
+}
+
+// colorPreviewField is a color input that paints its background with the
+// configured color and keeps the value text readable over it (black or
+// white by luma), like a color picker swatch. Form.Draw restyles every item
+// on each draw, so the preview re-applies itself in SetFormAttributes,
+// which the form calls right after its own styling.
+type colorPreviewField struct {
+	*tview.InputField
+	userChanged func(text string)
+}
+
+func newColorPreviewField() *colorPreviewField {
+	f := &colorPreviewField{InputField: tview.NewInputField()}
+	f.InputField.SetChangedFunc(func(text string) {
+		if f.userChanged != nil {
+			f.userChanged(text)
+		}
+		f.applyPreview()
+	})
+	return f
+}
+
+// SetChangedFunc chains the caller's handler with the swatch repaint, so
+// both the config value and the preview update on every edit. The return
+// value stays the embedded field because form code chains tview setters.
+func (f *colorPreviewField) SetChangedFunc(handler func(text string)) *tview.InputField {
+	f.userChanged = handler
+	return f.InputField
+}
+
+// SetFormAttributes delegates to the embedded field, then repaints the
+// swatch: this runs on every draw, after the form has overwritten the
+// field style, so the preview survives redraws.
+func (f *colorPreviewField) SetFormAttributes(labelWidth int, labelColor, bgColor, fieldTextColor, fieldBgColor tcell.Color) tview.FormItem {
+	f.InputField.SetFormAttributes(labelWidth, labelColor, bgColor, fieldTextColor, fieldBgColor)
+	f.applyPreview()
+	return f
+}
+
+// applyPreview paints the field background with the current value and picks
+// black or white text so the value stays legible on any color.
+func (f *colorPreviewField) applyPreview() {
+	color := tcell.GetColor(strings.TrimSpace(f.GetText()))
+	if color == tcell.ColorDefault {
+		// Unparseable text (mid-typing): keep the form style so the
+		// half-typed value stays visible instead of hiding the field.
+		return
+	}
+	text := tcell.ColorWhite
+	if color == tcell.ColorBlack || isLightColor(color) {
+		text = tcell.ColorBlack
+	}
+	f.SetFieldStyle(tcell.StyleDefault.Background(color).Foreground(text))
+}
+
+// isLightColor reports whether a color reads as light, using the same
+// BT.601 luma test the terminal background detection uses.
+func isLightColor(color tcell.Color) bool {
+	r, g, b := color.TrueColor().RGB()
+	return (299*int(r) + 587*int(g) + 114*int(b)) / 1000 > 127
 }
 
 // previewThemeColors applies the edited colors to the running UI without
