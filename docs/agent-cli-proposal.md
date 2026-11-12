@@ -9,7 +9,7 @@ No TUI code is touched. The CLI reads the same cache and calls the same fetchers
 ## Why
 
 - **Agents cannot use the TUI.** `app.Run()` opens `/dev/tty`; inside an agent shell there is no TTY, so today the only agent path is raw `gcloud` with per-resource flag archaeology. The value of lazycloud, one consistent view over 30+ resource types with a local cache, is exactly what an agent needs but cannot reach.
-- **The layer separation already exists.** `cmd/providers` has zero `tview`/`tcell` imports: 31 `List*` functions (gcloud.go, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
+- **The layer separation already exists.** `pkg/providers` (previously `cmd/providers`) has zero `tview`/`tcell` imports: 31 `List*` functions (gcloud.go, grammar support `--cloud`, pure ADC auth, no flags) and 124 `Cache` methods already cover everything the TUI shows. The proposal is a thin dispatcher over that layer, not a rewrite.
 - **JSON is already half-implemented.** The `y` copy key serializes any row's cached resource (handlers.go `rowCopyPayload`), and `:write` dumps whole views as JSON/YAML/CSV. The CLI generalizes what already exists.
 
 ## Non-goals
@@ -136,7 +136,7 @@ Same `~/.config/lazycloud/cache.db` (modernc.org/sqlite, no cgo). Concurrent TUI
 ## Phasing
 
 1. **Phase 1:** `list`/`get`/`projects`/`resources`, `--json` default, `--table`, `--project`, implicit all-projects, `--refresh`, `--yaml`, `--ndjson`, json tags, exit codes, tests. Registry seeded with 7-8 flagship resources (projects, vms, disks, clusters, networks, buckets, service accounts, IAM).
-2. **Phase 2:** all remaining resources (LBs, DNS zones/records, PSC, VPNs, cloud routers, images, instance templates, snapshots, reservations, instance groups, peerings, routes, firewalls, subnets), `--filter`, `resources --verbose` (per-resource flags), cache-status subcommand.
+2. **Phase 2:** all remaining resources (LBs, DNS zones/records, PSC, VPNs, cloud routers, images, instance templates, snapshots, reservations, instance groups, peerings, routes, firewalls, subnets), `--filter`, `resources --verbose` (per-resource flags), cache-status subcommand, and `skill install`, which writes an agent skill (compressed SKILL.md: grammar, selectors, exit codes, investigation recipes) to `~/.agents/skills/lazycloud/SKILL.md` or a `--path`/`LAZYCLOUD_SKILLS_DIR` override so agents self-serve the CLI contract without re-reading the README.
 3. **Phase 3:** viewDef refactor lifting `load`/`fetch` out of `*app` so TUI and CLI share one registry (kills the duplicated headers), opening the door to an MCP server wrapper over the same registry if agents with MCP support want it.
 
 ## Alternative surfaces considered

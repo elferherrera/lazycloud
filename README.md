@@ -197,16 +197,17 @@ A `+ ` followed by a space starts an **include term**: a row is only shown when 
 Running `lazycloud` with no arguments still opens the TUI. Passing a subcommand runs the same views as an agent-friendly CLI instead: it reads the same cache, refreshes with the same fetchers, and prints snake_case JSON by default.
 
 ```
-lazycloud list <resource> [--project <id>] [--json|--yaml|--table|--ndjson] [--refresh]
+lazycloud list <resource> [--cloud <name>] [--project <id>] [--json|--yaml|--table|--ndjson] [--refresh]
 lazycloud get <resource> <selector...> [--json|--yaml|--table|--ndjson]
 lazycloud projects            # shortcut: lazycloud list projects
 lazycloud resources           # the valid resource names
 lazycloud --help              # the full CLI surface: subcommands, flags, resources, selectors
+lazycloud skill install [--path <dir>]
 ```
 
 Resources: `projects`, `vms`, `disks`, `clusters`, `networks`, `buckets`, `serviceaccounts` (`sa`), `iam`. Singular aliases work (`lazycloud get vm ...`).
 
-Selectors: `project` for projects, `project/zone/name` for VMs and disks, `project/name` for clusters, buckets, and VPCs, `project/region/name` for subnets, `project/email` for service accounts, `project/member/role` for IAM bindings (the role keeps its slashes).
+Selectors: `project` for projects, `project/name` or `project/zone/name` for VMs and disks (the short form fits clouds without zones), `project/name` for clusters, buckets, and VPCs, `project/region/name` for subnets, `project/email` for service accounts, `project/member/role` for IAM bindings (the role keeps its slashes).
 
 Examples:
 
@@ -226,9 +227,14 @@ Behavior:
 
 - Output formats: `--json` (default, compact array), `--ndjson` (one object per line), `--yaml`, `--table` (the same columns as the TUI view).
 - Keys are snake_case; map keys like VM labels pass through untouched.
-- `--project <id>` scopes one project; without it (and without `LAZYCLOUD_PROJECT`) the list covers every project in the cache. `--refresh` re-fetches from GCP first, like the TUI's `u` key, and records the view update so the TUI's staleness display stays accurate. The global `projects` resource rejects a project scope (`--project` or `LAZYCLOUD_PROJECT`) with a usage error instead of ignoring it.
+- `--project <id>` scopes one project; without it (and without `LAZYCLOUD_PROJECT`) the list covers every project in the cache. `--refresh` re-fetches from the selected cloud first, like the TUI's `u` key, and records the view update so the TUI's staleness display stays accurate. The global `projects` resource rejects a project scope (`--project` or `LAZYCLOUD_PROJECT`) with a usage error instead of ignoring it. A repeated `--project` keeps the last value.
+- When a refresh covers several projects and some fail, the refreshed projects still print on stdout, each failure is reported on stderr, and the exit code is `3`.
+- `--cloud <name>` selects the provider from the registry in `pkg/cloud` (today: `gcp`, `nebius`); `gcp` is the default and `LAZYCLOUD_CLOUD` fills the flag when absent. Each cloud uses its own cache file (`cache.db` for GCP, `cache-nebius.db` for Nebius), so switching clouds never mixes data. The Nebius provider talks gRPC through the `nebius` Go SDK; the token comes from `NEBIUS_IAM_TOKEN` or the `nebius` CLI (`nebius iam get-access-token`). Design notes: [docs/nebius-support-proposal.md](docs/nebius-support-proposal.md).
+- `skill install` writes the lazycloud agent skill (a compressed SKILL.md teaching an agent the CLI grammar, selectors, exit codes, and investigation recipes, including the Nebius setup) to `<dir>/lazycloud/SKILL.md`. `<dir>` resolves from `--path` first, then `LAZYCLOUD_SKILLS_DIR`, then `~/.agents/skills`. An explicit `--path` never consults the environment. Re-running overwrites, so an update is the same command; the installed path prints on stdout. Directories are created as needed; write failures exit `3` with the reason on stderr.
 - Unscoped `--table` output prints the TUI's all-projects columns, including the trailing Project column; a scoped `--table` prints the per-project view's columns.
 - stdout is data only; warnings and diagnostics go to stderr.
 - Exit codes: `0` ok (empty result is `[]`), `1` usage, `2` not found, `3` infrastructure (cache, auth, quota, API).
+
+`skill install` behaves the same as the other subcommands for diagnostics: the path is data on stdout, errors and usage messages go to stderr, and the same exit codes apply. `lazycloud skill` alone or with an unknown subcommand is a usage error.
 
 Design rationale: [docs/agent-cli-proposal.md](docs/agent-cli-proposal.md).
