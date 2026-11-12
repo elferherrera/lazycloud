@@ -340,3 +340,28 @@ func TestConfigPreservesExplicitInfobarSortOrder(t *testing.T) {
 		t.Fatalf("config file infobar = %+v, want preserved %+v", onDisk.Infobar, want)
 	}
 }
+
+func TestConfigThemeLightSectionMergesAgainstLightPalette(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("themeLight:\n  labels: orange\n"), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+	got, err := LoadConfig(Theme{Mode: "dark"}, nil, AutoUpdate{}, Infobar{})
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if got.ThemeLight.Labels != "orange" {
+		t.Fatalf("LoadConfig() light labels = %q, want configured orange kept", got.ThemeLight.Labels)
+	}
+	want := DefaultLightTheme()
+	if got.ThemeLight.Background != want.Background || got.ThemeLight.Text != want.Text {
+		t.Fatalf("LoadConfig() light section = %+v, want unset keys filled from the built-in light palette", got.ThemeLight)
+	}
+	onDisk := readConfigFile(t, dir)
+	if onDisk.ThemeLight.Labels != "orange" {
+		t.Fatalf("config file light labels = %q, want orange persisted", onDisk.ThemeLight.Labels)
+	}
+}

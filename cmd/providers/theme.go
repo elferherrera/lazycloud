@@ -50,6 +50,40 @@ func ParseThemeMode(value string) ThemeMode {
 	}
 }
 
+// DefaultLightTheme is the built-in light palette. It is also the set of
+// defaults a partial themeLight config section merges against, so an empty
+// key falls back to the built-in value instead of the dark palette.
+// Labels use a dark bronze hex rather than the olive name because terminals
+// render olive too light for the white background (2.8:1 measured, below
+// the 4.5:1 AA floor; the bronze reads 5.9:1 on the same background).
+func DefaultLightTheme() Theme {
+	return Theme{
+		Mode:                string(ModeLight),
+		Background:          "white",
+		Labels:              "#705400",
+		Text:                "black",
+		Borders:             "black",
+		Title:               "black",
+		ShortcutLabels:      "#705400",
+		ShortcutText:        "black",
+		Focus:               "#705400",
+		StatusLabels:        "#705400",
+		StatusText:          "black",
+		SummaryLabels:       "#705400",
+		SummaryText:         "black",
+		DetailLabels:        "#705400",
+		DetailText:          "black",
+		ActiveRowText:       "white",
+		ActiveRowBackground: "black",
+	}
+}
+
+// CompleteLightTheme fills the empty keys of a themeLight section from the
+// built-in light palette.
+func CompleteLightTheme(theme Theme) Theme {
+	return mergeTheme(theme, DefaultLightTheme())
+}
+
 func themePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

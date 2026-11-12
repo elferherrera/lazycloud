@@ -29,6 +29,7 @@ const (
 
 type Config struct {
 	Theme      Theme             `yaml:"theme"`
+	ThemeLight Theme             `yaml:"themeLight"`
 	Shortcuts  map[string]string `yaml:"shortcuts"`
 	AutoUpdate AutoUpdate        `yaml:"autoupdate"`
 	Infobar    Infobar           `yaml:"infobar"`
@@ -72,6 +73,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 			return Config{}, err
 		}
 		config.Theme = mergeTheme(config.Theme, defaultTheme)
+		config.ThemeLight = CompleteLightTheme(config.ThemeLight)
 		if err := SaveConfig(config); err != nil {
 			return Config{}, err
 		}
@@ -84,6 +86,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	var sections struct {
 		AutoUpdate *AutoUpdate `yaml:"autoupdate"`
 		Infobar    *Infobar    `yaml:"infobar"`
+		ThemeLight *Theme       `yaml:"themeLight"`
 	}
 	if err := yaml.Unmarshal(data, &sections); err != nil {
 		return Config{}, err
@@ -93,6 +96,16 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	if merged != config.Theme {
 		config.Theme = merged
 		rewrote = true
+	}
+	if sections.ThemeLight == nil {
+		config.ThemeLight = CompleteLightTheme(Theme{})
+		rewrote = true
+	} else {
+		mergedLight := CompleteLightTheme(config.ThemeLight)
+		if mergedLight != config.ThemeLight {
+			config.ThemeLight = mergedLight
+			rewrote = true
+		}
 	}
 	if sections.AutoUpdate == nil {
 		config.AutoUpdate = defaultAutoUpdate

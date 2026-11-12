@@ -246,19 +246,20 @@ func TestShortcutPanelColors(t *testing.T) {
 }
 
 func TestResolveTheme(t *testing.T) {
+	light := providers.DefaultLightTheme()
 	config := providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}
-	if got := resolveTheme(config, providers.BackgroundDark); got.Labels != "orange" {
+	if got := resolveTheme(config, light, providers.BackgroundDark); got.Labels != "orange" {
 		t.Errorf("resolveTheme(system, dark) = %q, want configured palette", got.Labels)
 	}
-	if got := resolveTheme(config, providers.BackgroundLight); got.Labels != "olive" || got.Text != "black" {
+	if got := resolveTheme(config, light, providers.BackgroundLight); got.Labels != light.Labels || got.Text != light.Text {
 		t.Errorf("resolveTheme(system, light) = %q %q, want light palette", got.Labels, got.Text)
 	}
-	light := providers.Theme{Mode: "light", Labels: "orange"}
-	if got := resolveTheme(light, providers.BackgroundDark); got.Labels != "olive" {
-		t.Errorf("resolveTheme(light) = %q, want light palette regardless of background", got.Labels)
+	customLight := providers.Theme{Mode: "light", Labels: "orange"}
+	if got := resolveTheme(customLight, providers.CompleteLightTheme(customLight), providers.BackgroundDark); got.Labels != "orange" {
+		t.Errorf("resolveTheme(light) = %q, want the light section colors regardless of background", got.Labels)
 	}
 	dark := providers.Theme{Mode: "dark", Labels: "orange"}
-	if got := resolveTheme(dark, providers.BackgroundLight); got.Labels != "orange" {
+	if got := resolveTheme(dark, light, providers.BackgroundLight); got.Labels != "orange" {
 		t.Errorf("resolveTheme(dark) = %q, want configured palette regardless of background", got.Labels)
 	}
 }
@@ -278,8 +279,9 @@ func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	t.Cleanup(func() { detectBackground = originalDetect })
 
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundLight }
-	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"})
-	if theme.labels != "olive" || theme.text != "black" {
+	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
+	light := providers.DefaultLightTheme()
+	if theme.labels != light.Labels || theme.text != light.Text {
 		t.Errorf("applyConfigTheme(light bg) = %q %q, want light palette", theme.labels, theme.text)
 	}
 	if theme.background != "white" || tview.Styles.PrimitiveBackgroundColor != tcell.ColorWhite {
@@ -287,17 +289,18 @@ func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	}
 
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"})
+	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
 	if theme.labels != "orange" || theme.text != "silver" {
 		t.Errorf("applyConfigTheme(dark bg) = %q %q, want configured palette", theme.labels, theme.text)
 	}
 
-	applyConfigTheme(providers.Theme{Mode: "light", Labels: "orange"})
-	if theme.labels != "olive" {
-		t.Errorf("applyConfigTheme(light mode) = %q, want light palette", theme.labels)
+	customLight := providers.Theme{Mode: "light", Labels: "orange"}
+	applyConfigTheme(customLight, providers.CompleteLightTheme(customLight))
+	if theme.labels != "orange" {
+		t.Errorf("applyConfigTheme(light mode) = %q, want the light section colors", theme.labels)
 	}
 
-	applyConfigTheme(providers.Theme{Mode: "dark", Labels: "orange"})
+	applyConfigTheme(providers.Theme{Mode: "dark", Labels: "orange"}, providers.DefaultLightTheme())
 	if theme.labels != "orange" {
 		t.Errorf("applyConfigTheme(dark mode) = %q, want configured palette", theme.labels)
 	}

@@ -50,18 +50,20 @@ func TestRunAppliesConfigThemeBeforeFailure(t *testing.T) {
 }
 
 // TestResolveThemeMissingPalette keeps resolveTheme total when a palette
-// lookup misses: it must fall back to the configured theme.
+// lookup misses: system mode must fall back to the dark section. Light
+// and dark modes never consult palettes, so they stay total by construction.
 func TestResolveThemeMissingPalette(t *testing.T) {
 	original := palettes
 	palettes = map[providers.BackgroundKind]providers.Theme{}
 	t.Cleanup(func() { palettes = original })
 
+	light := providers.CompleteLightTheme(providers.Theme{})
 	config := providers.Theme{Mode: "light", Labels: "orange", Text: "aqua"}
-	if got := resolveTheme(config, providers.BackgroundLight); got != config {
-		t.Errorf("resolveTheme(missing palette) = %+v, want the configured theme", got)
+	if got := resolveTheme(config, light, providers.BackgroundLight); got != light {
+		t.Errorf("resolveTheme(light) = %+v, want the light section without palette lookup", got)
 	}
 	config.Mode = "system"
-	if got := resolveTheme(config, providers.BackgroundLight); got != config {
+	if got := resolveTheme(config, light, providers.BackgroundLight); got != config {
 		t.Errorf("resolveTheme(system, missing palette) = %+v, want the configured theme", got)
 	}
 }

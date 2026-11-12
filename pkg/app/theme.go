@@ -118,53 +118,35 @@ func themeColor(value, fallback string) string {
 // instead of querying the real terminal.
 var detectBackground = providers.DetectBackground
 
-// resolveTheme returns the palette the UI should paint with. Explicit dark
-// mode and a dark terminal under system mode keep the configured palette, so
-// existing color customizations survive. Only an explicit light mode or a
-// detected light terminal background switches to the built-in light palette.
-func resolveTheme(config providers.Theme, background providers.BackgroundKind) providers.Theme {
-	switch providers.ParseThemeMode(config.Mode) {
+// resolveTheme returns the palette the UI should paint with. Dark mode keeps
+// the theme section, light mode keeps themeLight (falling back to the
+// built-in light palette per key when unset), and system mode resolves from
+// the detected terminal background. Customizations in either section
+// survive mode switches because both sections are kept in the config.
+func resolveTheme(dark, light providers.Theme, background providers.BackgroundKind) providers.Theme {
+	switch providers.ParseThemeMode(dark.Mode) {
 	case providers.ModeLight:
-		if palette, ok := palettes[providers.BackgroundLight]; ok {
-			return palette
-		}
-		return config
+		return light
 	case providers.ModeDark:
-		return config
+		return dark
 	default:
 		if palette, ok := palettes[background]; ok {
 			return palette
 		}
-		return config
+		return dark
 	}
 }
 
 // palettes holds the built-in palettes keyed by terminal background kind.
 // A new palette is a data addition here, nothing else to touch.
 var palettes = map[providers.BackgroundKind]providers.Theme{
-	providers.BackgroundLight: {
-		Background:         "white",
-		Labels:              "olive",
-		Text:                "black",
-		Borders:             "black",
-		Title:               "black",
-		ShortcutLabels:      "olive",
-		ShortcutText:        "black",
-		StatusLabels:        "olive",
-		StatusText:          "black",
-		SummaryLabels:       "olive",
-		SummaryText:         "black",
-		DetailLabels:        "olive",
-		DetailText:          "black",
-		ActiveRowText:       "white",
-		ActiveRowBackground: "black",
-	},
+	providers.BackgroundLight: providers.DefaultLightTheme(),
 }
 
 // applyConfigTheme resolves the configured theme mode against the current
 // terminal background and applies the resulting palette.
-func applyConfigTheme(config providers.Theme) {
-	applyTheme(resolveTheme(config, detectBackground()))
+func applyConfigTheme(dark, light providers.Theme) {
+	applyTheme(resolveTheme(dark, light, detectBackground()))
 }
 
 func applyTheme(config providers.Theme) {
