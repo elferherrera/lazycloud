@@ -46,6 +46,9 @@ func TestApplyTheme(t *testing.T) {
 	if theme.shortcutLabels != "aqua" || theme.shortcutText != "gray" {
 		t.Errorf("applyTheme() shortcut colors = %q %q, want new labels/text fallback", theme.shortcutLabels, theme.shortcutText)
 	}
+	if theme.focus != "aqua" {
+		t.Errorf("applyTheme() focus = %q, want labels fallback", theme.focus)
+	}
 	if theme.statusLabels != "yellow" || theme.statusText != "gray" {
 		t.Errorf("applyTheme() status colors = %q %q, want yellow and new text fallback", theme.statusLabels, theme.statusText)
 	}
@@ -91,6 +94,9 @@ func TestApplyTheme(t *testing.T) {
 	if theme.shortcutLabels != "orange" || theme.shortcutText != "silver" {
 		t.Errorf("applyTheme() shortcut colors = %q %q, want orange silver", theme.shortcutLabels, theme.shortcutText)
 	}
+	if theme.focus != "orange" {
+		t.Errorf("applyTheme() focus = %q, want shortcut labels fallback", theme.focus)
+	}
 	if theme.labels != "#ff9900" {
 		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
 	}
@@ -134,6 +140,23 @@ func TestApplyTheme(t *testing.T) {
 	}
 	if theme.labels != "#ff9900" {
 		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	}
+
+	applyTheme(providers.Theme{Focus: "orange"})
+	if theme.focus != "orange" {
+		t.Errorf("applyTheme() focus = %q, want orange", theme.focus)
+	}
+	if theme.shortcutLabels != "#ff9900" {
+		t.Errorf("applyTheme() shortcut labels = %q, want #ff9900 kept", theme.shortcutLabels)
+	}
+}
+
+func TestFocusBorderColorFallsBackToBorder(t *testing.T) {
+	original := theme
+	t.Cleanup(func() { theme = original })
+	theme = themeColors{}
+	if got := theme.focusBorderColor(); got != theme.borderColor() {
+		t.Fatalf("focusBorderColor fallback = %v, want border color", got)
 	}
 }
 

@@ -14,6 +14,7 @@ type themeColors struct {
 	title               string
 	shortcutLabels      string
 	shortcutText        string
+	focus               string
 	statusLabels        string
 	statusText          string
 	summaryLabels       string
@@ -31,6 +32,7 @@ var theme = themeColors{
 	title:               "white",
 	shortcutLabels:      "yellow",
 	shortcutText:        "white",
+	focus:               "yellow",
 	statusLabels:        "yellow",
 	statusText:          "white",
 	summaryLabels:       "yellow",
@@ -47,6 +49,16 @@ func (t themeColors) shortcutLabelColor() tcell.Color {
 
 func (t themeColors) borderColor() tcell.Color {
 	return tcell.GetColor(t.borders)
+}
+
+// focusBorderColor marks the focused section while the search panel is open.
+// Same hue family as labels so the highlight reads as this app's accent, not a
+// new color.
+func (t themeColors) focusBorderColor() tcell.Color {
+	if c := tcell.GetColor(t.focus); c != tcell.ColorDefault {
+		return c
+	}
+	return t.borderColor()
 }
 
 func (t themeColors) titleColor() tcell.Color {
@@ -103,13 +115,16 @@ func themeColor(value, fallback string) string {
 func applyTheme(config providers.Theme) {
 	labels := themeColor(config.Labels, theme.labels)
 	text := themeColor(config.Text, theme.text)
+	shortcutLabels := themeColor(config.ShortcutLabels, labels)
+	shortcutText := themeColor(config.ShortcutText, text)
 	theme = themeColors{
 		labels:              labels,
 		text:                text,
 		borders:             themeColor(config.Borders, theme.borders),
 		title:               themeColor(config.Title, theme.title),
-		shortcutLabels:      themeColor(config.ShortcutLabels, labels),
-		shortcutText:        themeColor(config.ShortcutText, text),
+		shortcutLabels:      shortcutLabels,
+		shortcutText:        shortcutText,
+		focus:               themeColor(config.Focus, shortcutLabels),
 		statusLabels:        themeColor(config.StatusLabels, theme.statusLabels),
 		statusText:          themeColor(config.StatusText, text),
 		summaryLabels:       themeColor(config.SummaryLabels, labels),
@@ -141,6 +156,7 @@ func defaultThemeConfig() providers.Theme {
 		Title:               "white",
 		ShortcutLabels:      "yellow",
 		ShortcutText:        "white",
+		Focus:               "yellow",
 		StatusLabels:        "yellow",
 		StatusText:          "white",
 		SummaryLabels:       "yellow",

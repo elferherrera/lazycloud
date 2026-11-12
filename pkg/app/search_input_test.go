@@ -382,25 +382,69 @@ func TestSearchPanelWidthScalesWithTerminal(t *testing.T) {
 	}
 }
 
-func TestUpdateSearchPanelStyleUsesThemeBorder(t *testing.T) {
+func TestUpdateFocusStylesAccentsFocusedSection(t *testing.T) {
 	a := newSearchTestApp(t)
+	wireSearchApp(a)
 	resetAppState()
 
-	a.updateSearchPanelStyle()
+	accent := theme.focusBorderColor()
+	a.updateFocusStyles()
 	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
-		t.Fatalf("closed panel border = %v, want theme border", got)
+		t.Fatalf("closed input border = %v, want theme border", got)
+	}
+	if got := a.searchResults.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("closed results border = %v, want theme border", got)
+	}
+	if got := a.info.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("closed info border = %v, want theme border", got)
 	}
 
 	a.openSearch()
-	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
-		t.Fatalf("focused panel border = %v, want theme border", got)
+	if got := a.searchInput.GetBorderColor(); got != accent {
+		t.Fatalf("focused input border = %v, want accent", got)
+	}
+	if got := a.searchResults.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("results border while input focused = %v, want theme border", got)
+	}
+	if got := a.info.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("info border while input focused = %v, want theme border", got)
 	}
 
 	a.cycleSearchFocus(false)
 	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
-		t.Fatalf("unfocused panel border = %v, want theme border", got)
+		t.Fatalf("input border while results focused = %v, want theme border", got)
 	}
+	if got := a.searchResults.GetBorderColor(); got != accent {
+		t.Fatalf("focused results border = %v, want accent", got)
+	}
+
+	a.cycleSearchFocus(false)
+	if got := a.searchResults.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("results border while info focused = %v, want theme border", got)
+	}
+	if got := a.info.GetBorderColor(); got != accent {
+		t.Fatalf("focused info border = %v, want accent", got)
+	}
+
+	// Focus outside the three sections leaves no accent anywhere.
+	a.tapp.SetFocus(a.cmd)
+	a.updateFocusStyles()
+	if got := a.searchInput.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("input border with cmd focused = %v, want theme border", got)
+	}
+	if got := a.info.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("info border with cmd focused = %v, want theme border", got)
+	}
+
 	a.closeSearch()
+	if got := a.info.GetBorderColor(); got != theme.borderColor() {
+		t.Fatalf("info border after close = %v, want theme border", got)
+	}
+}
+
+func TestUpdateFocusStylesNilWidgetsIsNoop(t *testing.T) {
+	a := &app{}
+	a.updateFocusStyles()
 }
 
 func TestApplyThemeToWidgetsStylesSearchPanel(t *testing.T) {
@@ -418,6 +462,19 @@ func TestApplyThemeToWidgetsStylesSearchPanel(t *testing.T) {
 	if got := a.searchResults.GetBorderColor(); got != tcell.GetColor("green") {
 		t.Fatalf("results border after theme = %v, want green", got)
 	}
+
+	// While the panel is open the theme reload keeps the accent on the
+	// focused section and the theme border on the rest.
+	a.tapp.SetFocus(a.searchInput)
+	a.searchOpen.Store(true)
+	a.applyThemeToWidgets()
+	if got := a.searchInput.GetBorderColor(); got != tcell.GetColor("aqua") {
+		t.Fatalf("focused input border after theme = %v, want aqua accent", got)
+	}
+	if got := a.searchResults.GetBorderColor(); got != tcell.GetColor("green") {
+		t.Fatalf("results border after theme = %v, want green", got)
+	}
+	a.searchOpen.Store(false)
 }
 
 func TestSearchSelectWithNoGroupsIsNoop(t *testing.T) {
@@ -441,6 +498,26 @@ func TestSearchSelectWithNoGroupsIsNoop(t *testing.T) {
 	a.closeSearch()
 }
 
+func TestSearchShortcutOpensPanel(t *testing.T) {
+	a := newSearchTestApp(t)
+	wireSearchApp(a)
+	resetAppState()
+
+	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyCtrlUnderscore, 0, tcell.ModNone)); got != nil {
+		t.Fatal("Ctrl-/ should be consumed")
+	}
+	if !a.searchOpen.Load() {
+		t.Fatal("Ctrl-/ did not open the search panel")
+	}
+	a.closeSearch()
+
+	for _, s := range shortcuts {
+		if s.specialKey == tcell.KeyCtrlUnderscore && s.label() != "Ctrl-/" {
+			t.Fatalf("search shortcut label = %q, want Ctrl-/", s.label())
+		}
+	}
+}
+
 func TestEscapePressedClosesSearchBeforeOtherLayers(t *testing.T) {
 	a := newSearchTestApp(t)
 	wireSearchApp(a)
@@ -450,6 +527,31 @@ func TestEscapePressedClosesSearchBeforeOtherLayers(t *testing.T) {
 	a.escapePressed()
 	if a.searchOpen.Load() {
 		t.Fatal("escapePressed did not close the open search panel")
+	}
+}
+
+func TestEscapePressedClosesDetailOverlayBeforeSearch(t *testing.T) {
+	a := newSearchTestApp(t)
+	wireSearchApp(a)
+	resetAppState()
+
+	a.openSearch()
+	a.pages.AddPage("row", tview.NewFlex(), true, true)
+	if name, _ := a.pages.GetFrontPage(); name != "row" {
+		t.Fatalf("front page = %q, want row overlay", name)
+	}
+
+	a.escapePressed()
+	if name, _ := a.pages.GetFrontPage(); name == "row" {
+		t.Fatal("escapePressed left the detail overlay open")
+	}
+	if !a.searchOpen.Load() {
+		t.Fatal("escapePressed closed the search panel while dismissing the overlay")
+	}
+
+	a.escapePressed()
+	if a.searchOpen.Load() {
+		t.Fatal("second escapePressed did not close the search panel")
 	}
 }
 func TestBuildMainLayoutHostsSearchColumnAndPages(t *testing.T) {

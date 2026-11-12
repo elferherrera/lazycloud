@@ -12,6 +12,7 @@ type Theme struct {
 	Title               string `json:"title" yaml:"title"`
 	ShortcutLabels      string `json:"shortcutLabels" yaml:"shortcutLabels"`
 	ShortcutText        string `json:"shortcutText" yaml:"shortcutText"`
+	Focus               string `json:"focus" yaml:"focus"`
 	StatusLabels        string `json:"statusLabels" yaml:"statusLabels"`
 	StatusText          string `json:"statusText" yaml:"statusText"`
 	SummaryLabels       string `json:"summaryLabels" yaml:"summaryLabels"`
@@ -48,6 +49,9 @@ func mergeTheme(theme, defaults Theme) Theme {
 	}
 	if theme.ShortcutText == "" {
 		theme.ShortcutText = theme.Text
+	}
+	if theme.Focus == "" {
+		theme.Focus = theme.ShortcutLabels
 	}
 	if theme.StatusLabels == "" {
 		theme.StatusLabels = defaults.StatusLabels

@@ -234,10 +234,9 @@ func (a *app) applyThemeToWidgets() {
 	a.shortcuts.SetTitleColor(theme.titleColor())
 	if a.searchInput != nil {
 		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
-		a.searchInput.SetBorderColor(theme.borderColor())
-		a.searchResults.SetBorderColor(theme.borderColor())
 		a.searchResults.SetTitleColor(theme.titleColor())
 		a.searchResults.SetSeparator('│')
+		a.updateFocusStyles()
 	}
 	a.summary.SetTextColor(theme.summaryTextColor())
 	a.status.SetTextColor(theme.statusTextColor())

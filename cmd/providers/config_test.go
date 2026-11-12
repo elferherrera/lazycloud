@@ -58,7 +58,7 @@ func readConfigFile(t *testing.T, dir string) Config {
 func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	dir := testConfigDir(t)
 
-	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
@@ -94,7 +94,7 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 	legacyShortcuts := map[string]string{"1": "clusters", "5": "ips"}
 	writeLegacyFiles(t, dir, &legacyTheme, legacyShortcuts)
 
-	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
@@ -103,7 +103,7 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	want := Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "aqua", ShortcutText: "gray", StatusLabels: "yellow", StatusText: "gray", SummaryLabels: "aqua", SummaryText: "gray", DetailLabels: "yellow", DetailText: "gray", ActiveRowText: "black", ActiveRowBackground: "gray"}
+	want := Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "aqua", ShortcutText: "gray", Focus: "aqua", StatusLabels: "yellow", StatusText: "gray", SummaryLabels: "aqua", SummaryText: "gray", DetailLabels: "yellow", DetailText: "gray", ActiveRowText: "black", ActiveRowBackground: "gray"}
 	if got.Theme != want {
 		t.Fatalf("LoadConfig() theme = %+v, want migrated %+v", got.Theme, want)
 	}
@@ -132,7 +132,7 @@ func TestConfigRoundtrip(t *testing.T) {
 	testConfigDir(t)
 
 	custom := Config{
-		Theme:      Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", ActiveRowText: "lime", ActiveRowBackground: "teal"},
+		Theme:      Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", Focus: "red", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", ActiveRowText: "lime", ActiveRowBackground: "teal"},
 		Shortcuts:  map[string]string{"1": "clusters", "5": "ips"},
 		AutoUpdate: AutoUpdate{Enabled: false, ThresholdInMinutes: 30},
 		Infobar:    Infobar{ShowShortcuts: false},
@@ -168,7 +168,7 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 		t.Fatalf("writing config file: %v", err)
 	}
 
-	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultTheme := Theme{Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
@@ -177,7 +177,7 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	want := Theme{Labels: "aqua", Text: "white", Borders: "green", Title: "white", ShortcutLabels: "aqua", ShortcutText: "white", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "aqua", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	want := Theme{Labels: "aqua", Text: "white", Borders: "green", Title: "white", ShortcutLabels: "aqua", ShortcutText: "white", Focus: "aqua", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "aqua", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	if got.Theme != want {
 		t.Fatalf("LoadConfig() theme = %+v, want merged %+v", got.Theme, want)
 	}

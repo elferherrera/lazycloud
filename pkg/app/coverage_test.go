@@ -248,11 +248,6 @@ func TestPullSearchKindUnknownKindIsNoop(t *testing.T) {
 	a.pullSearchKind(viewKind("nonexistent-all"))
 }
 
-func TestUpdateSearchPanelStyleNilWidgetsIsNoop(t *testing.T) {
-	a := &app{}
-	a.updateSearchPanelStyle()
-}
-
 func TestRunSearchTruncatesOverflowTitle(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)

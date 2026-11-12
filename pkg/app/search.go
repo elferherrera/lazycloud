@@ -338,6 +338,15 @@ func (a *app) buildSearchPanel() {
 	})
 	results.SetSelectionChangedFunc(func(row, _ int) { a.searchPreview(row) })
 	results.SetSelectedFunc(func(row, _ int) { a.searchSelect(row) })
+	// Focus moves through more than the Tab cycle (Enter on the input jumps
+	// to the results, select lands on the main view), so the focus accent
+	// follows via the focus hooks. Blur hooks must not read the app's focus
+	// primitive: tview fires Blur inside the locked section of SetFocus, so
+	// they only restore their own border.
+	input.SetFocusFunc(func() { a.updateFocusStyles() })
+	input.SetBlurFunc(func() { a.searchInput.SetBorderColor(theme.borderColor()) })
+	results.SetFocusFunc(func() { a.updateFocusStyles() })
+	results.SetBlurFunc(func() { a.searchResults.SetBorderColor(theme.borderColor()) })
 
 	panel := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(input, 3, 1, true).
@@ -352,6 +361,8 @@ func (a *app) buildSearchPanel() {
 // wiring without starting the terminal loop.
 func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 	a.buildSearchPanel()
+	a.info.SetFocusFunc(func() { a.updateFocusStyles() })
+	a.info.SetBlurFunc(func() { a.info.SetBorderColor(theme.borderColor()) })
 
 	// The header row spans the full width; the search panel splits only the
 	// area below it, so the project context stays visible while searching.
@@ -416,7 +427,7 @@ func (a *app) openSearch() {
 	a.searchColumn.ResizeItem(a.searchPanel, searchPanelWidthFor(width), 1)
 	a.tapp.SetFocus(a.searchInput)
 	a.runSearch()
-	a.updateSearchPanelStyle()
+	a.updateFocusStyles()
 	a.ensureSearchIndex(false)
 	a.ensureSearchProjects()
 }
@@ -431,7 +442,7 @@ func (a *app) closeSearch() {
 	if a.searchColumn != nil {
 		a.searchColumn.ResizeItem(a.searchPanel, 0, 0)
 	}
-	a.updateSearchPanelStyle()
+	a.updateFocusStyles()
 	a.tapp.SetFocus(a.info)
 }
 
@@ -457,18 +468,33 @@ func (a *app) cycleSearchFocus(backward bool) {
 	next := sections[(current+step)%len(sections)]
 	a.searchPanelFocus = next != a.info
 	a.tapp.SetFocus(next)
-	a.updateSearchPanelStyle()
+	a.updateFocusStyles()
 }
 
-// updateSearchPanelStyle keeps the search panel border on the theme border
-// colour, the same as the info table, including after a theme reload.
-func (a *app) updateSearchPanelStyle() {
-	if a.searchInput == nil || a.searchResults == nil {
+// updateFocusStyles marks the focused section with the accent border while
+// the search panel is open: the one of the query input, the results table or
+// the info table holding focus takes the accent, the others stay on the
+// theme border. With the panel closed, or focus elsewhere (the bottom filter
+// input, overlays), all three revert to the theme border.
+func (a *app) updateFocusStyles() {
+	if a.searchInput == nil || a.searchResults == nil || a.info == nil {
 		return
 	}
-	border := theme.borderColor()
-	a.searchInput.SetBorderColor(border)
-	a.searchResults.SetBorderColor(border)
+	plain := theme.borderColor()
+	inputBorder, resultsBorder, infoBorder := plain, plain, plain
+	if a.searchOpen.Load() {
+		switch a.tapp.GetFocus() {
+		case a.searchInput:
+			inputBorder = theme.focusBorderColor()
+		case a.searchResults:
+			resultsBorder = theme.focusBorderColor()
+		case a.info:
+			infoBorder = theme.focusBorderColor()
+		}
+	}
+	a.searchInput.SetBorderColor(inputBorder)
+	a.searchResults.SetBorderColor(resultsBorder)
+	a.info.SetBorderColor(infoBorder)
 }
 
 // runSearch re-runs the query against the index and refreshes the results
@@ -623,7 +649,7 @@ func (a *app) searchSelect(row int) {
 	a.applyFilter()
 	a.tapp.SetFocus(a.info)
 	a.searchPanelFocus = false
-	a.updateSearchPanelStyle()
+	a.updateFocusStyles()
 	a.statusInfo(fmt.Sprintf("%s: %s (Esc closes panel or clears filter)", views[group.kind].title, a.searchRowQuery(row)))
 }
 

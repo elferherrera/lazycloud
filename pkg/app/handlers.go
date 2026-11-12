@@ -109,9 +109,9 @@ func init() {
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{
-			key:  'S',
-			desc: "search side panel (Tab toggle, Esc close)",
-			run:  (*app).openSearch,
+			specialKey: tcell.KeyCtrlUnderscore,
+			desc:       "search side panel (Tab toggle, Esc close)",
+			run:        (*app).openSearch,
 		},
 		{key: ' ', desc: "show projects", run: func(a *app) {
 			a.setView(viewProjects)
@@ -320,6 +320,9 @@ func shortcutKeyLabel(key rune) string {
 
 func (s shortcut) label() string {
 	if s.specialKey != 0 {
+		if s.specialKey == tcell.KeyCtrlUnderscore {
+			return "Ctrl-/"
+		}
 		return tcell.KeyNames[s.specialKey]
 	}
 	return shortcutKeyLabel(s.key)
@@ -1215,13 +1218,15 @@ func (a *app) escapePressed() {
 		a.toggleHelp()
 		return
 	}
-	if a.searchOpen.Load() {
-		a.closeSearch()
-		return
-	}
+	// Detail overlays sit on top of the search panel, so they close first:
+	// Esc on an overlay dismisses it, the next Esc closes the search panel.
 	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {
 		a.pages.RemovePage(name)
 		a.tapp.SetFocus(a.info)
+		return
+	}
+	if a.searchOpen.Load() {
+		a.closeSearch()
 		return
 	}
 	a.cmd.SetBorder(false)
