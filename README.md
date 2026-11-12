@@ -88,6 +88,9 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `v` | Show focused row details |
 | `g` | Open focused resource in GCP Console |
 | `a` | Toggle all-projects view |
+| `space` | Projects view with the filter ready to type |
+| `b` | Back to the previous view (any view you navigated from) |
+| `F1` | Open the settings panel: theme mode, shortcut bar, auto update, and the 16 colors of the active palette as live swatches. Up/down arrows cycle the color list, hex and tcell names type directly, changes preview live and save on close |
 | `?` | Toggle help overlay |
 | `Esc` | Dismiss overlay / leave filter or command mode |
 

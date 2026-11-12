@@ -17,6 +17,8 @@ func settingsTestApp(t *testing.T) *app {
 	return &app{
 		pages:  tview.NewPages(),
 		status: tview.NewTextView().SetDynamicColors(true),
+		tapp:   tview.NewApplication(),
+		info:   tview.NewTable(),
 	}
 }
 
@@ -171,5 +173,44 @@ func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
 	}
 	if config.ThemeLight.Labels != "orange" {
 		t.Errorf("saved light labels = %q, want orange", config.ThemeLight.Labels)
+	}
+}
+
+// TestCloseSettingsPersistsColorEdits pins the Close path: color edits live
+// in memory while the panel is open, so closing it (Close button or Esc) must
+// persist them like a checkbox toggle does.
+func TestCloseSettingsPersistsColorEdits(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	// closeSettings repaints the global palette through applyConfigTheme;
+	// restore it so later theme tests see the palette they expect.
+	originalTheme := theme
+	t.Cleanup(func() { theme = originalTheme })
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Mode: string(providers.ModeDark)}
+	configuredThemesDark = configuredTheme
+	configuredThemesLight = providers.DefaultLightTheme()
+	a.buildSettingsPage()
+
+	// Edit a color field without toggling any checkbox.
+	var field *tview.InputField
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		if pf, ok := a.settingsForm.GetFormItem(i).(*colorPreviewField); ok && pf.GetLabel() == "Labels" {
+			field = pf.InputField
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("settings form has no Labels color field")
+	}
+	field.SetText("teal")
+
+	a.closeSettings()
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Theme.Labels != "teal" {
+		t.Errorf("saved dark labels = %q, want teal after closing the panel", config.Theme.Labels)
 	}
 }

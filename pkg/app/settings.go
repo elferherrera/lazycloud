@@ -346,6 +346,9 @@ func (a *app) openSettings() {
 }
 
 func (a *app) closeSettings() {
+	// Color edits only live in memory until a checkbox save runs, so closing
+	// the panel persists them: Esc and the Close button both land here.
+	a.applySettings()
 	a.pages.HidePage("settings")
 	a.tapp.SetFocus(a.info)
 }
