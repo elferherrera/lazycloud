@@ -16,9 +16,9 @@ import (
 func formRows(t *testing.T, width int) []string {
 	t.Helper()
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: "dark"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	form := a.settingsForm
 	h := settingsFormHeight(a)

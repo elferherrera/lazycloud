@@ -18,35 +18,16 @@ type settingsRow struct {
 }
 
 // settingsRows returns the toggleable entries in panel order: appearance
-// first (theme pack, theme mode, shortcut bar), then behavior (auto update).
+// first (follow-terminal or theme pack and colors, shortcut bar), then
+// behavior (auto update).
 func (a *app) settingsRows() []settingsRow {
 	return []settingsRow{
+		{label: "Follow terminal", get: func() bool { return configuredFollowTerminal },
+			set: func(on bool) { setConfiguredFollowTerminal(on) }},
 		{label: "Theme: " + configuredThemeName, get: func() bool { return false },
 			set: func(on bool) {
 				if on {
 					a.cycleThemeName(1)
-				}
-			}},
-		{label: "Light theme", get: func() bool { return configuredThemeMode() == providers.ModeLight },
-			set: func(on bool) {
-				mode := providers.ModeDark
-				if on {
-					mode = providers.ModeLight
-				}
-				setConfiguredThemeMode(mode)
-			}},
-		{label: "Dark theme", get: func() bool { return configuredThemeMode() == providers.ModeDark },
-			set: func(on bool) {
-				mode := providers.ModeSystem
-				if on {
-					mode = providers.ModeDark
-				}
-				setConfiguredThemeMode(mode)
-			}},
-		{label: "Theme follows terminal", get: func() bool { return configuredThemeMode() == providers.ModeSystem },
-			set: func(on bool) {
-				if on {
-					setConfiguredThemeMode(providers.ModeSystem)
 				}
 			}},
 		{label: "Shortcut bar", get: func() bool { return infobarEnabled },
@@ -107,36 +88,33 @@ var themeColorKeys = []themeColorKey{
 }
 
 // configuredThemes holds the theme packs of the loaded config plus the
-// selected pack's two sections, so the settings panel can read and write
-// them without touching the config file on disk until the user saves.
-// configuredThemesDark and configuredThemesLight are the selected pack's
-// sections; configuredTheme aliases the dark section for existing call
-// sites that only care about the mode key living there.
+// selected pack's palette, so the settings panel can read and write them
+// without touching the config file on disk until the user saves.
+// configuredTheme is the selected pack's palette; configuredFollowTerminal
+// mirrors the config flag and switches the whole app to the terminal's
+// own colors.
 var (
-	configuredThemePacks  map[string]providers.ThemeSpec
-	configuredThemeName   string
-	configuredThemesDark  providers.Theme
-	configuredThemesLight providers.Theme
+	configuredThemePacks     map[string]providers.Theme
+	configuredThemeName      string
+	configuredTheme          providers.Theme
+	configuredFollowTerminal bool
 )
 
-var configuredTheme providers.Theme
-
 // setConfiguredThemes resolves the config's selected pack into the
-// configured sections and applies it. Run and reloadConfig hand the whole
-// loaded file over; the pack map stays in sync so a later save keeps every
-// pack, not just the active one.
+// configured palette and applies the palette the follow flag selects. Run
+// and reloadConfig hand the whole loaded file over; the pack map stays in
+// sync so a later save keeps every pack, not just the active one.
 func setConfiguredThemes(config providers.Config) {
 	configuredThemePacks = config.Themes
 	configuredThemeName = config.ThemeName
-	spec, ok := config.Themes[config.ThemeName]
+	configuredFollowTerminal = config.FollowTerminal
+	pack, ok := config.Themes[config.ThemeName]
 	if !ok {
 		configuredThemeName = providers.DefaultThemeName
-		spec = config.Themes[configuredThemeName]
+		pack = config.Themes[configuredThemeName]
 	}
-	configuredThemesDark = spec.Dark
-	configuredThemesLight = spec.Light
-	configuredTheme = configuredThemesDark
-	applyConfigTheme(configuredThemesDark, configuredThemesLight)
+	configuredTheme = pack
+	applyActiveThemeFn()
 }
 
 // configuredThemeNames lists the pack names in the order the settings row
@@ -153,17 +131,15 @@ func configuredThemeNames() []string {
 	return names
 }
 
-// cycleThemeName switches the selected pack, snaps the panel's sections to
+// cycleThemeName switches the selected pack, snaps the panel's palette to
 // the new pack, previews it live, and repaints the row so the label shows
 // the selection. Unsaved edits to the current pack are stored back into the
-// pack map first so switching away and back does not lose them; the new
-// pack keeps its own mode, which the mode rows and color fields pick up on
-// the next rebuild.
+// pack map first so switching away and back does not lose them.
 func (a *app) cycleThemeName(dir int) {
 	if configuredThemePacks == nil {
-		configuredThemePacks = map[string]providers.ThemeSpec{}
+		configuredThemePacks = map[string]providers.Theme{}
 	}
-	configuredThemePacks[configuredThemeName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	configuredThemePacks[configuredThemeName] = configuredTheme
 	names := configuredThemeNames()
 	idx := 0
 	for i, name := range names {
@@ -173,10 +149,7 @@ func (a *app) cycleThemeName(dir int) {
 		}
 	}
 	configuredThemeName = names[(idx+dir+len(names))%len(names)]
-	spec := configuredThemePacks[configuredThemeName]
-	configuredThemesDark = spec.Dark
-	configuredThemesLight = spec.Light
-	configuredTheme = configuredThemesDark
+	configuredTheme = configuredThemePacks[configuredThemeName]
 	// The save-as name follows the pack switch: a name typed for the
 	// previous pack would silently rename this one, so the field goes
 	// back to the suggestion.
@@ -188,8 +161,16 @@ func (a *app) cycleThemeName(dir int) {
 	a.rebuildSettingsForm()
 }
 
-func configuredThemeMode() providers.ThemeMode {
-	return providers.ParseThemeMode(configuredTheme.Mode)
+// setConfiguredFollowTerminal flips the terminal-follow toggle: on, the
+// app paints with the terminal's own colors and the theme and color rows
+// hide; off, the selected pack paints and its rows come back.
+func setConfiguredFollowTerminal(on bool) {
+	configuredFollowTerminal = on
+	if on {
+		applyTheme(providers.FollowTerminalTheme())
+		return
+	}
+	applyActiveThemeFn()
 }
 
 // suggestedThemeName seeds the save-as field: a bundled pack offers its
@@ -226,8 +207,8 @@ func (a *app) forkBundledTheme() {
 	forkName := providers.CustomThemeForkName(seedName, configuredThemeNameSet())
 	// The seed slot goes back to the pristine palette the bundle shipped;
 	// the fork carries the seed palette plus the edit in flight.
-	configuredThemePacks[seedName] = providers.BundledThemeSpecs()[seedName]
-	configuredThemePacks[forkName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	configuredThemePacks[seedName] = providers.BundledThemes()[seedName]
+	configuredThemePacks[forkName] = configuredTheme
 	configuredThemeName = forkName
 	if a.sessionForks == nil {
 		a.sessionForks = map[string]bool{}
@@ -269,22 +250,6 @@ func (a *app) relabelThemeRow(seedName string) {
 			cb.SetLabel(cb.base)
 		}
 	}
-}
-
-func setConfiguredThemeMode(mode providers.ThemeMode) {
-	configuredTheme.Mode = string(mode)
-	configuredThemesDark.Mode = string(mode)
-}
-
-// activeThemeSection returns the section the color fields should edit: the
-// section the resolved mode paints with, so an edit always lands where the
-// user sees it. System mode resolves against the given terminal background;
-// on a light terminal that is the light section.
-func activeThemeSection(background providers.BackgroundKind) *providers.Theme {
-	if resolveTheme(configuredThemesDark, configuredThemesLight, background) == configuredThemesDark {
-		return &configuredThemesDark
-	}
-	return &configuredThemesLight
 }
 
 // buildSettingsPage creates the settings overlay: a bordered form with the
@@ -337,10 +302,14 @@ const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrow
 // the buttons instead of clipping them: one line per form item (toggles,
 // theme name input, color inputs, config path), the leading blank line
 // inside the border, a blank line before and after the button row, and the
-// border itself. On very short screens the flex hands the form a smaller
-// height and tview scrolls it to the focused item, so every field stays
-// reachable.
+// border itself. Follow-terminal mode drops the theme, save-as and color
+// rows, so the panel shrinks with them. On very short screens the flex
+// hands the form a smaller height and tview scrolls it to the focused
+// item, so every field stays reachable.
 func settingsFormHeight(a *app) int {
+	if configuredFollowTerminal {
+		return len(a.settingsRows()) + 6
+	}
 	return len(a.settingsRows()) + len(themeColorKeys) + 8
 }
 
@@ -380,6 +349,11 @@ func (a *app) rebuildSettingsForm() {
 		Foreground(readableOnColor(theme.focusColor())))
 	for _, row := range a.settingsRows() {
 		row := row
+		// Theme rows govern pack colors; in follow-terminal mode the
+		// terminal owns every color, so they do not apply.
+		if configuredFollowTerminal && isThemeRow(row.label) {
+			continue
+		}
 		checkbox := newFocusCheckbox()
 		checkbox.SetLabel(row.label)
 		checkbox.SetChecked(row.get())
@@ -392,42 +366,51 @@ func (a *app) rebuildSettingsForm() {
 	// Save-as row: the name the current pack saves under. A bundled pack
 	// forks into the suggested name on its first color edit, so the seed
 	// stays pristine; typing a different name saves the colors as a new
-	// pack instead. A typed name survives the refill.
-	saveAs := tview.NewInputField()
-	saveAs.SetFieldWidth(16)
-	suggestion := suggestedThemeName()
-	text := suggestion
-	if a.settingsSaveAs != nil {
-		if typed := a.settingsSaveAs.GetText(); typed != "" && typed != a.settingsSaveAsSuggestion {
-			text = typed
+	// pack instead. A typed name survives the refill. Follow-terminal
+	// mode owns every color, so no pack gets saved or renamed.
+	if configuredFollowTerminal {
+		a.settingsSaveAs = nil
+	} else {
+		saveAs := tview.NewInputField()
+		saveAs.SetFieldWidth(16)
+		suggestion := suggestedThemeName()
+		text := suggestion
+		if a.settingsSaveAs != nil {
+			if typed := a.settingsSaveAs.GetText(); typed != "" && typed != a.settingsSaveAsSuggestion {
+				text = typed
+			}
 		}
-	}
-	saveAs.SetText(text)
-	a.settingsSaveAsSuggestion = suggestion
-	a.settingsSaveAs = saveAs
-	// Same focus marker as the checkbox and color rows, so every focusable
-	// row shows which one holds the caret.
-	markSaveAs := func() {
-		marker := noFocusMarker
-		if saveAs.HasFocus() {
-			marker = focusMarker
+		saveAs.SetText(text)
+		a.settingsSaveAsSuggestion = suggestion
+		a.settingsSaveAs = saveAs
+		// Same focus marker as the checkbox and color rows, so every focusable
+		// row shows which one holds the caret.
+		markSaveAs := func() {
+			marker := noFocusMarker
+			if saveAs.HasFocus() {
+				marker = focusMarker
+			}
+			saveAs.SetLabel(marker + "Save theme as")
 		}
-		saveAs.SetLabel(marker + "Save theme as")
+		saveAs.SetFocusFunc(markSaveAs)
+		saveAs.SetBlurFunc(markSaveAs)
+		markSaveAs()
+		form.AddFormItem(saveAs)
 	}
-	saveAs.SetFocusFunc(markSaveAs)
-	saveAs.SetBlurFunc(markSaveAs)
-	markSaveAs()
-	form.AddFormItem(saveAs)
-	section := activeThemeSection(a.settingsBackgroundKind())
 	for _, key := range themeColorKeys {
+		// The color rows edit the pack palette; follow-terminal mode
+		// paints from the terminal, so there is nothing to edit.
+		if configuredFollowTerminal {
+			break
+		}
 		key := key
 		field := newColorPreviewField()
 		form.AddFormItem(field)
 		field.SetLabel(key.label)
 		field.SetFieldWidth(12)
-		field.SetText(key.get(*section))
+		field.SetText(key.get(configuredTheme))
 		field.SetChangedFunc(func(text string) {
-			key.set(section, text)
+			key.set(&configuredTheme, text)
 			a.forkBundledTheme()
 			a.previewThemeColors()
 		})
@@ -437,10 +420,10 @@ func (a *app) rebuildSettingsForm() {
 		field.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 			switch event.Key() {
 			case tcell.KeyDown:
-				cycleThemeColor(section, key, 1, field.InputField)
+				cycleThemeColor(&configuredTheme, key, 1, field.InputField)
 				return nil
 			case tcell.KeyUp:
-				cycleThemeColor(section, key, -1, field.InputField)
+				cycleThemeColor(&configuredTheme, key, -1, field.InputField)
 				return nil
 			}
 			return event
@@ -449,6 +432,20 @@ func (a *app) rebuildSettingsForm() {
 	path, _ := providers.ConfigFilePath()
 	form.AddTextView("Config file", path, 38, 1, false, false)
 	form.AddButton("Open in editor", func() { a.openConfigFile() })
+	if configuredFollowTerminal {
+		// Deleting or renaming packs only applies while a pack paints
+		// the UI; in follow-terminal mode both buttons would be no-ops.
+		form.AddButton("Close", func() { a.closeSettings() })
+		if wasFocused {
+			if item >= 0 && item < form.GetFormItemCount() {
+				form.SetFocus(item)
+			} else if button >= 0 && button < form.GetButtonCount() {
+				form.SetFocus(form.GetFormItemCount() + button)
+			}
+			a.tapp.SetFocus(form)
+		}
+		return
+	}
 	// Delete stays honest about what it can do: bundled packs are seeds
 	// that would come back on the next seeding anyway, and deleting the
 	// selected pack needs a fallback, so the button only acts on custom
@@ -643,24 +640,19 @@ func isLightColor(color tcell.Color) bool {
 	return (299*int(r)+587*int(g)+114*int(b))/1000 > 127
 }
 
-// previewThemeColors applies the edited colors to the running UI without
-// writing the config, so the user sees each keystroke take effect. It
-// resolves the mode against the terminal background cached at boot, so in
-// system mode on a light terminal the preview paints the light section that
-// closing will save.
-func (a *app) previewThemeColors() {
-	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, terminalBackground()))
-	a.applyThemeToWidgets()
-	a.applyThemeChrome()
+// isThemeRow reports whether a settings row governs pack colors; the
+// follow-terminal toggle hides these rows because no pack paints the UI
+// while it is on.
+func isThemeRow(label string) bool {
+	return strings.HasPrefix(label, "Theme: ")
 }
 
-// terminalBackground is cached at boot (see run.go), so the settings panel
-// reads it instead of querying the terminal again: tcell owns stdin inside
-// the running TUI and consumes terminal replies, so a live query stalls for
-// the OSC timeout and falls back to COLORFGBG, which dark terminals often
-// report as light.
-func (a *app) settingsBackgroundKind() providers.BackgroundKind {
-	return terminalBackground()
+// previewThemeColors applies the edited palette to the running UI without
+// writing the config, so the user sees each keystroke take effect.
+func (a *app) previewThemeColors() {
+	applyActiveTheme()
+	a.applyThemeToWidgets()
+	a.applyThemeChrome()
 }
 
 // applySettings persists the toggled values and applies them live, then
@@ -671,30 +663,25 @@ func (a *app) applySettings() {
 		a.statusText("[red]Failed to read config: [-]" + err.Error())
 		return
 	}
-	config.Theme = configuredThemesDark
-	config.ThemeLight = configuredThemesLight
-	// themeLight.mode round-trips as a copy of theme.mode so the file never
-	// carries a value that looks like it selects the mode: only theme.mode
-	// does, and a hand-edited themeLight.mode is ignored on load.
-	config.ThemeLight.Mode = configuredTheme.Mode
+	config.FollowTerminal = configuredFollowTerminal
 	config.Infobar.ShowShortcuts = infobarEnabled
 	config.AutoUpdate.Enabled = a.staleAutoRefresh
-	config.Theme.Mode = configuredTheme.Mode
-	// Store the edited sections back and write the whole pack map: edits
+	// Store the edited palette back and write the whole pack map: edits
 	// made to other packs during this panel session live in the map (kept
 	// there by cycleThemeName), and dropping them on save would lose work.
 	// A nil map (no config file yet) gets a fresh one-pack map.
 	if configuredThemePacks == nil {
-		configuredThemePacks = map[string]providers.ThemeSpec{}
+		configuredThemePacks = map[string]providers.Theme{}
 	}
-	configuredThemePacks[configuredThemeName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	configuredThemePacks[configuredThemeName] = configuredTheme
 	config.Themes = configuredThemePacks
 	config.ThemeName = configuredThemeName
 	if err := providers.SaveConfig(config); err != nil {
 		a.statusText("[red]Failed to save config: [-]" + err.Error())
 		return
 	}
-	applyConfigTheme(config.Theme, config.ThemeLight)
+	config.Theme = configuredTheme
+	applyActiveTheme()
 	a.applyThemeToWidgets()
 	a.applyThemeChrome()
 	a.setInfobarEnabled(infobarEnabled)
@@ -767,21 +754,16 @@ func (a *app) deleteTheme() {
 	}
 	delete(configuredThemePacks, configuredThemeName)
 	if configuredThemePacks == nil {
-		configuredThemePacks = map[string]providers.ThemeSpec{}
+		configuredThemePacks = map[string]providers.Theme{}
 	}
 	// The default pack is the fallback selection, so it must exist to be
 	// selectable after a delete.
 	if _, ok := configuredThemePacks[providers.DefaultThemeName]; !ok {
-		configuredThemePacks[providers.DefaultThemeName] = providers.ThemeSpec{
-			Dark: defaultThemeConfig(), Light: providers.DefaultLightTheme(),
-		}
+		configuredThemePacks[providers.DefaultThemeName] = defaultThemeConfig()
 	}
 	deleted := configuredThemeName
 	configuredThemeName = providers.DefaultThemeName
-	spec := configuredThemePacks[providers.DefaultThemeName]
-	configuredThemesDark = spec.Dark
-	configuredThemesLight = spec.Light
-	configuredTheme = configuredThemesDark
+	configuredTheme = configuredThemePacks[providers.DefaultThemeName]
 	// A name typed for the deleted pack must not rename the fallback
 	// pack on close: the field falls back to the suggestion on rebuild.
 	if a.settingsSaveAs != nil {

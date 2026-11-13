@@ -44,33 +44,35 @@ func overlayCellStyles(a *app, want string) (map[int]tcell.Style, bool) {
 	return nil, false
 }
 
-// TestSettingsPanelPaintsWithSettingsKeys pins the new settings color keys:
-// the form's row labels follow settingsLabels, not the shortcut bar keys,
-// and the field values follow settingsText.
+// settingsColorsTestState restores the palette globals each of these tests
+// overrides.
+func settingsColorsTestState(t *testing.T) {
+	t.Helper()
+	originalTheme := theme
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
+	configuredFollowTerminal = false
+}
+
+// TestSettingsPanelPaintsWithSettingsKeys pins the settings color keys: the
+// form's row labels follow settingsLabels, not the shortcut bar keys, and
+// the field values follow settingsText.
 func TestSettingsPanelPaintsWithSettingsKeys(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
-	originalDetect := detectBackground
-	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	cachedBackground = ""
-	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
-	})
+	settingsColorsTestState(t)
 
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{
-		Mode:           string(providers.ModeDark),
 		Labels:         "yellow",
 		Text:           "white",
 		SettingsLabels: "orange",
 		SettingsText:   "aqua",
 	}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
-	applyConfigTheme(configuredThemesDark, configuredThemesLight)
+	applyActiveTheme()
 
 	a.buildSettingsPage()
 	a.openSettings()
@@ -100,26 +102,16 @@ func TestSettingsPanelPaintsWithSettingsKeys(t *testing.T) {
 	}
 }
 
-// TestSettingsPanelLiveEditRestylesItself proves an edit to the new keys
+// TestSettingsPanelLiveEditRestylesItself proves an edit to the keys
 // repaints the open panel through the preview path, the same behavior the
 // other color fields have.
 func TestSettingsPanelLiveEditRestylesItself(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
-	originalDetect := detectBackground
-	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	cachedBackground = ""
-	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
-	})
+	settingsColorsTestState(t)
 
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: string(providers.ModeDark)}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
 	a.buildSettingsPage()
 	a.openSettings()
 
@@ -135,8 +127,8 @@ func TestSettingsPanelLiveEditRestylesItself(t *testing.T) {
 	}
 	field.SetText("teal")
 
-	if configuredThemesDark.SettingsLabels != "teal" {
-		t.Errorf("edited settingsLabels = %q, want teal", configuredThemesDark.SettingsLabels)
+	if configuredTheme.SettingsLabels != "teal" {
+		t.Errorf("edited settingsLabels = %q, want teal", configuredTheme.SettingsLabels)
 	}
 	// The preview path repaints the overlay, so the row labels must now
 	// carry the edited color.
@@ -154,46 +146,6 @@ func TestSettingsPanelLiveEditRestylesItself(t *testing.T) {
 	}
 	if !sawTeal {
 		t.Error("no row label painted teal after the live edit; preview did not restyle the panel")
-	}
-}
-
-// TestSettingsPanelDoesNotRequeryTerminal pins the boot-cache behavior: the
-// panel reads the background detected at boot and never calls the detection
-// seam again, because inside the running TUI tcell owns stdin and a live
-// OSC 11 query only stalls until the timeout and falls back to COLORFGBG.
-func TestSettingsPanelDoesNotRequeryTerminal(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	originalDetect := detectBackground
-	cachedBackground = ""
-	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
-	})
-
-	calls := 0
-	detectBackground = func() providers.BackgroundKind {
-		calls++
-		return providers.BackgroundDark
-	}
-
-	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: string(providers.ModeSystem)}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
-
-	// Simulate the boot detection the app runs before tcell starts.
-	cachedBackground = detectBackground()
-	calls = 0
-
-	a.buildSettingsPage()
-	a.openSettings()
-	a.rebuildSettingsForm()
-	a.previewThemeColors()
-	a.closeSettings()
-
-	if calls != 0 {
-		t.Errorf("detection ran %d times inside the panel, want 0 (boot cache only)", calls)
 	}
 }
 

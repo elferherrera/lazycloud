@@ -150,58 +150,35 @@ func (t themeColors) activeRowBackgroundColor() tcell.Color {
 	return tcell.GetColor(t.activeRowBackground)
 }
 
+// themeColor resolves a config value to the color string the UI paints
+// with: "default" defers the slot to the terminal's own color, any tcell
+// name or hex pins it, and an unparseable value falls back to the built-in
+// palette so a typo never blanks a slot.
 func themeColor(value, fallback string) string {
-	if tcell.GetColor(value) == tcell.ColorDefault {
+	switch {
+	case value == "":
 		return fallback
-	}
-	return value
-}
-
-// detectBackground is the seam tests use to pin the terminal background
-// instead of querying the real terminal. cachedBackground holds the value
-// queried once at boot, before the tview screen starts; see Run.
-var (
-	detectBackground = providers.DetectBackground
-	cachedBackground providers.BackgroundKind
-)
-
-// terminalBackground returns the boot-time detection, re-querying only
-// when it has never run (tests that swap the seam after boot). The running
-// app never re-queries: tcell owns stdin then, so a fresh OSC 11 query can
-// only time out and fall back to COLORFGBG, which dark terminals often
-// report as light.
-func terminalBackground() providers.BackgroundKind {
-	if cachedBackground == "" {
-		cachedBackground = detectBackground()
-	}
-	return cachedBackground
-}
-
-// resolveTheme returns the palette the UI should paint with. Dark mode keeps
-// the theme section, light mode keeps themeLight (falling back to the
-// built-in light palette per key when unset), and system mode resolves from
-// the detected terminal background: a light terminal paints with themeLight
-// too, so customizing it retunes both light mode and system-on-light.
-// Customizations in either section survive mode switches because both
-// sections are kept in the config.
-func resolveTheme(dark, light providers.Theme, background providers.BackgroundKind) providers.Theme {
-	switch providers.ParseThemeMode(dark.Mode) {
-	case providers.ModeLight:
-		return light
-	case providers.ModeDark:
-		return dark
+	case value == "default":
+		return "default"
+	case tcell.GetColor(value) == tcell.ColorDefault:
+		return fallback
 	default:
-		if background == providers.BackgroundLight {
-			return light
-		}
-		return dark
+		return value
 	}
 }
 
-// applyConfigTheme resolves the configured theme mode against the current
-// terminal background and applies the resulting palette.
-func applyConfigTheme(dark, light providers.Theme) {
-	applyTheme(resolveTheme(dark, light, terminalBackground()))
+// applyActiveTheme applies the palette the current settings select: the
+// terminal-follow palette when the Follow terminal toggle is on (every
+// slot defers to the user's terminal colors), the selected pack otherwise.
+// applyActiveThemeFn is the seam tests use to observe the call.
+var applyActiveThemeFn = applyActiveTheme
+
+func applyActiveTheme() {
+	if configuredFollowTerminal {
+		applyTheme(providers.FollowTerminalTheme())
+		return
+	}
+	applyTheme(configuredTheme)
 }
 
 // applyThemeChrome pushes the theme's box colors into the widgets that
@@ -340,43 +317,19 @@ func applyTheme(config providers.Theme) {
 		activeRowText:       themeColor(config.ActiveRowText, theme.activeRowText),
 		activeRowBackground: themeColor(config.ActiveRowBackground, text),
 	}
-	if c := tcell.GetColor(theme.labels); c != tcell.ColorDefault {
-		tview.Styles.SecondaryTextColor = c
-	}
-	if c := tcell.GetColor(theme.text); c != tcell.ColorDefault {
-		tview.Styles.PrimaryTextColor = c
-	}
-	if c := tcell.GetColor(theme.borders); c != tcell.ColorDefault {
-		tview.Styles.BorderColor = c
-	}
-	if c := tcell.GetColor(theme.title); c != tcell.ColorDefault {
-		tview.Styles.TitleColor = c
-	}
-	if c := tcell.GetColor(theme.background); c != tcell.ColorDefault {
-		tview.Styles.PrimitiveBackgroundColor = c
-	}
+	// These styles are set unconditionally, "default" included: ColorDefault
+	// is what makes the terminal-follow palette defer to the terminal's own
+	// foreground and background, so a stale style from the previous pack
+	// must not survive a switch.
+	tview.Styles.SecondaryTextColor = tcell.GetColor(theme.labels)
+	tview.Styles.PrimaryTextColor = tcell.GetColor(theme.text)
+	tview.Styles.BorderColor = tcell.GetColor(theme.borders)
+	tview.Styles.TitleColor = tcell.GetColor(theme.title)
+	tview.Styles.PrimitiveBackgroundColor = tcell.GetColor(theme.background)
 }
 
+// defaultThemeConfig is the palette handed to LoadConfig as the fill
+// default; the lazycloud_dark bundle is the single source of that palette.
 func defaultThemeConfig() providers.Theme {
-	return providers.Theme{
-		Mode:                string(providers.ModeDark),
-		Background:          "black",
-		Labels:              "yellow",
-		Text:                "white",
-		Borders:             "white",
-		Title:               "white",
-		ShortcutLabels:      "yellow",
-		ShortcutText:        "white",
-		Focus:               "yellow",
-		StatusLabels:        "yellow",
-		StatusText:          "white",
-		SummaryLabels:       "yellow",
-		SummaryText:         "white",
-		DetailLabels:        "yellow",
-		DetailText:          "white",
-		SettingsLabels:      "yellow",
-		SettingsText:        "white",
-		ActiveRowText:       "black",
-		ActiveRowBackground: "white",
-	}
+	return providers.BundledThemes()[providers.DefaultThemeName]
 }

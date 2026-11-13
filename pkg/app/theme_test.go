@@ -26,6 +26,11 @@ func TestThemeColor(t *testing.T) {
 	if got := themeColor("not-a-color", "yellow"); got != "yellow" {
 		t.Errorf("themeColor(invalid) = %q, want yellow", got)
 	}
+	// "default" defers the slot to the terminal's own color instead of
+	// falling back, which is what follow-terminal mode paints with.
+	if got := themeColor("default", "yellow"); got != "default" {
+		t.Errorf("themeColor(default) = %q, want default so the terminal paints the slot", got)
+	}
 }
 
 func TestApplyTheme(t *testing.T) {
@@ -245,75 +250,37 @@ func TestShortcutPanelColors(t *testing.T) {
 	}
 }
 
-func TestResolveTheme(t *testing.T) {
-	light := providers.DefaultLightTheme()
-	config := providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}
-	if got := resolveTheme(config, light, providers.BackgroundDark); got.Labels != "orange" {
-		t.Errorf("resolveTheme(system, dark) = %q, want configured palette", got.Labels)
-	}
-	// The light section passed in is the configured themeLight, so a light
-	// terminal must paint with it, not the built-in palette.
-	custom := providers.DefaultLightTheme()
-	custom.Labels = "orange"
-	custom.Text = "navy"
-	if got := resolveTheme(config, custom, providers.BackgroundLight); got.Labels != "orange" || got.Text != "navy" {
-		t.Errorf("resolveTheme(system, light) = %q %q, want the customized light section", got.Labels, got.Text)
-	}
-	customLight := providers.Theme{Mode: "light", Labels: "orange"}
-	if got := resolveTheme(customLight, providers.CompleteLightTheme(customLight), providers.BackgroundDark); got.Labels != "orange" {
-		t.Errorf("resolveTheme(light) = %q, want the light section colors regardless of background", got.Labels)
-	}
-	dark := providers.Theme{Mode: "dark", Labels: "orange"}
-	if got := resolveTheme(dark, light, providers.BackgroundLight); got.Labels != "orange" {
-		t.Errorf("resolveTheme(dark) = %q, want configured palette regardless of background", got.Labels)
-	}
-}
-
-func TestApplyConfigThemeRespectsBackground(t *testing.T) {
+// TestApplyThemeHonorsDefault pins the follow-terminal contract at the
+// style level: a palette whose slots are "default" pushes ColorDefault
+// into the tview styles unconditionally, so the terminal's own colors show
+// through and no stale style from a previous pack survives the switch.
+func TestApplyThemeHonorsDefault(t *testing.T) {
+	secondary, primary, border, primitive := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor, tview.Styles.BorderColor, tview.Styles.PrimitiveBackgroundColor
 	original := theme
-	secondary, primary := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor
-	primitive := tview.Styles.PrimitiveBackgroundColor
 	t.Cleanup(func() {
-		theme = original
 		tview.Styles.SecondaryTextColor = secondary
 		tview.Styles.PrimaryTextColor = primary
+		tview.Styles.BorderColor = border
 		tview.Styles.PrimitiveBackgroundColor = primitive
+		theme = original
 	})
 
-	originalDetect := detectBackground
-	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
-	})
-	cachedBackground = ""
-
-	detectBackground = func() providers.BackgroundKind { return providers.BackgroundLight }
-	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
-	light := providers.DefaultLightTheme()
-	if theme.labels != light.Labels || theme.text != light.Text {
-		t.Errorf("applyConfigTheme(light bg) = %q %q, want light palette", theme.labels, theme.text)
-	}
-	if theme.background != "white" || tview.Styles.PrimitiveBackgroundColor != tcell.ColorWhite {
-		t.Errorf("applyConfigTheme(light bg) background = %q style %v, want white", theme.background, tview.Styles.PrimitiveBackgroundColor)
+	applyTheme(providers.Theme{Background: "black", Labels: "yellow", Text: "white"})
+	if tview.Styles.PrimitiveBackgroundColor != tcell.ColorBlack {
+		t.Fatalf("precondition failed: background style = %v, want black", tview.Styles.PrimitiveBackgroundColor)
 	}
 
-	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	// terminalBackground caches the boot detection, so a mid-test seam swap
-	// must clear the cache the same way a fresh process would start empty.
-	cachedBackground = ""
-	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
-	if theme.labels != "orange" || theme.text != "silver" {
-		t.Errorf("applyConfigTheme(dark bg) = %q %q, want configured palette", theme.labels, theme.text)
+	applyTheme(providers.FollowTerminalTheme())
+	if tview.Styles.PrimitiveBackgroundColor != tcell.ColorDefault {
+		t.Errorf("background style = %v, want ColorDefault so the terminal paints it", tview.Styles.PrimitiveBackgroundColor)
 	}
-
-	customLight := providers.Theme{Mode: "light", Labels: "orange"}
-	applyConfigTheme(customLight, providers.CompleteLightTheme(customLight))
-	if theme.labels != "orange" {
-		t.Errorf("applyConfigTheme(light mode) = %q, want the light section colors", theme.labels)
+	if tview.Styles.PrimaryTextColor != tcell.ColorDefault {
+		t.Errorf("text style = %v, want ColorDefault so the terminal paints it", tview.Styles.PrimaryTextColor)
 	}
-
-	applyConfigTheme(providers.Theme{Mode: "dark", Labels: "orange"}, providers.DefaultLightTheme())
-	if theme.labels != "orange" {
-		t.Errorf("applyConfigTheme(dark mode) = %q, want configured palette", theme.labels)
+	if tview.Styles.SecondaryTextColor != tcell.GetColor("yellow") {
+		t.Errorf("labels style = %v, want the named palette yellow", tview.Styles.SecondaryTextColor)
+	}
+	if theme.background != "default" || theme.labels != "yellow" {
+		t.Errorf("theme slots = %q/%q, want default/yellow", theme.background, theme.labels)
 	}
 }

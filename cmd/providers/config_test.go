@@ -227,9 +227,9 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 	}
 }
 
-func TestConfigThemeModeRoundtrip(t *testing.T) {
+func TestConfigThemeSectionKeepsValues(t *testing.T) {
 	testConfigDir(t)
-	custom := Config{Theme: Theme{Mode: "light", Labels: "aqua"}}
+	custom := Config{Theme: Theme{Labels: "aqua"}}
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -237,12 +237,12 @@ func TestConfigThemeModeRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got.Theme.Mode != "light" {
-		t.Fatalf("LoadConfig() theme mode = %q, want light", got.Theme.Mode)
+	if got.Theme.Labels != "aqua" {
+		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
 	}
 }
 
-func TestConfigThemeModeDefaultsToSystem(t *testing.T) {
+func TestConfigThemeMirrorFollowsSelection(t *testing.T) {
 	dir := testConfigDir(t)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
@@ -250,20 +250,24 @@ func TestConfigThemeModeDefaultsToSystem(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
-	got, err := LoadConfig(Theme{Mode: "system"}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if got.Theme.Mode != "system" {
-		t.Fatalf("LoadConfig() theme mode = %q, want system default", got.Theme.Mode)
 	}
 	if got.Theme.Labels != "aqua" {
 		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
 	}
+	pack, ok := got.Themes[got.ThemeName]
+	if !ok {
+		t.Fatalf("LoadConfig() selected pack %q missing", got.ThemeName)
+	}
+	if pack.Labels != "aqua" {
+		t.Fatalf("selected pack labels = %q, want aqua from the theme section", pack.Labels)
+	}
 }
 
 func TestMergeThemeFillsEveryEmptyKey(t *testing.T) {
-	defaults := Theme{Mode: "system", Background: "black", Labels: "yellow", Text: "white"}
+	defaults := Theme{Background: "black", Labels: "yellow", Text: "white"}
 	merged := mergeTheme(Theme{}, defaults)
 	if merged.Labels != "yellow" {
 		t.Errorf("mergeTheme() labels = %q, want default yellow", merged.Labels)
@@ -342,38 +346,75 @@ func TestConfigPreservesExplicitInfobarSortOrder(t *testing.T) {
 	}
 }
 
-func TestConfigThemeLightSectionMergesAgainstLightPalette(t *testing.T) {
+// TestConfigThemeLightSectionBecomesPack pins the legacy themeLight
+// migration: an old light-mode config painted with themeLight, so that
+// section becomes the palette of the house pack.
+func TestConfigThemeLightSectionBecomesPack(t *testing.T) {
 	dir := testConfigDir(t)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("themeLight:\n  labels: orange\n"), 0o644); err != nil {
+	content := "theme:\n  mode: light\n  labels: blue\nthemeLight:\n  labels: orange\n  background: white\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
-	got, err := LoadConfig(Theme{Mode: "dark"}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{Background: "black"}, nil, AutoUpdate{}, Infobar{})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got.ThemeLight.Labels != "orange" {
-		t.Fatalf("LoadConfig() light labels = %q, want configured orange kept", got.ThemeLight.Labels)
+	pack, ok := got.Themes[DefaultThemeName]
+	if !ok {
+		t.Fatalf("LoadConfig() themes missing the %q pack: %+v", DefaultThemeName, got.Themes)
 	}
-	want := DefaultLightTheme()
-	if got.ThemeLight.Background != want.Background || got.ThemeLight.Text != want.Text {
-		t.Fatalf("LoadConfig() light section = %+v, want unset keys filled from the built-in light palette", got.ThemeLight)
+	if pack.Labels != "orange" || pack.Background != "white" {
+		t.Fatalf("default pack = %+v, want the themeLight section (orange on white)", pack)
+	}
+	if got.FollowTerminal {
+		t.Fatal("LoadConfig() followTerminal = true, want false for mode light")
 	}
 	onDisk := readConfigFile(t, dir)
-	if onDisk.ThemeLight.Labels != "orange" {
-		t.Fatalf("config file light labels = %q, want orange persisted", onDisk.ThemeLight.Labels)
+	if onDisk.Themes[DefaultThemeName].Labels != "orange" {
+		t.Fatalf("config file pack labels = %q, want orange persisted", onDisk.Themes[DefaultThemeName].Labels)
+	}
+	if onDisk.FollowTerminal {
+		t.Fatal("config file followTerminal = true, want false")
+	}
+}
+
+// TestConfigThemeModeSystemMigratesToFollow pins the followTerminal
+// migration: theme.mode system asked the app to follow the terminal, so
+// the load keeps that intent instead of pinning a palette.
+func TestConfigThemeModeSystemMigratesToFollow(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	content := "theme:\n  mode: system\n  labels: aqua\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{})
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if !got.FollowTerminal {
+		t.Fatal("LoadConfig() followTerminal = false, want true from theme.mode system")
+	}
+	if got.Theme.Labels != "aqua" {
+		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
+	}
+	onDisk := readConfigFile(t, dir)
+	if !onDisk.FollowTerminal {
+		t.Fatal("config file followTerminal = false, want the migration persisted")
 	}
 }
 
 // TestConfigThemesMapMigration pins the pack migration: a file with only
-// the legacy sections gets them wrapped into a default pack, while a file
-// that already carries packs keeps them, gets their empty keys filled in
-// and persisted, and falls back to the default pack when the selection
-// points at a pack that does not exist.
+// the legacy sections gets them wrapped into a default pack, old
+// two-section packs collapse to the palette their mode selected, and a
+// selection pointing at a missing pack falls back to the default pack.
 func TestConfigThemesMapMigration(t *testing.T) {
-	defaultTheme := Theme{Mode: "system", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
 
@@ -389,31 +430,31 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
-		spec, ok := got.Themes[DefaultThemeName]
+		pack, ok := got.Themes[DefaultThemeName]
 		if !ok {
 			t.Fatalf("LoadConfig() themes missing the %q pack: %+v", DefaultThemeName, got.Themes)
 		}
-		if len(got.Themes) != 1+len(BundledThemeSpecs()) {
-			t.Fatalf("LoadConfig() themes has %d packs, want the default plus %d bundles", len(got.Themes), len(BundledThemeSpecs()))
+		if len(got.Themes) != len(BundledThemes()) {
+			t.Fatalf("LoadConfig() themes has %d packs, want the house palette under its bundle name plus the other %d bundles", len(got.Themes), len(BundledThemes())-1)
 		}
-		if spec.Dark.Labels != "aqua" || spec.Dark.Text != defaultTheme.Text {
-			t.Fatalf("default pack dark = %+v, want explicit labels with filled text", spec.Dark)
+		if pack.Labels != "aqua" || pack.Text != defaultTheme.Text {
+			t.Fatalf("default pack = %+v, want explicit labels with filled text", pack)
 		}
 		if got.ThemeName != DefaultThemeName {
 			t.Fatalf("LoadConfig() themeName = %q, want %q", got.ThemeName, DefaultThemeName)
 		}
 		onDisk := readConfigFile(t, dir)
-		if onDisk.Themes[DefaultThemeName].Dark.Labels != "aqua" {
-			t.Fatalf("config file default pack dark = %+v, want aqua persisted", onDisk.Themes[DefaultThemeName].Dark)
+		if onDisk.Themes[DefaultThemeName].Labels != "aqua" {
+			t.Fatalf("config file default pack = %+v, want aqua persisted", onDisk.Themes[DefaultThemeName])
 		}
 	})
 
-	t.Run("existing packs are kept, filled in and persisted", func(t *testing.T) {
+	t.Run("two-section packs collapse to the mode's palette", func(t *testing.T) {
 		dir := testConfigDir(t)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("creating config dir: %v", err)
 		}
-		content := "themeName: ocean\nthemes:\n  ocean:\n    dark:\n      labels: aqua\n    light:\n      labels: teal\n  forest:\n    dark:\n      labels: olive\n"
+		content := "themeName: ocean\nthemes:\n  ocean:\n    dark:\n      mode: light\n      labels: aqua\n    light:\n      labels: teal\n  forest:\n    dark:\n      labels: olive\n  emptypack: {}\n"
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
@@ -421,24 +462,47 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
-		if len(got.Themes) != 2+len(BundledThemeSpecs()) {
-			t.Fatalf("LoadConfig() themes has %d packs, want ocean, forest and the %d bundles", len(got.Themes), len(BundledThemeSpecs()))
+		if len(got.Themes) != 2+len(BundledThemes()) {
+			t.Fatalf("LoadConfig() themes has %d packs, want ocean, forest and the %d bundles", len(got.Themes), len(BundledThemes()))
 		}
 		ocean := got.Themes["ocean"]
-		if ocean.Dark.Labels != "aqua" || ocean.Dark.Text != defaultTheme.Text {
-			t.Fatalf("ocean dark = %+v, want explicit labels with filled text", ocean.Dark)
+		if ocean.Labels != "teal" || ocean.Text != defaultTheme.Text {
+			t.Fatalf("ocean = %+v, want the light section (teal) because mode was light, with filled text", ocean)
 		}
-		if ocean.Light.Labels != "teal" || ocean.Light.Text != DefaultLightTheme().Text {
-			t.Fatalf("ocean light = %+v, want explicit labels with light palette fill", ocean.Light)
+		forest := got.Themes["forest"]
+		if forest.Labels != "olive" {
+			t.Fatalf("forest = %+v, want the dark section (olive) kept", forest)
+		}
+		if _, ok := got.Themes["emptypack"]; ok {
+			t.Fatal("LoadConfig() kept an empty legacy pack, want it dropped")
 		}
 		if got.ThemeName != "ocean" {
 			t.Fatalf("LoadConfig() themeName = %q, want ocean kept", got.ThemeName)
 		}
-		// The fill-in must persist: a partial pack on disk comes back
+		// The collapse must persist: a partial pack on disk comes back
 		// complete on the next load without rewriting it again.
 		onDisk := readConfigFile(t, dir)
-		if onDisk.Themes["ocean"].Dark.Text != defaultTheme.Text {
-			t.Fatalf("config file ocean dark text = %q, want filled-in value persisted", onDisk.Themes["ocean"].Dark.Text)
+		if onDisk.Themes["ocean"].Text != defaultTheme.Text {
+			t.Fatalf("config file ocean text = %q, want filled-in value persisted", onDisk.Themes["ocean"].Text)
+		}
+	})
+
+	t.Run("flat packs keep their palette", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		content := "themeName: ocean\nthemes:\n  ocean:\n    labels: aqua\n"
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		ocean := got.Themes["ocean"]
+		if ocean.Labels != "aqua" || ocean.Text != defaultTheme.Text {
+			t.Fatalf("ocean = %+v, want the flat palette with filled text", ocean)
 		}
 	})
 
@@ -447,7 +511,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("creating config dir: %v", err)
 		}
-		content := "themeName: no-such-pack\nthemes:\n  default:\n    dark:\n      labels: aqua\n"
+		content := "themeName: no-such-pack\nthemes:\n  ocean:\n    dark:\n      labels: aqua\n"
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
@@ -466,7 +530,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 // a user pack under a bundle name keeps its keys, and the flag stops the
 // seeding from running again so a deleted bundle stays deleted.
 func TestConfigSeedsBundledThemesOnce(t *testing.T) {
-	defaultTheme := Theme{Mode: "system", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
 
@@ -489,22 +553,26 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if !ok {
 			t.Fatalf("LoadConfig() themes missing the monokai bundle: %+v", got.Themes)
 		}
-		if monokai.Dark.Labels != "#a6e22e" || monokai.Dark.Background != "#272822" {
-			t.Fatalf("monokai dark = %+v, want the bundled palette", monokai.Dark)
+		if monokai.Labels != "#a6e22e" || monokai.Background != "#272822" {
+			t.Fatalf("monokai = %+v, want the bundled palette", monokai)
 		}
-		// Gruvbox, solarized and one-dark ship their canonical light
-		// variants; the rest fill from the built-in light palette.
-		if got.Themes["gruvbox"].Light.Background != "#fbf1c7" {
-			t.Fatalf("gruvbox light background = %q, want the bundled light variant", got.Themes["gruvbox"].Light.Background)
+		// The house packs seed alongside the scheme packs.
+		if got.Themes["lazycloud_dark"].Background != "black" {
+			t.Fatalf("lazycloud_dark background = %q, want the shipped dark palette", got.Themes["lazycloud_dark"].Background)
 		}
-		if got.Themes["solarized"].Light.Background != "#fdf6e3" {
-			t.Fatalf("solarized light background = %q, want the bundled light variant", got.Themes["solarized"].Light.Background)
+		if got.Themes["lazycloud_light"].Background != "white" {
+			t.Fatalf("lazycloud_light background = %q, want the shipped light palette", got.Themes["lazycloud_light"].Background)
 		}
-		if got.Themes["one-dark"].Light.Background != "#fafafa" {
-			t.Fatalf("one-dark light background = %q, want the bundled light variant", got.Themes["one-dark"].Light.Background)
+		// Gruvbox, solarized and one-dark ship their canonical dark
+		// variants as single palettes now.
+		if got.Themes["gruvbox"].Background != "#282828" {
+			t.Fatalf("gruvbox background = %q, want the bundled dark variant", got.Themes["gruvbox"].Background)
 		}
-		if got.Themes["monokai"].Light.Background != DefaultLightTheme().Background {
-			t.Fatalf("monokai light background = %q, want the built-in light palette fill", got.Themes["monokai"].Light.Background)
+		if got.Themes["solarized"].Background != "#002b36" {
+			t.Fatalf("solarized background = %q, want the bundled dark variant", got.Themes["solarized"].Background)
+		}
+		if got.Themes["one-dark"].Background != "#282c34" {
+			t.Fatalf("one-dark background = %q, want the bundled dark variant", got.Themes["one-dark"].Background)
 		}
 		// A second load must not rewrite the file: the flag already says
 		// the bundles are there.
@@ -570,8 +638,8 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 		nord := got.Themes["nord"]
-		if nord.Dark.Labels != "lime" {
-			t.Fatalf("nord dark labels = %q, want the user's lime kept over the bundle", nord.Dark.Labels)
+		if nord.Labels != "lime" {
+			t.Fatalf("nord labels = %q, want the user's lime kept over the bundle", nord.Labels)
 		}
 	})
 }

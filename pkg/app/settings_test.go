@@ -31,35 +31,64 @@ func TestSettingsRowsCoverPanelToggles(t *testing.T) {
 			t.Errorf("settings row %q has nil accessors", row.label)
 		}
 	}
-	for _, want := range []string{"Light theme", "Dark theme", "Theme follows terminal", "Shortcut bar", "Auto update cache"} {
+	for _, want := range []string{"Follow terminal", "Shortcut bar", "Auto update cache"} {
 		if !labels[want] {
 			t.Errorf("settings panel is missing row %q", want)
 		}
 	}
-}
-
-func TestThemeModeTogglesAreExclusive(t *testing.T) {
-	// The theme pack row previews its pack live, which repaints the global
-	// palette; restore it so later theme tests see the palette they expect.
-	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
-	setConfiguredThemeMode(providers.ModeLight)
-	if configuredThemeMode() != providers.ModeLight {
-		t.Fatal("light mode not stored")
-	}
-	rows := settingsTestApp(t).settingsRows()
-	var dark, system bool
-	for _, row := range rows {
-		row.set(true)
-		switch row.label {
-		case "Dark theme":
-			dark = configuredThemeMode() == providers.ModeDark
-		case "Theme follows terminal":
-			system = configuredThemeMode() == providers.ModeSystem
+	sawTheme := false
+	for label := range labels {
+		if strings.HasPrefix(label, "Theme: ") {
+			sawTheme = true
 		}
 	}
-	if !dark || !system {
-		t.Errorf("toggles did not set modes: dark=%v system=%v", dark, system)
+	if !sawTheme {
+		t.Error("settings panel is missing the Theme pack row")
+	}
+	for _, gone := range []string{"Light theme", "Dark theme", "Theme follows terminal"} {
+		if labels[gone] {
+			t.Errorf("settings panel still carries removed row %q", gone)
+		}
+	}
+}
+
+// TestFollowTerminalToggleDrivesPalette pins the toggle: on paints with the
+// terminal palette, off returns to the selected pack.
+func TestFollowTerminalToggleDrivesPalette(t *testing.T) {
+	originalTheme := theme
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
+	configuredTheme = providers.Theme{Background: "#272822", Labels: "#a6e22e"}
+	configuredFollowTerminal = false
+
+	rows := settingsTestApp(t).settingsRows()
+	var followRow settingsRow
+	for _, row := range rows {
+		if row.label == "Follow terminal" {
+			followRow = row
+		}
+	}
+	if followRow.set == nil {
+		t.Fatal("Follow terminal row missing")
+	}
+
+	followRow.set(true)
+	if !configuredFollowTerminal {
+		t.Error("toggle did not store follow-terminal mode")
+	}
+	if theme.background != "default" || theme.labels != "yellow" {
+		t.Errorf("toggle-on palette = %q/%q, want the terminal-follow palette (default/yellow)", theme.background, theme.labels)
+	}
+
+	followRow.set(false)
+	if configuredFollowTerminal {
+		t.Error("toggle did not clear follow-terminal mode")
+	}
+	if theme.background != "#272822" || theme.labels != "#a6e22e" {
+		t.Errorf("toggle-off palette = %q/%q, want the selected pack back", theme.background, theme.labels)
 	}
 }
 
@@ -71,23 +100,26 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: string(providers.ModeDark), Labels: "yellow"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
-	configuredThemePacks = map[string]providers.ThemeSpec{
-		"default": {Dark: configuredTheme, Light: configuredThemesLight},
-		"ocean":   {Dark: providers.Theme{Mode: string(providers.ModeDark), Labels: "aqua"}, Light: providers.DefaultLightTheme()},
+	configuredTheme = providers.Theme{Background: "black", Labels: "yellow"}
+	configuredFollowTerminal = false
+	configuredThemePacks = map[string]providers.Theme{
+		"lazycloud_dark": configuredTheme,
+		"ocean":          {Background: "navy", Labels: "aqua"},
 	}
-	configuredThemeName = "default"
+	configuredThemeName = "lazycloud_dark"
 
 	a.cycleThemeName(1)
 	if configuredThemeName != "ocean" {
 		t.Fatalf("cycleThemeName(1) selected %q, want ocean", configuredThemeName)
 	}
-	if configuredThemesDark.Labels != "aqua" {
-		t.Fatalf("cycled dark labels = %q, want the ocean pack's aqua", configuredThemesDark.Labels)
+	if configuredTheme.Labels != "aqua" {
+		t.Fatalf("cycled labels = %q, want the ocean pack's aqua", configuredTheme.Labels)
 	}
 	if theme.labels != "aqua" {
 		t.Fatalf("preview labels = %q, want the ocean pack painted live", theme.labels)
@@ -95,14 +127,14 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 
 	// Wrapping past the end returns to the first pack.
 	a.cycleThemeName(1)
-	if configuredThemeName != "default" {
-		t.Fatalf("cycleThemeName(1) wrap selected %q, want default", configuredThemeName)
+	if configuredThemeName != "lazycloud_dark" {
+		t.Fatalf("cycleThemeName(1) wrap selected %q, want lazycloud_dark", configuredThemeName)
 	}
 
-	// Edits made to the default pack before switching away survive the
-	// switch and the save.
-	configuredThemesDark.Labels = "teal"
-	a.cycleThemeName(1) // default -> ocean
+	// Edits made to the lazycloud_dark pack before switching away survive
+	// the switch and the save.
+	configuredTheme.Labels = "teal"
+	a.cycleThemeName(1) // lazycloud_dark -> ocean
 	a.applySettings()
 	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
@@ -112,13 +144,13 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 		t.Fatalf("saved themeName = %q, want ocean", config.ThemeName)
 	}
 	if config.Theme.Labels != "aqua" {
-		t.Fatalf("saved legacy labels = %q, want the ocean pack mirrored", config.Theme.Labels)
+		t.Fatalf("saved mirror labels = %q, want the ocean pack mirrored", config.Theme.Labels)
 	}
-	if got := config.Themes["default"].Dark.Labels; got != "teal" {
-		t.Fatalf("saved default pack dark labels = %q, want the parked teal edit", got)
+	if got := config.Themes["lazycloud_dark"].Labels; got != "teal" {
+		t.Fatalf("saved lazycloud_dark labels = %q, want the parked teal edit", got)
 	}
-	if got := config.Themes["ocean"].Dark.Labels; got != "aqua" {
-		t.Fatalf("saved ocean pack dark labels = %q, want aqua kept", got)
+	if got := config.Themes["ocean"].Labels; got != "aqua" {
+		t.Fatalf("saved ocean labels = %q, want aqua kept", got)
 	}
 }
 
@@ -126,13 +158,14 @@ func TestRebuildSettingsFormReflectsLiveValues(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black", Labels: "orange"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	if a.settingsForm == nil {
 		t.Fatal("buildSettingsPage did not create the form")
 	}
 	infobarEnabled = false
-	configuredThemesDark = providers.Theme{Mode: "dark", Labels: "orange"}
-	configuredThemesLight = providers.DefaultLightTheme()
 	a.rebuildSettingsForm()
 	want := len(a.settingsRows()) + len(themeColorKeys) + 2
 	if got := a.settingsForm.GetFormItemCount(); got != want {
@@ -150,23 +183,26 @@ func TestRebuildSettingsFormReflectsLiveValues(t *testing.T) {
 func TestApplySettingsPersistsToggles(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// applySettings swaps the global palette through applyConfigTheme;
-	// restore it so later theme tests see the palette they expect.
+	// applySettings repaints the global palette; restore it so later
+	// theme tests see the palette they expect.
 	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
 	a := settingsTestApp(t)
 	a.staleAutoRefresh = true
 	infobarEnabled = false
-	configuredTheme = providers.Theme{Mode: string(providers.ModeLight)}
-	configuredThemesDark = providers.Theme{Mode: string(providers.ModeLight)}
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredFollowTerminal = true
+	configuredTheme = providers.Theme{Background: "black"}
 	a.applySettings()
 	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Theme.Mode != string(providers.ModeLight) {
-		t.Errorf("theme mode = %q, want light", config.Theme.Mode)
+	if !config.FollowTerminal {
+		t.Error("follow terminal toggle not persisted as enabled")
 	}
 	if config.Infobar.ShowShortcuts {
 		t.Error("infobar toggle not persisted as disabled")
@@ -176,41 +212,23 @@ func TestApplySettingsPersistsToggles(t *testing.T) {
 	}
 }
 
-func TestActiveThemeSectionFollowsMode(t *testing.T) {
-	configuredTheme = providers.Theme{Mode: string(providers.ModeDark)}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
-	if activeThemeSection(providers.BackgroundDark) != &configuredThemesDark {
-		t.Error("activeThemeSection(dark) did not return the dark section")
-	}
-	configuredTheme.Mode = string(providers.ModeLight)
-	configuredThemesDark.Mode = string(providers.ModeLight)
-	if activeThemeSection(providers.BackgroundDark) != &configuredThemesLight {
-		t.Error("activeThemeSection(light) did not return the light section")
-	}
-	// System mode follows the terminal: dark terminal edits the dark
-	// section, light terminal edits the light one the UI actually paints.
-	configuredTheme.Mode = string(providers.ModeSystem)
-	configuredThemesDark.Mode = string(providers.ModeSystem)
-	if activeThemeSection(providers.BackgroundDark) != &configuredThemesDark {
-		t.Error("activeThemeSection(system, dark terminal) did not return the dark section")
-	}
-	if activeThemeSection(providers.BackgroundLight) != &configuredThemesLight {
-		t.Error("activeThemeSection(system, light terminal) did not return the light section")
-	}
-}
-
-func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
+func TestSettingsColorFieldsEditPackPalette(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// applySettings repaints the global palette through applyConfigTheme;
-	// restore it so later theme tests see the palette they expect.
+	// applySettings repaints the global palette; restore it so later
+	// theme tests see the palette they expect.
 	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: string(providers.ModeLight)}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemePacks = map[string]providers.Theme{
+		configuredThemeName: configuredTheme,
+	}
 	a.buildSettingsPage()
 
 	// Find the Labels input field and type into it the way the form does.
@@ -227,21 +245,18 @@ func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
 		t.Fatal("settings form has no Labels color field")
 	}
 	field.SetText("orange")
-	if configuredThemesLight.Labels != "orange" {
-		t.Errorf("light section labels = %q, want orange after editing the field", configuredThemesLight.Labels)
-	}
-	if configuredThemesDark.Labels == "orange" {
-		t.Error("dark section labels changed, want it untouched while editing light mode")
+	if configuredTheme.Labels != "orange" {
+		t.Errorf("palette labels = %q, want orange after editing the field", configuredTheme.Labels)
 	}
 
-	// Saving persists the edited section.
+	// Saving persists the edited palette into the pack.
 	a.applySettings()
 	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.ThemeLight.Labels != "orange" {
-		t.Errorf("saved light labels = %q, want orange", config.ThemeLight.Labels)
+	if got := config.Themes[configuredThemeName].Labels; got != "orange" {
+		t.Errorf("saved pack labels = %q, want orange", got)
 	}
 }
 
@@ -251,14 +266,20 @@ func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
 func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	// closeSettings repaints the global palette through applyConfigTheme;
-	// restore it so later theme tests see the palette they expect.
+	// closeSettings repaints the global palette; restore it so later
+	// theme tests see the palette they expect.
 	originalTheme := theme
-	t.Cleanup(func() { theme = originalTheme })
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		theme = originalTheme
+		configuredFollowTerminal = originalFollow
+	})
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: string(providers.ModeDark)}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemePacks = map[string]providers.Theme{
+		configuredThemeName: configuredTheme,
+	}
 	a.buildSettingsPage()
 
 	// Edit a color field without toggling any checkbox.
@@ -279,7 +300,7 @@ func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Theme.Labels != "teal" {
-		t.Errorf("saved dark labels = %q, want teal after closing the panel", config.Theme.Labels)
+	if got := config.Themes[config.ThemeName].Labels; got != "teal" {
+		t.Errorf("saved pack labels = %q, want teal after closing the panel", got)
 	}
 }

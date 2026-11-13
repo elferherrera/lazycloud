@@ -35,15 +35,12 @@ func TestRunAppliesConfigThemeBeforeFailure(t *testing.T) {
 	}
 
 	applied := false
-	originalDetect := detectBackground
-	detectBackground = func() providers.BackgroundKind {
+	originalActive := applyActiveThemeFn
+	applyActiveThemeFn = func() {
 		applied = true
-		return providers.BackgroundDark
 	}
-	cachedBackground = ""
 	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
+		applyActiveThemeFn = originalActive
 	})
 
 	_ = Run()
@@ -53,20 +50,39 @@ func TestRunAppliesConfigThemeBeforeFailure(t *testing.T) {
 	}
 }
 
-// TestResolveThemeUnknownBackground pins the system-mode fallback: a
-// background kind the detection cannot classify keeps the dark section,
-// and a light terminal paints with the configured light section.
-func TestResolveThemeUnknownBackground(t *testing.T) {
-	light := providers.CompleteLightTheme(providers.Theme{Labels: "orange"})
-	config := providers.Theme{Mode: "light", Labels: "orange", Text: "aqua"}
-	if got := resolveTheme(config, light, providers.BackgroundLight); got != light {
-		t.Errorf("resolveTheme(light) = %+v, want the light section", got)
+// TestFollowTerminalThemeUsesTerminalColors pins the follow-terminal
+// palette: every slot is a tcell palette name or "default", never a hex
+// pin, so the terminal resolves each color from its own configuration.
+func TestFollowTerminalThemeUsesTerminalColors(t *testing.T) {
+	follow := providers.FollowTerminalTheme()
+	if follow.Background != "default" || follow.Text != "default" || follow.Borders != "default" {
+		t.Errorf("FollowTerminalTheme() base slots = %+v, want default so the terminal paints them", follow)
 	}
-	config.Mode = "system"
-	if got := resolveTheme(config, light, providers.BackgroundLight); got != light {
-		t.Errorf("resolveTheme(system, light background) = %+v, want the configured light section", got)
+	if follow.Labels != "yellow" || follow.Title != "cyan" || follow.Focus != "green" {
+		t.Errorf("FollowTerminalTheme() accents = %+v, want named tcell palette colors", follow)
 	}
-	if got := resolveTheme(config, light, providers.BackgroundDark); got != config {
-		t.Errorf("resolveTheme(system, dark background) = %+v, want the configured theme section", got)
+	if follow.ActiveRowText != "black" || follow.ActiveRowBackground != "cyan" {
+		t.Errorf("FollowTerminalTheme() active row = %+v, want black on cyan", follow)
+	}
+}
+
+// TestApplyActiveThemeFollowTerminal pins the settings selection: the
+// follow-terminal toggle paints with the follow palette, a pack selection
+// paints with the pack, and the toggle wins over the selected pack.
+func TestApplyActiveThemeFollowTerminal(t *testing.T) {
+	configuredFollowTerminal = true
+	configuredTheme = providers.Theme{Background: "#272822", Labels: "#a6e22e"}
+	t.Cleanup(func() {
+		configuredFollowTerminal = false
+		configuredTheme = providers.Theme{}
+	})
+	applyActiveTheme()
+	if theme.background != "default" || theme.labels != "yellow" {
+		t.Errorf("applyActiveTheme() follow-terminal slots = %q/%q, want default/yellow", theme.background, theme.labels)
+	}
+	configuredFollowTerminal = false
+	applyActiveTheme()
+	if theme.background != "#272822" || theme.labels != "#a6e22e" {
+		t.Errorf("applyActiveTheme() pack slots = %q/%q, want the pack palette", theme.background, theme.labels)
 	}
 }

@@ -6,7 +6,6 @@ import (
 )
 
 type Theme struct {
-	Mode                string `json:"mode" yaml:"mode"`
 	Background          string `json:"background" yaml:"background"`
 	Labels              string `json:"labels" yaml:"labels"`
 	Text                string `json:"text" yaml:"text"`
@@ -27,67 +26,38 @@ type Theme struct {
 	ActiveRowBackground string `json:"activeRowBackground" yaml:"activeRowBackground"`
 }
 
-// ThemeMode selects which palette lazycloud paints the UI with.
-type ThemeMode string
-
-const (
-	// ModeSystem resolves the palette from the terminal background.
-	ModeSystem ThemeMode = "system"
-	// ModeLight always uses the light palette.
-	ModeLight ThemeMode = "light"
-	// ModeDark always uses the dark palette.
-	ModeDark ThemeMode = "dark"
-)
-
-// ParseThemeMode maps a config value onto a ThemeMode. Unknown or empty
-// values resolve to dark, the safe default for a TUI on an unknown terminal.
-func ParseThemeMode(value string) ThemeMode {
-	switch ThemeMode(value) {
-	case ModeLight:
-		return ModeLight
-	case ModeSystem:
-		return ModeSystem
-	default:
-		return ModeDark
-	}
-}
-
-// DefaultLightTheme is the built-in light palette. It is also the set of
-// defaults a partial themeLight config section merges against, so an empty
-// key falls back to the built-in value instead of the dark palette.
-// Labels use a dark bronze hex rather than the olive name because terminals
-// render olive too light for the white background (4.2:1 measured, below
-// the 4.5:1 AA floor; the bronze reads 7.1:1 on the same background).
-func DefaultLightTheme() Theme {
+// FollowTerminalTheme is the palette used when followTerminal hides the
+// theme and color rows: every value is a tcell palette name or "default",
+// so the terminal resolves each color from its own user-configured palette
+// the way lazygit and htop defer to the terminal. "default" leaves the
+// slot to the terminal's default foreground/background, so the app sits on
+// whatever base colors the terminal ships. Named accents (yellow, cyan,
+// green) read well over both dark and light default backgrounds.
+func FollowTerminalTheme() Theme {
 	return Theme{
-		Mode:                string(ModeLight),
-		Background:          "white",
-		Labels:              "#705400",
-		Text:                "black",
-		Borders:             "black",
-		Title:               "black",
-		ShortcutLabels:      "#705400",
-		ShortcutText:        "black",
-		Focus:               "#705400",
-		StatusLabels:        "#705400",
-		StatusText:          "black",
-		SummaryLabels:       "#705400",
-		SummaryText:         "black",
-		DetailLabels:        "#705400",
-		DetailText:          "black",
-		SettingsLabels:      "#705400",
-		SettingsText:        "black",
-		ActiveRowText:       "white",
-		ActiveRowBackground: "black",
+		Background:          "default",
+		Labels:              "yellow",
+		Text:                "default",
+		Borders:             "default",
+		Title:               "cyan",
+		ShortcutLabels:      "yellow",
+		ShortcutText:        "default",
+		Focus:               "green",
+		StatusLabels:        "yellow",
+		StatusText:          "default",
+		SummaryLabels:       "yellow",
+		SummaryText:         "default",
+		DetailLabels:        "cyan",
+		DetailText:          "default",
+		SettingsLabels:      "yellow",
+		SettingsText:        "default",
+		ActiveRowText:       "black",
+		ActiveRowBackground: "cyan",
 	}
 }
 
-// CompleteLightTheme fills the empty keys of a themeLight section from the
-// built-in light palette.
-func CompleteLightTheme(theme Theme) Theme {
-	return mergeTheme(theme, DefaultLightTheme())
-}
-
+// themePath is the pre-config-file theme.json location; LoadConfig still
+// imports it on a fresh config.yaml so an old install keeps its palette.
 func themePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -96,10 +66,10 @@ func themePath() (string, error) {
 	return filepath.Join(home, ".config", "lazycloud", "theme.json"), nil
 }
 
+// mergeTheme fills the empty keys of theme from defaults. Deriving roles
+// with real fallback chains (shortcutLabels falls back to labels) rather
+// than the same defaults table keeps a partially-specified pack coherent.
 func mergeTheme(theme, defaults Theme) Theme {
-	if theme.Mode == "" {
-		theme.Mode = defaults.Mode
-	}
 	if theme.Background == "" {
 		theme.Background = defaults.Background
 	}

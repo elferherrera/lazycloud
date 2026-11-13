@@ -30,34 +30,28 @@ func TestCycleThemeNameRestylesOverlayChrome(t *testing.T) {
 	originalTheme := theme
 	t.Cleanup(func() { theme = originalTheme })
 	a := chromeTestApp(t)
-	originalDetect := detectBackground
-	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	cachedBackground = ""
-	t.Cleanup(func() {
-		detectBackground = originalDetect
-		cachedBackground = ""
-	})
+	originalFollow := configuredFollowTerminal
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = originalFollow })
 
-	configuredThemePacks = map[string]providers.ThemeSpec{
-		"default": {Dark: providers.Theme{
-			Mode:       string(providers.ModeDark),
+	configuredThemePacks = map[string]providers.Theme{
+		"lazycloud_dark": {
 			Background: "black",
 			Borders:    "white",
 			Title:      "white",
 			Labels:     "yellow",
-		}, Light: providers.DefaultLightTheme()},
-		"ocean": {Dark: providers.Theme{
-			Mode:       string(providers.ModeDark),
+		},
+		"ocean": {
 			Background: "navy",
 			Borders:    "aqua",
 			Title:      "white",
 			Labels:     "aqua",
-		}, Light: providers.DefaultLightTheme()},
+		},
 	}
-	configuredThemeName = "default"
-	setConfiguredThemes(providers.Config{Themes: configuredThemePacks, ThemeName: "default"})
+	configuredThemeName = "lazycloud_dark"
+	setConfiguredThemes(providers.Config{Themes: configuredThemePacks, ThemeName: "lazycloud_dark"})
 
-	a.cycleThemeName(1) // default -> ocean
+	a.cycleThemeName(1) // lazycloud_dark -> ocean
 
 	if got := a.settingsForm.GetBackgroundColor(); got != tcell.GetColor("navy") {
 		t.Errorf("settings form background = %v, want the ocean pack's navy", got)
@@ -86,9 +80,9 @@ func TestSettingsOverlayDrawsUsageHint(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: "dark"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 
 	screen := tcell.NewSimulationScreen("UTF-8")

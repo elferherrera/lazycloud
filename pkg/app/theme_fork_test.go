@@ -10,41 +10,36 @@ import (
 // themeForkTestState snapshots the globals the fork flow touches, so each
 // test starts from the bundled seeds and restores the palette afterwards.
 type themeForkTestState struct {
-	t         *testing.T
-	origPacks map[string]providers.ThemeSpec
-	origName  string
-	origDark  providers.Theme
-	origLight providers.Theme
-	origMode  providers.Theme
+	t          *testing.T
+	origPacks  map[string]providers.Theme
+	origName   string
+	origTheme  providers.Theme
+	origFollow bool
 }
 
 func forkTestState(t *testing.T) *themeForkTestState {
 	t.Helper()
 	s := &themeForkTestState{
-		t:         t,
-		origPacks: configuredThemePacks,
-		origName:  configuredThemeName,
-		origDark:  configuredThemesDark,
-		origLight: configuredThemesLight,
-		origMode:  configuredTheme,
+		t:          t,
+		origPacks:  configuredThemePacks,
+		origName:   configuredThemeName,
+		origTheme:  configuredTheme,
+		origFollow: configuredFollowTerminal,
 	}
-	packs := map[string]providers.ThemeSpec{}
-	for name, spec := range providers.BundledThemeSpecs() {
-		packs[name] = spec
+	packs := map[string]providers.Theme{}
+	for name, pack := range providers.BundledThemes() {
+		packs[name] = pack
 	}
 	configuredThemePacks = packs
 	seed := "monokai"
 	configuredThemeName = seed
-	spec := packs[seed]
-	configuredThemesDark = spec.Dark
-	configuredThemesLight = spec.Light
-	configuredTheme = spec.Dark
+	configuredTheme = packs[seed]
+	configuredFollowTerminal = false
 	t.Cleanup(func() {
 		configuredThemePacks = s.origPacks
 		configuredThemeName = s.origName
-		configuredThemesDark = s.origDark
-		configuredThemesLight = s.origLight
-		configuredTheme = s.origMode
+		configuredTheme = s.origTheme
+		configuredFollowTerminal = s.origFollow
 	})
 	return s
 }
@@ -59,26 +54,26 @@ func TestForkBundledThemeOnFirstColorEdit(t *testing.T) {
 	a.rebuildSettingsForm()
 
 	seed := "monokai"
-	seedPalette := providers.BundledThemeSpecs()[seed]
+	seedPalette := providers.BundledThemes()[seed]
 	edit := themeColorKeys[0]
 
-	// The changed callback writes the value into the section first, then
+	// The changed callback writes the value into the palette first, then
 	// forks, so the fork snapshot carries the edit in flight.
-	edit.set(&configuredThemesDark, "orange")
+	edit.set(&configuredTheme, "orange")
 	a.forkBundledTheme()
 
 	if configuredThemeName != "monokai-custom" {
 		t.Fatalf("configuredThemeName = %q, want %q", configuredThemeName, "monokai-custom")
 	}
-	if got := configuredThemePacks[seed]; got.Dark != seedPalette.Dark {
-		t.Errorf("seed palette drifted: %+v, want %+v", got.Dark, seedPalette.Dark)
+	if got := configuredThemePacks[seed]; got != seedPalette {
+		t.Errorf("seed palette drifted: %+v, want %+v", got, seedPalette)
 	}
 	fork, ok := configuredThemePacks["monokai-custom"]
 	if !ok {
 		t.Fatal("fork pack missing from configuredThemePacks")
 	}
-	if fork.Dark.Background != "orange" {
-		t.Errorf("fork background = %q, want orange (the edit in flight)", fork.Dark.Background)
+	if fork.Background != "orange" {
+		t.Errorf("fork background = %q, want orange (the edit in flight)", fork.Background)
 	}
 	if !a.sessionForks["monokai-custom"] {
 		t.Error("sessionForks does not track the auto-fork")
@@ -177,8 +172,8 @@ func TestDeleteThemeClearsTypedSaveAsName(t *testing.T) {
 	a.settingsSaveAs.SetText("midnight")
 	a.deleteTheme()
 
-	if text := a.settingsSaveAs.GetText(); text != providers.DefaultThemeName {
-		t.Errorf("save-as text after delete = %q, want the %q suggestion", text, providers.DefaultThemeName)
+	if text := a.settingsSaveAs.GetText(); text != providers.CustomThemeForkName(providers.DefaultThemeName, nil) {
+		t.Errorf("save-as text after delete = %q, want the %q suggestion", text, providers.CustomThemeForkName(providers.DefaultThemeName, nil))
 	}
 	if !a.applyTypedThemeName() {
 		t.Fatal("close refused after delete")
@@ -199,6 +194,7 @@ func TestDeleteThemeRefusesBundledSeeds(t *testing.T) {
 
 	for _, seed := range []string{"monokai", providers.DefaultThemeName} {
 		configuredThemeName = seed
+		configuredTheme = configuredThemePacks[seed]
 		a.deleteTheme()
 		if providers.IsBundledThemeName(seed) {
 			if _, exists := configuredThemePacks[seed]; !exists {
@@ -223,7 +219,7 @@ func TestDeleteThemeRemovesCustomPack(t *testing.T) {
 
 	a.forkBundledTheme()
 	edit := themeColorKeys[0]
-	edit.set(&configuredThemesDark, "orange")
+	edit.set(&configuredTheme, "orange")
 	a.applySettings() // persist the fork so the delete has something real to drop
 
 	a.deleteTheme()
@@ -239,5 +235,45 @@ func TestDeleteThemeRemovesCustomPack(t *testing.T) {
 	}
 	if _, exists := config.Themes["monokai-custom"]; exists {
 		t.Error("config still holds the deleted pack")
+	}
+}
+
+// TestFollowTerminalHidesThemeRows pins the follow-terminal panel shape:
+// the toggle row stays, the theme pack row, the save-as input, the color
+// rows and the Delete button all go, because the terminal owns every color
+// while the toggle is on.
+func TestFollowTerminalHidesThemeRows(t *testing.T) {
+	forkTestState(t)
+	a := settingsTestApp(t)
+	a.buildSettingsPage()
+	a.rebuildSettingsForm()
+
+	configuredFollowTerminal = true
+	a.rebuildSettingsForm()
+
+	if a.settingsForm == nil {
+		t.Fatal("settings form missing")
+	}
+	var labels []string
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		switch item := a.settingsForm.GetFormItem(i).(type) {
+		case *focusCheckbox:
+			labels = append(labels, item.base)
+		}
+	}
+	if len(labels) != 3 {
+		t.Fatalf("checkbox rows = %v, want only Follow terminal, Shortcut bar and Auto update cache", labels)
+	}
+	if labels[0] != "Follow terminal" {
+		t.Errorf("first checkbox = %q, want Follow terminal", labels[0])
+	}
+	if a.settingsSaveAs != nil {
+		t.Error("save-as field survived follow-terminal mode")
+	}
+	if a.settingsForm.GetFormItemCount() != 4 {
+		t.Errorf("form items = %d, want 4 (three toggles, config path, no colors or save-as)", a.settingsForm.GetFormItemCount())
+	}
+	if a.settingsForm.GetButtonCount() != 2 {
+		t.Errorf("form buttons = %d, want 2 (Open in editor, Close; Delete theme hidden)", a.settingsForm.GetButtonCount())
 	}
 }

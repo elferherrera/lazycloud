@@ -16,9 +16,9 @@ import (
 func focusFormRows(t *testing.T, width, focusIndex int) (*app, []string) {
 	t.Helper()
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: "dark"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	form := a.settingsForm
 	h := settingsFormHeight(a)
@@ -52,12 +52,12 @@ func focusFormRows(t *testing.T, width, focusIndex int) (*app, []string) {
 // checkbox row carries the ▸ prefix and an accent-colored label, while
 // unfocused rows keep their plain labels so the column stays aligned.
 func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 1) // Light theme, first toggleable row
+	_, rows := focusFormRows(t, 80, 0) // Follow terminal, first toggleable row
 	joined := strings.Join(rows, "\n")
-	if !strings.Contains(joined, focusMarker+"Light theme") {
+	if !strings.Contains(joined, focusMarker+"Follow terminal") {
 		t.Errorf("focused checkbox row is missing the %q marker; form:\n%s", focusMarker, joined)
 	}
-	if !strings.Contains(joined, noFocusMarker+"Dark theme") {
+	if !strings.Contains(joined, noFocusMarker+"Shortcut bar") {
 		t.Errorf("unfocused checkbox row lost its padding prefix; form:\n%s", joined)
 	}
 }
@@ -65,7 +65,7 @@ func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
 // TestFocusedColorFieldRowShowsMarker pins the same affordance on the color
 // swatch rows, whose labels live on the embedded InputField.
 func TestFocusedColorFieldRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 7) // first color field (Background)
+	_, rows := focusFormRows(t, 80, 5) // first color field (Background)
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, focusMarker+"Background") {
 		t.Errorf("focused color row is missing the %q marker; form:\n%s", focusMarker, joined)
@@ -84,23 +84,23 @@ func TestRebuildSettingsFormKeepsFocusedRow(t *testing.T) {
 	originalTheme := theme
 	t.Cleanup(func() { theme = originalTheme })
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: "dark"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	form := a.settingsForm
 
-	// Focus the Shortcut bar row (index 4) and rebuild, like a toggle does.
-	form.SetFocus(4)
+	// Focus the Shortcut bar row (index 2) and rebuild, like a toggle does.
+	form.SetFocus(2)
 	a.rebuildSettingsForm()
 
 	item, button := form.GetFocusedItemIndex()
-	if item != 4 || button != -1 {
-		t.Fatalf("after rebuild focused item=%d button=%d, want item=4 button=-1", item, button)
+	if item != 2 || button != -1 {
+		t.Fatalf("after rebuild focused item=%d button=%d, want item=2 button=-1", item, button)
 	}
-	checkbox, ok := form.GetFormItem(4).(*focusCheckbox)
+	checkbox, ok := form.GetFormItem(2).(*focusCheckbox)
 	if !ok {
-		t.Fatalf("form item 4 is %T, want *focusCheckbox", form.GetFormItem(4))
+		t.Fatalf("form item 2 is %T, want *focusCheckbox", form.GetFormItem(2))
 	}
 	if !strings.HasPrefix(checkbox.GetLabel(), focusMarker) {
 		t.Errorf("rebuilt focused checkbox label = %q, want %q prefix", checkbox.GetLabel(), focusMarker)
@@ -114,9 +114,9 @@ func TestRebuildSettingsFormResetsFocusWithoutFormFocus(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
-	configuredTheme = providers.Theme{Mode: "dark"}
-	configuredThemesDark = configuredTheme
-	configuredThemesLight = providers.DefaultLightTheme()
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 
 	form := a.settingsForm
