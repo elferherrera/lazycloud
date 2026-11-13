@@ -836,8 +836,13 @@ func (a *app) refreshView() {
 }
 
 // refreshProjectViews updates the cache of every per-project view for the
-// current project, one after another, showing the view being fetched.
+// current project, one after another, showing the view being fetched. With
+// all-projects selected it walks every cached project instead.
 func (a *app) refreshProjectViews() {
+	if appState.AllProjects {
+		a.refreshAllProjectsViews()
+		return
+	}
 	if appState.ProjectID == "" {
 		a.statusText("[red]No project selected[-]")
 		return
@@ -871,6 +876,61 @@ func (a *app) refreshProjectViews() {
 		a.queueUpdateDraw(func() {
 			a.setView(appState.ViewKind)
 			status := fmt.Sprintf("[green]Updated %d views for %s[-]", len(projectViewKinds)-failed, projectID)
+			if failed > 0 {
+				status += fmt.Sprintf(" [red](%d views failed, see log)[-]", failed)
+			}
+			a.statusText(status)
+		})
+	})
+}
+
+// refreshAllProjectsViews updates the cache of every per-project view for
+// every cached project, one view per project at a time, showing the project
+// and view being fetched in the status line. Fetch errors are logged and
+// surfaced in the status and summary, counted in the final report.
+func (a *app) refreshAllProjectsViews() {
+	a.statusInfo("Updating all views for all projects...")
+	a.goBackground(func() {
+		projects, err := a.cache.ListProjects()
+		if err != nil {
+			a.reportError("all-projects", "all", "Failed to list projects", err)
+			return
+		}
+		if len(projects) == 0 {
+			a.queueUpdateDraw(func() {
+				a.statusText("[red]No cached projects to update[-]")
+			})
+			return
+		}
+		total := len(projects) * len(projectViewKinds)
+		p := newProgress(total)
+		stop := a.startProgressTicker(p)
+		defer stop()
+		failed := 0
+		for _, proj := range projects {
+			for _, kind := range projectViewKinds {
+				a.markAutoFetched(autoFetchKey(kind, proj.ProjectID))
+			}
+			for _, kind := range projectViewKinds {
+				def := views[kind]
+				p.advance(fmt.Sprintf("Fetching %s for %s", def.title, proj.ProjectID))
+				a.queueUpdateDraw(func() {
+					if cur, ok := p.current(); ok {
+						a.statusInfo(cur)
+					}
+				})
+				if _, _, err := def.fetch(a, proj.ProjectID); err != nil {
+					a.reportError(string(kind), proj.ProjectID, "Failed to fetch "+def.title+" for "+proj.ProjectID, err)
+					failed++
+				} else {
+					a.markViewUpdated(kind, proj.ProjectID)
+				}
+			}
+		}
+		p.finish()
+		a.queueUpdateDraw(func() {
+			a.setView(appState.ViewKind)
+			status := fmt.Sprintf("[green]Updated %d views across %d projects[-]", total-failed, len(projects))
 			if failed > 0 {
 				status += fmt.Sprintf(" [red](%d views failed, see log)[-]", failed)
 			}

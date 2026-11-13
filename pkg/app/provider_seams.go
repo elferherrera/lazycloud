@@ -38,5 +38,6 @@ var (
 	listProjectInstanceTpl     = providers.ListProjectInstanceTemplates
 	listProjectServiceAccounts = providers.ListProjectServiceAccounts
 	listProjectIAMPolicy       = providers.ListProjectIAMPolicy
+	listProjectCustomRoles     = providers.ListProjectCustomRoles
 	listBucketIAMPolicy        = providers.ListBucketIAMPolicy
 )

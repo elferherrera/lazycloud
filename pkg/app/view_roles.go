@@ -39,7 +39,7 @@ func customRoleResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectRoles(a *app, projectID string) (int, string, error) {
-	roles, err := providers.ListProjectCustomRoles(projectID)
+	roles, err := listProjectCustomRoles(projectID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -119,7 +119,7 @@ var rolesAllView = viewDef{
 				a.tapp.QueueUpdateDraw(func() {
 					a.statusInfo(fmt.Sprintf("Fetching custom roles for %s...", p.ProjectID))
 				})
-				roles, err := providers.ListProjectCustomRoles(p.ProjectID)
+				roles, err := listProjectCustomRoles(p.ProjectID)
 				if err != nil {
 					a.reportError("roles", p.ProjectID, "Failed to fetch custom roles for "+p.ProjectID, err)
 					failed++

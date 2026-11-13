@@ -107,6 +107,7 @@ func restoreSeams(t *testing.T) func() {
 		instanceTemplates func(string) ([]providers.InstanceTemplate, error)
 		serviceAccounts   func(string) ([]providers.ServiceAccount, error)
 		iamPolicy         func(string) ([]providers.IAMBinding, error)
+		customRoles       func(string) ([]providers.CustomRole, error)
 		bucketIAM         func(string, string) ([]providers.BucketIAMBinding, error)
 	}{
 		listGcloudProjects, listProjectVMs, listProjectDisks, listProjectBuckets,
@@ -118,7 +119,7 @@ func restoreSeams(t *testing.T) func() {
 		listProjectInstanceGroups, listInstanceGroupVMs, listProjectDNSZones,
 		listZoneDNSRecords, listProjectCloudRouters, listProjectServiceAttach,
 		listProjectVPNGateways, listProjectReservations, listProjectInstanceTpl,
-		listProjectServiceAccounts, listProjectIAMPolicy, listBucketIAMPolicy,
+		listProjectServiceAccounts, listProjectIAMPolicy, listProjectCustomRoles, listBucketIAMPolicy,
 	}
 	return func() {
 		listGcloudProjects = saved.projects
@@ -151,6 +152,7 @@ func restoreSeams(t *testing.T) func() {
 		listProjectInstanceTpl = saved.instanceTemplates
 		listProjectServiceAccounts = saved.serviceAccounts
 		listProjectIAMPolicy = saved.iamPolicy
+		listProjectCustomRoles = saved.customRoles
 		listBucketIAMPolicy = saved.bucketIAM
 	}
 }
@@ -218,6 +220,7 @@ func failingSeams(t *testing.T) {
 	listProjectInstanceTpl = func(string) ([]providers.InstanceTemplate, error) { return nil, boom }
 	listProjectServiceAccounts = func(string) ([]providers.ServiceAccount, error) { return nil, boom }
 	listProjectIAMPolicy = func(string) ([]providers.IAMBinding, error) { return nil, boom }
+	listProjectCustomRoles = func(string) ([]providers.CustomRole, error) { return nil, boom }
 	listBucketIAMPolicy = func(string, string) ([]providers.BucketIAMBinding, error) { return nil, boom }
 }
 
@@ -254,6 +257,7 @@ func emptySeams(t *testing.T) {
 	listProjectInstanceTpl = func(string) ([]providers.InstanceTemplate, error) { return nil, nil }
 	listProjectServiceAccounts = func(string) ([]providers.ServiceAccount, error) { return nil, nil }
 	listProjectIAMPolicy = func(string) ([]providers.IAMBinding, error) { return nil, nil }
+	listProjectCustomRoles = func(string) ([]providers.CustomRole, error) { return nil, nil }
 	listBucketIAMPolicy = func(string, string) ([]providers.BucketIAMBinding, error) { return nil, nil }
 }
 

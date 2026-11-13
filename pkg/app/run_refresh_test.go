@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -106,7 +107,7 @@ func TestRefreshProjectViewsSummaries(t *testing.T) {
 	a.refreshProjectViews()
 
 	waitFor(t, a, func() bool {
-		return strings.Contains(a.status.GetText(false), "Updated 21 views for p1")
+		return strings.Contains(a.status.GetText(false), fmt.Sprintf("Updated %d views for p1", len(projectViewKinds)))
 	})
 }
 
@@ -127,6 +128,74 @@ func TestRefreshProjectViewsCountsFailures(t *testing.T) {
 	failingSeams(t)
 	resetAppState()
 	appState.ProjectID = "p1"
+
+	a.refreshProjectViews()
+
+	waitFor(t, a, func() bool {
+		return strings.Contains(a.status.GetText(false), "views failed")
+	})
+}
+
+func TestRefreshProjectViewsAllProjectsWalksEveryProject(t *testing.T) {
+	a := newFetchTestApp(t)
+	defer restoreSeams(t)()
+	emptySeams(t)
+	resetAppState()
+	appState.AllProjects = true
+	if err := a.cache.SaveProjects([]providers.Project{
+		{ProjectID: "p1", Name: "P One", ProjectNumber: "111"},
+		{ProjectID: "p2", Name: "P Two", ProjectNumber: "222"},
+	}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
+
+	a.refreshProjectViews()
+
+	waitFor(t, a, func() bool {
+		return strings.Contains(a.status.GetText(false), "views across 2 projects")
+	})
+
+	for _, projectID := range []string{"p1", "p2"} {
+		updatedAt, err := a.cache.GetViewUpdate(string(viewVMs), projectID)
+		if err != nil {
+			t.Fatalf("GetViewUpdate(vms, %s) error = %v", projectID, err)
+		}
+		if updatedAt == "" {
+			t.Fatalf("vms view not marked updated for %s", projectID)
+		}
+	}
+}
+
+func TestRefreshProjectViewsAllProjectsWithoutProjects(t *testing.T) {
+	a := newFetchTestApp(t)
+	defer restoreSeams(t)()
+	emptySeams(t)
+	resetAppState()
+	appState.AllProjects = true
+	// The test fixture seeds project p1; drop it so the cache holds none.
+	if _, err := a.cache.DeleteProject("p1"); err != nil {
+		t.Fatalf("DeleteProject(p1) error = %v", err)
+	}
+
+	a.refreshProjectViews()
+
+	waitFor(t, a, func() bool {
+		return strings.Contains(a.status.GetText(false), "No cached projects to update")
+	})
+}
+
+func TestRefreshProjectViewsAllProjectsCountsFailures(t *testing.T) {
+	a := newFetchTestApp(t)
+	defer restoreSeams(t)()
+	failingSeams(t)
+	resetAppState()
+	appState.AllProjects = true
+	if err := a.cache.SaveProjects([]providers.Project{
+		{ProjectID: "p1", Name: "P One", ProjectNumber: "111"},
+		{ProjectID: "p2", Name: "P Two", ProjectNumber: "222"},
+	}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
 
 	a.refreshProjectViews()
 
