@@ -298,9 +298,16 @@ func populateInfobarCommands(view *tview.TextView, text string, screenWidth int)
 }
 
 // infobarShowsFilterPaths reports whether the infobar should list the view's
-// detail-filter paths instead of the view shortcuts: filter mode.
+// detail-filter paths instead of the view shortcuts: filter mode, but only
+// while the bottom input is the active filter editor or the search panel is
+// closed. While global search is open, searchPreview/searchSelect drive the
+// bottom input with the landed query, and the query's head token is not a
+// path the user is typing, so a miss would blank the bar — show shortcuts.
 func (a *app) infobarShowsFilterPaths() bool {
-	return appState.CmdMode == modeFilter
+	if appState.CmdMode != modeFilter {
+		return false
+	}
+	return a.cmdFocused || !a.searchOpen.Load()
 }
 
 // infobarFilterPathMatches filters the cached paths by a case-insensitive

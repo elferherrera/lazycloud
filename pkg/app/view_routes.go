@@ -65,9 +65,6 @@ var routesView = viewDef{
 		}
 		return routeRows(routes), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d routes for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewRoutes, "routes", fetchProjectRoutes),
 	fetch:   fetchProjectRoutes,
 	resource: func(a *app, row []string) (any, error) {
@@ -88,9 +85,6 @@ var routesAllView = viewDef{
 			return nil, err
 		}
 		return routeRowsAll(routes), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d routes for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewRoutesAll, "routes", "routes", "routes", fetchProjectRoutes),
 	resource: func(a *app, row []string) (any, error) {

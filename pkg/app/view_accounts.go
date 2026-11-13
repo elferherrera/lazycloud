@@ -66,9 +66,6 @@ var accountsView = viewDef{
 		}
 		return serviceAccountRows(accounts), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d service accounts for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewAccounts, "service accounts", fetchProjectAccounts),
 	fetch:   fetchProjectAccounts,
 	resource: func(a *app, row []string) (any, error) {
@@ -89,9 +86,6 @@ var accountsAllView = viewDef{
 			return nil, err
 		}
 		return serviceAccountRowsAll(accounts), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d service accounts for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewAccountsAll, "accounts", "service accounts", "service accounts", fetchProjectAccounts),
 	resource: func(a *app, row []string) (any, error) {

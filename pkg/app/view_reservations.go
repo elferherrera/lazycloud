@@ -60,9 +60,6 @@ var reservationsView = viewDef{
 		}
 		return reservationRows(reservations), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d reservations for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewReservations, "reservations", fetchProjectReservations),
 	fetch:   fetchProjectReservations,
 	resource: func(a *app, row []string) (any, error) {
@@ -83,9 +80,6 @@ var reservationsAllView = viewDef{
 			return nil, err
 		}
 		return reservationRowsAll(reservations), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d reservations for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewReservationsAll, "reservations", "reservations", "reservations", fetchProjectReservations),
 	resource: func(a *app, row []string) (any, error) {

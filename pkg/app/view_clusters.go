@@ -71,9 +71,6 @@ var clustersView = viewDef{
 		}
 		return clusterRows(clusters), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d clusters for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewClusters, "clusters", fetchProjectClusters),
 	fetch:   fetchProjectClusters,
 	resource: func(a *app, row []string) (any, error) {
@@ -94,9 +91,6 @@ var clustersAllView = viewDef{
 			return nil, err
 		}
 		return clusterRowsAll(clusters), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d clusters for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewClustersAll, "clusters", "clusters", "clusters", fetchProjectClusters),
 	resource: func(a *app, row []string) (any, error) {

@@ -77,9 +77,6 @@ var rolesView = viewDef{
 		}
 		return customRoleRows(roles), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d custom roles for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewRoles, "custom roles", fetchProjectRoles),
 	fetch:   fetchProjectRoles,
 	resource: func(a *app, row []string) (any, error) {
@@ -102,11 +99,8 @@ var rolesAllView = viewDef{
 		}
 		return customRoleRowsAll(roles), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d custom roles for all projects", count)
-	},
 	refresh: func(a *app) {
-		a.statusInfo("Fetching custom roles for all projects...")
+		a.statusProgress("Fetching custom roles for all projects...")
 		go func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -117,7 +111,7 @@ var rolesAllView = viewDef{
 			failed := 0
 			for _, p := range projects {
 				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching custom roles for %s...", p.ProjectID))
+					a.statusProgress(fmt.Sprintf("Fetching custom roles for %s...", p.ProjectID))
 				})
 				roles, err := listProjectCustomRoles(p.ProjectID)
 				if err != nil {

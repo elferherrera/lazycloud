@@ -62,9 +62,6 @@ var vpnsView = viewDef{
 		}
 		return vpnGatewayRows(gateways), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d VPN gateways for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewVPNs, "VPN gateways", fetchProjectVPNs),
 	fetch:   fetchProjectVPNs,
 	resource: func(a *app, row []string) (any, error) {
@@ -85,9 +82,6 @@ var vpnsAllView = viewDef{
 			return nil, err
 		}
 		return vpnGatewayRowsAll(gateways), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d VPN gateways for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewVPNsAll, "vpns", "VPN gateways", "VPN gateways", fetchProjectVPNs),
 	resource: func(a *app, row []string) (any, error) {

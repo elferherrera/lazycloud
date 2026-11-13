@@ -60,9 +60,6 @@ var imagesView = viewDef{
 		}
 		return imageRows(images), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d images for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewImages, "images", fetchProjectImages),
 	fetch:   fetchProjectImages,
 	resource: func(a *app, row []string) (any, error) {
@@ -83,9 +80,6 @@ var imagesAllView = viewDef{
 			return nil, err
 		}
 		return imageRowsAll(images), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d images for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewImagesAll, "images", "images", "images", fetchProjectImages),
 	resource: func(a *app, row []string) (any, error) {

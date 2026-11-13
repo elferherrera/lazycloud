@@ -57,9 +57,6 @@ var dnsZonesView = viewDef{
 		}
 		return dnsZoneRows(zones), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d dns zones for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewDNSZones, "dns zones", fetchProjectDNSZones),
 	fetch:   fetchProjectDNSZones,
 	resource: func(a *app, row []string) (any, error) {
@@ -80,9 +77,6 @@ var dnsZonesAllView = viewDef{
 			return nil, err
 		}
 		return dnsZoneRowsAll(zones), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d dns zones for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewDNSZonesAll, "dns-zones", "dns zones", "dns zones", fetchProjectDNSZones),
 	resource: func(a *app, row []string) (any, error) {

@@ -16,11 +16,8 @@ var publicImagesView = viewDef{
 		}
 		return imageRowsAll(images), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d public images", count)
-	},
 	refresh: func(a *app) {
-		a.statusInfo("Fetching public images...")
+		a.statusProgress("Fetching public images...")
 		a.goBackground(func() {
 			prog := newProgress(len(providers.PublicImageProjects))
 			stop := a.startProgressTicker(prog)
@@ -31,7 +28,7 @@ var publicImagesView = viewDef{
 				prog.advance(fmt.Sprintf("Fetching public images from %s...", projectID))
 				a.queueUpdateDraw(func() {
 					if cur, ok := prog.current(); ok {
-						a.statusInfo(cur)
+						a.statusProgress(cur)
 					}
 				})
 				images, err := listProjectImages(projectID)

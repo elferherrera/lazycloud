@@ -8,7 +8,6 @@ type viewDef struct {
 	title      string
 	headers    []string
 	load       func(a *app) ([][]string, error)
-	status     func(a *app, count int) string
 	refresh    func(a *app)
 	fetch      func(a *app, projectID string) (int, string, error)
 	selectRow  func(a *app, row, col int)
@@ -113,7 +112,7 @@ func projectRefresh(kind viewKind, label string, fetch func(a *app, projectID st
 			a.statusText("[red]No project selected[-]")
 			return
 		}
-		a.statusInfo("Fetching " + label + "...")
+		a.statusProgress("Fetching " + label + "...")
 		a.goBackground(func() {
 			projectID := appState.ProjectID
 			_, msg, err := fetch(a, projectID)

@@ -76,9 +76,6 @@ var vmsView = viewDef{
 		}
 		return vmRows(vms), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d VMs for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewVMs, "VMs", fetchProjectVMs),
 	fetch:   fetchProjectVMs,
 	resource: func(a *app, row []string) (any, error) {
@@ -99,9 +96,6 @@ var vmsAllView = viewDef{
 			return nil, err
 		}
 		return vmRowsAll(vms), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d VMs for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewVMsAll, "vms", "VMs", "VMs", fetchProjectVMs),
 	resource: func(a *app, row []string) (any, error) {

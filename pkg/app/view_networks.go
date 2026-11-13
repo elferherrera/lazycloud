@@ -104,9 +104,6 @@ var networksView = viewDef{
 		}
 		return networkRows(networks, subnetworks), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d network resources for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewNetworks, "networks", fetchProjectNetworks),
 	fetch:   fetchProjectNetworks,
 	resource: func(a *app, row []string) (any, error) {
@@ -137,11 +134,8 @@ var networksAllView = viewDef{
 		}
 		return networkRowsAll(networks, subnetworks), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d network resources for all projects", count)
-	},
 	refresh: func(a *app) {
-		a.statusInfo("Fetching networks for all projects...")
+		a.statusProgress("Fetching networks for all projects...")
 		a.goBackground(func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -157,7 +151,7 @@ var networksAllView = viewDef{
 				prog.advance(fmt.Sprintf("Fetching networks for %s...", p.ProjectID))
 				a.queueUpdateDraw(func() {
 					if cur, ok := prog.current(); ok {
-						a.statusInfo(cur)
+						a.statusProgress(cur)
 					}
 				})
 				networks, err := listProjectNetworks(p.ProjectID)

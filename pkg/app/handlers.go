@@ -850,7 +850,7 @@ func (a *app) refreshProjectViews() {
 		return
 	}
 	projectID := appState.ProjectID
-	a.statusInfo(fmt.Sprintf("Updating all views for %s...", projectID))
+	a.statusProgress(fmt.Sprintf("Updating all views for %s...", projectID))
 	for _, kind := range projectViewKinds {
 		a.markAutoFetched(autoFetchKey(kind, projectID))
 	}
@@ -864,7 +864,7 @@ func (a *app) refreshProjectViews() {
 			p.advance("Fetching " + def.title)
 			a.queueUpdateDraw(func() {
 				if cur, ok := p.current(); ok {
-					a.statusInfo(cur)
+					a.statusProgress(cur)
 				}
 			})
 			if _, _, err := def.fetch(a, projectID); err != nil {
@@ -891,7 +891,7 @@ func (a *app) refreshProjectViews() {
 // and view being fetched in the status line. Fetch errors are logged and
 // surfaced in the status and summary, counted in the final report.
 func (a *app) refreshAllProjectsViews() {
-	a.statusInfo("Updating all views for all projects...")
+	a.statusProgress("Updating all views for all projects...")
 	a.goBackground(func() {
 		projects, err := a.cache.ListProjects()
 		if err != nil {
@@ -918,7 +918,7 @@ func (a *app) refreshAllProjectsViews() {
 				p.advance(fmt.Sprintf("Fetching %s for %s", def.title, proj.ProjectID))
 				a.queueUpdateDraw(func() {
 					if cur, ok := p.current(); ok {
-						a.statusInfo(cur)
+						a.statusProgress(cur)
 					}
 				})
 				if _, _, err := def.fetch(a, proj.ProjectID); err != nil {

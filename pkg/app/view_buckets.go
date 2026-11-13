@@ -71,9 +71,6 @@ var bucketsView = viewDef{
 		}
 		return bucketRows(buckets), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d buckets for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewBuckets, "buckets", fetchProjectBuckets),
 	fetch:   fetchProjectBuckets,
 	resource: func(a *app, row []string) (any, error) {
@@ -94,9 +91,6 @@ var bucketsAllView = viewDef{
 			return nil, err
 		}
 		return bucketRowsAll(buckets), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d buckets for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewBucketsAll, "buckets", "buckets", "buckets", fetchProjectBuckets),
 	resource: func(a *app, row []string) (any, error) {

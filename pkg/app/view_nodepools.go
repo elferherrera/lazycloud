@@ -60,9 +60,6 @@ var nodePoolsView = viewDef{
 		}
 		return nodePoolRows(cl.NodePools, nodes), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d node pools for cluster %s (project %s)", count, appState.Cluster, appState.ClusterProject)
-	},
 	refresh: func(a *app) {
 		if appState.ClusterProject == "" || appState.Cluster == "" {
 			a.statusText("[red]No cluster selected (press n on a cluster row)[-]")
@@ -77,7 +74,7 @@ var nodePoolsView = viewDef{
 			a.statusText("[red]Cluster not found in cache (press u in the clusters view to refresh)[-]")
 			return
 		}
-		a.statusInfo(fmt.Sprintf("Fetching nodes for %s...", appState.Cluster))
+		a.statusProgress(fmt.Sprintf("Fetching nodes for %s...", appState.Cluster))
 		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
@@ -188,7 +185,7 @@ func (a *app) showNodePoolVMs() {
 	renderSummary(a.summary)
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
-		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
+		a.statusProgress(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
 		a.goBackground(func() { a.fetchNodePoolVMs(pool) })
 		return
 	}

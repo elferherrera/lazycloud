@@ -25,11 +25,8 @@ var projectsView = viewDef{
 		}
 		return projectRows(projects), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d projects", count)
-	},
 	refresh: func(a *app) {
-		a.statusInfo("Fetching projects...")
+		a.statusProgress("Fetching projects...")
 		a.goBackground(func() {
 			projects, err := listGcloudProjects()
 			if err != nil {

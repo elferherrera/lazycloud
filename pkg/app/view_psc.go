@@ -122,9 +122,6 @@ var pscView = viewDef{
 		}
 		return pscRows(attachments, pscEndpoints(rules)), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d PSC resources for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewPSC, "PSC resources", fetchProjectPSC),
 	fetch:   fetchProjectPSC,
 	resource: func(a *app, row []string) (any, error) {
@@ -152,9 +149,6 @@ var pscAllView = viewDef{
 			return nil, err
 		}
 		return pscRowsAll(attachments, pscEndpoints(rules)), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d PSC resources for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewPSCAll, "psc", "PSC resources", "PSC resources", fetchProjectPSC),
 	resource: func(a *app, row []string) (any, error) {

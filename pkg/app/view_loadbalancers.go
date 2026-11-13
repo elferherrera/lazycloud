@@ -119,9 +119,6 @@ var lbsView = viewDef{
 		}
 		return lbRows(a.cache, appState.ProjectID, rules), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d load balancers for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewLBs, "load balancers", fetchProjectLBs),
 	fetch:   fetchProjectLBs,
 	resource: func(a *app, row []string) (any, error) {
@@ -142,9 +139,6 @@ var lbsAllView = viewDef{
 			return nil, err
 		}
 		return lbRowsAll(a.cache, rules), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d load balancers for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewLBsAll, "lbs", "load balancers", "load balancers", fetchProjectLBs),
 	resource: func(a *app, row []string) (any, error) {

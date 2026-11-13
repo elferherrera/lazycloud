@@ -85,9 +85,6 @@ var instanceTemplatesView = viewDef{
 		}
 		return instanceTemplateRows(templates), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d instance templates for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewInstanceTemplates, "instance templates", fetchProjectInstanceTemplates),
 	fetch:   fetchProjectInstanceTemplates,
 	resource: func(a *app, row []string) (any, error) {
@@ -108,9 +105,6 @@ var instanceTemplatesAllView = viewDef{
 			return nil, err
 		}
 		return instanceTemplateRowsAll(templates), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d instance templates for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewInstanceTemplatesAll, "instance-templates", "instance templates", "instance templates", fetchProjectInstanceTemplates),
 	resource: func(a *app, row []string) (any, error) {
@@ -198,7 +192,7 @@ func (a *app) showTemplateVMs() {
 	renderSummary(a.summary)
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
-		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
+		a.statusProgress(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
 		a.goBackground(func() { a.fetchTemplateVMs(template) })
 		return
 	}

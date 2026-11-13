@@ -87,9 +87,6 @@ var ipsView = viewDef{
 		}
 		return ipAddressRows(resolveIPNetworks(ips, networks)), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d IP addresses for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewIPs, "IP addresses", fetchProjectIPs),
 	fetch:   fetchProjectIPs,
 	resource: func(a *app, row []string) (any, error) {
@@ -154,9 +151,6 @@ var ipsAllView = viewDef{
 			networks = subnetNetworkMap(subs)
 		}
 		return ipAddressRowsAll(resolveIPNetworks(ips, networks)), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d IP addresses for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewIPsAll, "ips", "IPs", "IP addresses", fetchProjectIPs),
 	resource: func(a *app, row []string) (any, error) {

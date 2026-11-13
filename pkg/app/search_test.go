@@ -507,3 +507,65 @@ func TestSearchTabCyclesFocus(t *testing.T) {
 	}
 	a.closeSearch()
 }
+
+func TestStatusBarShowsOnlyErrorsAndUpdates(t *testing.T) {
+	savedView := appState.ViewKind
+	savedPrev := appState.PrevViewKind
+	t.Cleanup(func() { appState.ViewKind = savedView; appState.PrevViewKind = savedPrev })
+
+	a := newFilterTestApp(t)
+	sim := infobarSimScreen(t, 200, 40)
+	a.screen = sim
+	a.buildMainLayout(a.helpRow)
+	a.tapp.SetRoot(a.pages, true)
+	draw := func() { a.rootView.Draw(sim) }
+
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 0 {
+		t.Fatalf("status height = %d, want 0 at rest", h)
+	}
+
+	a.statusInfo("3 projects")
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 0 {
+		t.Fatal("plain info status expands the row")
+	}
+
+	a.statusProgress("Fetching VMs...")
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 1 {
+		t.Fatal("update notice does not expand the status row")
+	}
+
+	a.statusText("[green]Fetched 12 VMs[-]")
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 1 {
+		t.Fatal("success status does not keep the status row")
+	}
+
+	a.statusText("[red]fetch failed[-]")
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 1 {
+		t.Fatal("error does not expand the status row")
+	}
+	if !a.statusShowing {
+		t.Fatal("statusText does not classify [red] text as shown")
+	}
+
+	a.statusText("")
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 0 {
+		t.Fatal("cleared status keeps the row visible")
+	}
+
+	a.statusProgress("Fetching VMs...")
+	draw()
+	a.setView(viewVMs)
+	draw()
+	if _, _, _, h := a.status.GetRect(); h != 0 {
+		t.Fatal("switching views keeps the status row visible")
+	}
+	if a.status.GetText(true) != "" {
+		t.Fatalf("switching views keeps status text %q", a.status.GetText(true))
+	}
+}

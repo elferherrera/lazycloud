@@ -59,9 +59,6 @@ var firewallsView = viewDef{
 		}
 		return firewallRows(rules), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d firewall rules for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewFirewalls, "firewall rules", fetchProjectFirewalls),
 	fetch:   fetchProjectFirewalls,
 	resource: func(a *app, row []string) (any, error) {
@@ -82,9 +79,6 @@ var firewallsAllView = viewDef{
 			return nil, err
 		}
 		return firewallRowsAll(rules), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d firewall rules for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewFirewallsAll, "firewalls", "firewall rules", "firewall rules", fetchProjectFirewalls),
 	resource: func(a *app, row []string) (any, error) {

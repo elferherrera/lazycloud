@@ -355,10 +355,10 @@ func (a *app) buildSearchPanel() {
 }
 
 // buildMainLayout wires the shared widget tree run() mounts: the header row
-// on top spanning the full width, below it the search side panel next to the
-// main view in a zero-width column, then the infobar and status bar spanning
-// the full width. It exists apart from run() so tests can exercise the real
-// wiring without starting the terminal loop.
+// on top spanning the full width, the status bar right under it, then the
+// search side panel next to the main view in a zero-width column, with the
+// infobar spanning the full width at the bottom. It exists apart from run()
+// so tests can exercise the real wiring without starting the terminal loop.
 func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 	a.buildSearchPanel()
 	a.info.SetFocusFunc(func() { a.updateFocusStyles() })
@@ -379,14 +379,14 @@ func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 	// fixed slice so the main view shrinks instead of being covered.
 	searchColumn := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(a.searchPanel, 0, 0, false).
-		AddItem(mainView, 0, 1, false)
+		AddItem(mainView, 0, 1, true)
 	a.searchColumn = searchColumn
 
 	root := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(summary, 4, 1, false).
+		AddItem(a.status, 0, 0, false).
 		AddItem(searchColumn, 0, 1, true).
-		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
-		AddItem(a.status, 1, 1, false)
+		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false)
 	a.rootView = root
 
 	a.pages.AddPage("main", root, true, true)
@@ -428,6 +428,7 @@ func (a *app) openSearch() {
 	a.tapp.SetFocus(a.searchInput)
 	a.runSearch()
 	a.updateFocusStyles()
+	a.refreshInfobar()
 	a.ensureSearchIndex(false)
 	a.ensureSearchProjects()
 }

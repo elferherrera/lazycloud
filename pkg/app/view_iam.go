@@ -65,9 +65,6 @@ var iamView = viewDef{
 		}
 		return iamBindingRows(bindings), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d IAM bindings for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewIAM, "IAM policy", fetchProjectIAM),
 	fetch:   fetchProjectIAM,
 	resource: func(a *app, row []string) (any, error) {
@@ -88,9 +85,6 @@ var iamAllView = viewDef{
 			return nil, err
 		}
 		return iamBindingRowsAll(bindings), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d IAM bindings for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewIAMAll, "iam", "IAM policy", "IAM bindings", fetchProjectIAM),
 	resource: func(a *app, row []string) (any, error) {

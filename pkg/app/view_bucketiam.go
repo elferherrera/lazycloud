@@ -41,15 +41,12 @@ var bucketIAMView = viewDef{
 		}
 		return bucketIAMRows(bindings), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d IAM bindings for bucket %s (project %s)", count, appState.Bucket, appState.BucketProject)
-	},
 	refresh: func(a *app) {
 		if appState.BucketProject == "" || appState.Bucket == "" {
 			a.statusText("[red]No bucket selected (press i on a bucket row)[-]")
 			return
 		}
-		a.statusInfo(fmt.Sprintf("Fetching IAM policy for %s...", appState.Bucket))
+		a.statusProgress(fmt.Sprintf("Fetching IAM policy for %s...", appState.Bucket))
 		a.goBackground(func() {
 			projectID := appState.BucketProject
 			bucket := appState.Bucket

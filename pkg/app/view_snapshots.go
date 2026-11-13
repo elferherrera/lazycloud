@@ -59,9 +59,6 @@ var snapshotsView = viewDef{
 		}
 		return snapshotRows(snapshots), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d snapshots for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewSnapshots, "snapshots", fetchProjectSnapshots),
 	fetch:   fetchProjectSnapshots,
 	resource: func(a *app, row []string) (any, error) {
@@ -82,9 +79,6 @@ var snapshotsAllView = viewDef{
 			return nil, err
 		}
 		return snapshotRowsAll(snapshots), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d snapshots for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewSnapshotsAll, "snapshots", "snapshots", "snapshots", fetchProjectSnapshots),
 	resource: func(a *app, row []string) (any, error) {

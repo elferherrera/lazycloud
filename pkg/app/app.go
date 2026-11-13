@@ -62,6 +62,7 @@ type app struct {
 	searchPanelFocus  bool
 	searchOpen        atomic.Bool
 	cmdFocused        bool
+	statusShowing     bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -125,10 +126,34 @@ func populateInfoPanel(table *tview.Table, headers []string, rows [][]string) {
 
 func (a *app) statusText(text string) {
 	a.status.SetText(text)
+	a.statusShowing = strings.HasPrefix(text, "[red]") || strings.HasPrefix(text, "[green]")
+	a.updateStatusHeight()
 }
 
 func (a *app) statusInfo(text string) {
 	a.statusText(theme.statusLabelTag() + text + "[-]")
+}
+
+// statusProgress reports an in-flight update (fetching, refreshing) so the
+// status row stays visible for its duration.
+func (a *app) statusProgress(text string) {
+	a.statusInfo(text)
+	a.statusShowing = true
+	a.updateStatusHeight()
+}
+
+// updateStatusHeight keeps the status row collapsed except while the current
+// status is an error, a success, or an update notice — errors and successes
+// stay hardcoded [red]/[green], so statusText classifies by prefix.
+func (a *app) updateStatusHeight() {
+	if a.rootView == nil {
+		return
+	}
+	height := 0
+	if a.statusShowing {
+		height = 1
+	}
+	a.rootView.ResizeItem(a.status, height, height)
 }
 
 func (a *app) reportError(view, projectID, message string, err error) {
@@ -261,6 +286,7 @@ func (a *app) setView(kind viewKind) {
 	}
 	appState.ViewKind = kind
 	a.clearFilterStash()
+	a.statusText("")
 	a.refreshShortcuts()
 	a.refreshInfobar()
 	a.viewHeaders = def.headers
@@ -268,9 +294,6 @@ func (a *app) setView(kind viewKind) {
 	a.setFilterBase(rows)
 	a.cmd.SetText("")
 	a.applyFilter()
-	if def.status != nil {
-		a.statusInfo(def.status(a, len(rows)))
-	}
 	if !a.autoFetchIfEmpty(kind, def, rows) {
 		a.autoRefreshStale(kind, def)
 	}

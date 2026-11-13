@@ -75,9 +75,6 @@ var peeringsView = viewDef{
 		}
 		return peeringRows(peerings), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d network peerings for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewPeerings, "network peerings", fetchProjectPeerings),
 	fetch:   fetchProjectPeerings,
 	resource: func(a *app, row []string) (any, error) {
@@ -98,9 +95,6 @@ var peeringsAllView = viewDef{
 			return nil, err
 		}
 		return peeringRowsAll(peerings), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d network peerings for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewPeeringsAll, "peerings", "network peerings", "network peerings", fetchProjectPeerings),
 	resource: func(a *app, row []string) (any, error) {

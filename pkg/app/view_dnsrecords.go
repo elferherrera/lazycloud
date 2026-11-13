@@ -39,15 +39,12 @@ var dnsRecordsView = viewDef{
 		}
 		return dnsRecordRows(records), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d dns records for zone %s (project %s)", count, appState.Zone, appState.ZoneProject)
-	},
 	refresh: func(a *app) {
 		if appState.ZoneProject == "" || appState.Zone == "" {
 			a.statusText("[red]No dns zone selected (press d on a zone row)[-]")
 			return
 		}
-		a.statusInfo(fmt.Sprintf("Fetching dns records for %s...", appState.Zone))
+		a.statusProgress(fmt.Sprintf("Fetching dns records for %s...", appState.Zone))
 		a.goBackground(func() {
 			projectID := appState.ZoneProject
 			zone := appState.Zone

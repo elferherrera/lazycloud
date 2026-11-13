@@ -59,9 +59,6 @@ var instanceGroupsView = viewDef{
 		}
 		return instanceGroupRows(groups), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d instance groups for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewInstanceGroups, "instance groups", fetchProjectInstanceGroups),
 	fetch:   fetchProjectInstanceGroups,
 	resource: func(a *app, row []string) (any, error) {
@@ -82,9 +79,6 @@ var instanceGroupsAllView = viewDef{
 			return nil, err
 		}
 		return instanceGroupRowsAll(groups), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d instance groups for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewInstanceGroupsAll, "instance-groups", "instance groups", "instance groups", fetchProjectInstanceGroups),
 	resource: func(a *app, row []string) (any, error) {
@@ -141,7 +135,7 @@ func (a *app) showInstanceGroupVMs() {
 		appState.ProjectNumber = p.ProjectNumber
 	}
 	renderSummary(a.summary)
-	a.statusInfo(fmt.Sprintf("Fetching VMs for instance group %s...", group))
+	a.statusProgress(fmt.Sprintf("Fetching VMs for instance group %s...", group))
 	a.goBackground(func() { a.fetchInstanceGroupVMs(location, group) })
 }
 

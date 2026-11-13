@@ -726,3 +726,71 @@ func stripColorTags(s string) string {
 	}
 	return sb.String()
 }
+
+func TestInfobarFilterPathsGateWhileSearchOpen(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeFilter
+	appState.ViewKind = viewVMs
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+
+	a.refreshInfobar()
+	if !strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("filter mode infobar does not list the VM detail paths")
+	}
+
+	a.searchOpen.Store(true)
+	t.Cleanup(func() { a.searchOpen.Store(false) })
+	a.refreshInfobar()
+	text := a.infobar.GetText(true)
+	if strings.Contains(text, "BootDisk") {
+		t.Fatal("infobar lists detail paths while the search panel is open")
+	}
+	if text == "" {
+		t.Fatal("infobar goes blank when the search panel opens in filter mode")
+	}
+
+	a.tapp.SetFocus(a.cmd)
+	t.Cleanup(func() { a.tapp.SetFocus(a.info) })
+	a.refreshInfobar()
+	if !strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("infobar does not return to detail paths when the bottom input is focused with the search panel open")
+	}
+}
+
+func TestInfobarSearchPreviewKeepsShortcuts(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeCmd
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.buildMainLayout(a.helpRow)
+	a.setView(viewProjects)
+	a.searchIndex = newSearchIndex()
+	a.openSearch()
+	waitFor(t, a, func() bool { return a.searchIndex.warmCount() == len(searchKinds) })
+
+	a.searchInput.SetText("other")
+	if !a.searchOpen.Load() {
+		t.Fatal("openSearch did not open the search panel")
+	}
+	if len(a.searchRowGroups) == 0 {
+		t.Fatal("seeded VMs produced no search hits")
+	}
+	if appState.CmdMode != modeFilter || a.cmd.GetText() != "other" {
+		t.Fatalf("searchPreview did not land the query, mode=%v cmd=%q", appState.CmdMode, a.cmd.GetText())
+	}
+	text := stripColorTags(a.infobar.GetText(true))
+	if text == "" {
+		t.Fatal("infobar goes blank while search results preview")
+	}
+	if !strings.Contains(text, "update") {
+		t.Fatalf("infobar does not show the shortcuts line while search results preview, got %q", text)
+	}
+}

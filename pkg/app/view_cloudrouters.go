@@ -67,9 +67,6 @@ var cloudRoutersView = viewDef{
 		}
 		return cloudRouterRows(routers), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d cloud routers for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewCloudRouters, "cloud routers", fetchProjectCloudRouters),
 	fetch:   fetchProjectCloudRouters,
 	resource: func(a *app, row []string) (any, error) {
@@ -90,9 +87,6 @@ var cloudRoutersAllView = viewDef{
 			return nil, err
 		}
 		return cloudRouterRowsAll(routers), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d cloud routers for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewCloudRoutersAll, "cloud-routers", "cloud routers", "cloud routers", fetchProjectCloudRouters),
 	resource: func(a *app, row []string) (any, error) {

@@ -60,9 +60,6 @@ var disksView = viewDef{
 		}
 		return diskRows(disks), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d disks for %s", count, appState.ProjectID)
-	},
 	refresh: projectRefresh(viewDisks, "disks", fetchProjectDisks),
 	fetch:   fetchProjectDisks,
 	resource: func(a *app, row []string) (any, error) {
@@ -83,9 +80,6 @@ var disksAllView = viewDef{
 			return nil, err
 		}
 		return diskRowsAll(disks), nil
-	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d disks for all projects", count)
 	},
 	refresh: allProjectsRefresh(viewDisksAll, "disks", "disks", "disks", fetchProjectDisks),
 	resource: func(a *app, row []string) (any, error) {

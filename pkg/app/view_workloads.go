@@ -41,9 +41,6 @@ var workloadsView = viewDef{
 		}
 		return workloadRows(workloads), nil
 	},
-	status: func(a *app, count int) string {
-		return fmt.Sprintf("%d workloads for cluster %s (project %s)", count, appState.Cluster, appState.ClusterProject)
-	},
 	refresh: func(a *app) {
 		if appState.ClusterProject == "" || appState.Cluster == "" {
 			a.statusText("[red]No cluster selected (press w on a cluster row)[-]")
@@ -58,7 +55,7 @@ var workloadsView = viewDef{
 			a.statusText("[red]Cluster not found in cache (press u in the clusters view to refresh)[-]")
 			return
 		}
-		a.statusInfo(fmt.Sprintf("Fetching workloads for %s...", appState.Cluster))
+		a.statusProgress(fmt.Sprintf("Fetching workloads for %s...", appState.Cluster))
 		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster

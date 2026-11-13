@@ -116,7 +116,7 @@ func (a *app) startProgressTicker(p *progress) (stop func()) {
 			case <-ticker.C:
 				a.queueUpdateDraw(func() {
 					if msg, ok := p.tick(); ok {
-						a.statusInfo(msg)
+						a.statusProgress(msg)
 					}
 				})
 			}
@@ -138,7 +138,7 @@ func (a *app) startProgressTicker(p *progress) (stop func()) {
 // the final summary; logView is the reportError and log view name.
 func allProjectsRefresh(kind viewKind, logView, stepLabel, totalLabel string, fetch func(a *app, projectID string) (int, string, error)) func(a *app) {
 	return func(a *app) {
-		a.statusInfo(fmt.Sprintf("Fetching %s for all projects...", stepLabel))
+		a.statusProgress(fmt.Sprintf("Fetching %s for all projects...", stepLabel))
 		a.goBackground(func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
@@ -153,7 +153,7 @@ func allProjectsRefresh(kind viewKind, logView, stepLabel, totalLabel string, fe
 				p.advance(fmt.Sprintf("Fetching %s for %s...", stepLabel, proj.ProjectID))
 				a.queueUpdateDraw(func() {
 					if cur, ok := p.current(); ok {
-						a.statusInfo(cur)
+						a.statusProgress(cur)
 					}
 				})
 				count, _, err := fetch(a, proj.ProjectID)

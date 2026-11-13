@@ -136,7 +136,6 @@ func bootApp() (*app, func(), error) {
 
 	renderSummary(a.summary)
 	a.setView(viewProjects)
-	a.statusText("help ?")
 
 	tapp.SetRoot(a.pages, true)
 	tapp.SetInputCapture(a.inputCapture)
