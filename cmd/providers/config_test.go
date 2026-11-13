@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -389,8 +390,11 @@ func TestConfigThemesMapMigration(t *testing.T) {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
 		spec, ok := got.Themes[DefaultThemeName]
-		if !ok || len(got.Themes) != 1 {
-			t.Fatalf("LoadConfig() themes = %+v, want a single %q pack", got.Themes, DefaultThemeName)
+		if !ok {
+			t.Fatalf("LoadConfig() themes missing the %q pack: %+v", DefaultThemeName, got.Themes)
+		}
+		if len(got.Themes) != 1+len(BundledThemeSpecs()) {
+			t.Fatalf("LoadConfig() themes has %d packs, want the default plus %d bundles", len(got.Themes), len(BundledThemeSpecs()))
 		}
 		if spec.Dark.Labels != "aqua" || spec.Dark.Text != defaultTheme.Text {
 			t.Fatalf("default pack dark = %+v, want explicit labels with filled text", spec.Dark)
@@ -417,8 +421,8 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
-		if len(got.Themes) != 2 {
-			t.Fatalf("LoadConfig() themes = %+v, want ocean and forest kept", got.Themes)
+		if len(got.Themes) != 2+len(BundledThemeSpecs()) {
+			t.Fatalf("LoadConfig() themes has %d packs, want ocean, forest and the %d bundles", len(got.Themes), len(BundledThemeSpecs()))
 		}
 		ocean := got.Themes["ocean"]
 		if ocean.Dark.Labels != "aqua" || ocean.Dark.Text != defaultTheme.Text {
@@ -453,6 +457,121 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		}
 		if got.ThemeName != DefaultThemeName {
 			t.Fatalf("LoadConfig() themeName = %q, want fallback to %q", got.ThemeName, DefaultThemeName)
+		}
+	})
+}
+
+// TestConfigSeedsBundledThemesOnce pins the bundle seeding: a fresh or
+// upgraded config gains the shipped palettes plus the bundledThemes flag,
+// a user pack under a bundle name keeps its keys, and the flag stops the
+// seeding from running again so a deleted bundle stays deleted.
+func TestConfigSeedsBundledThemesOnce(t *testing.T) {
+	defaultTheme := Theme{Mode: "system", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
+
+	t.Run("upgraded config gains bundles and the flag", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if !got.BundledThemes {
+			t.Fatal("LoadConfig() did not set the bundledThemes flag")
+		}
+		monokai, ok := got.Themes["monokai"]
+		if !ok {
+			t.Fatalf("LoadConfig() themes missing the monokai bundle: %+v", got.Themes)
+		}
+		if monokai.Dark.Labels != "#a6e22e" || monokai.Dark.Background != "#272822" {
+			t.Fatalf("monokai dark = %+v, want the bundled palette", monokai.Dark)
+		}
+		// Gruvbox, solarized and one-dark ship their canonical light
+		// variants; the rest fill from the built-in light palette.
+		if got.Themes["gruvbox"].Light.Background != "#fbf1c7" {
+			t.Fatalf("gruvbox light background = %q, want the bundled light variant", got.Themes["gruvbox"].Light.Background)
+		}
+		if got.Themes["solarized"].Light.Background != "#fdf6e3" {
+			t.Fatalf("solarized light background = %q, want the bundled light variant", got.Themes["solarized"].Light.Background)
+		}
+		if got.Themes["one-dark"].Light.Background != "#fafafa" {
+			t.Fatalf("one-dark light background = %q, want the bundled light variant", got.Themes["one-dark"].Light.Background)
+		}
+		if got.Themes["monokai"].Light.Background != DefaultLightTheme().Background {
+			t.Fatalf("monokai light background = %q, want the built-in light palette fill", got.Themes["monokai"].Light.Background)
+		}
+		// A second load must not rewrite the file: the flag already says
+		// the bundles are there.
+		before, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar); err != nil {
+			t.Fatal(err)
+		}
+		after, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(before) != string(after) {
+			t.Fatal("LoadConfig() rewrote the config on the second load despite the bundledThemes flag")
+		}
+	})
+
+	t.Run("deleted bundle stays deleted once flagged", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		// Seed once, then hand-delete a bundle from the file.
+		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pruned := strings.Replace(string(data), "  monokai:\n", "  monokai-gone:\n", 1)
+		if pruned == string(data) {
+			t.Fatal("test could not find the monokai pack to rename")
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(pruned), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.Themes["monokai"]; ok {
+			t.Fatal("LoadConfig() re-seeded the deleted monokai bundle despite the flag")
+		}
+		if _, ok := got.Themes["monokai-gone"]; !ok {
+			t.Fatal("LoadConfig() lost the renamed pack")
+		}
+	})
+
+	t.Run("user pack under a bundle name wins", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		content := "themes:\n  nord:\n    dark:\n      labels: lime\n"
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nord := got.Themes["nord"]
+		if nord.Dark.Labels != "lime" {
+			t.Fatalf("nord dark labels = %q, want the user's lime kept over the bundle", nord.Dark.Labels)
 		}
 	})
 }

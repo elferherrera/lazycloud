@@ -33,11 +33,14 @@ type Config struct {
 	// Themes holds every named palette pack; ThemeName selects one.
 	// Kept alongside the two legacy sections so old files load and the
 	// settings panel can switch packs without a second file.
-	Themes     map[string]ThemeSpec `yaml:"themes,omitempty"`
-	ThemeName  string               `yaml:"themeName,omitempty"`
-	Shortcuts  map[string]string    `yaml:"shortcuts"`
-	AutoUpdate AutoUpdate           `yaml:"autoupdate"`
-	Infobar    Infobar              `yaml:"infobar"`
+	Themes    map[string]ThemeSpec `yaml:"themes,omitempty"`
+	ThemeName string               `yaml:"themeName,omitempty"`
+	// BundledThemes records that the shipped palette packs were seeded
+	// into the themes map, so the seeding runs once per config file.
+	BundledThemes bool              `yaml:"bundledThemes,omitempty"`
+	Shortcuts     map[string]string `yaml:"shortcuts"`
+	AutoUpdate    AutoUpdate        `yaml:"autoupdate"`
+	Infobar       Infobar           `yaml:"infobar"`
 }
 
 // ThemeSpec is one named theme pack: a palette for each terminal
@@ -91,6 +94,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		config.ThemeLight = CompleteLightTheme(config.ThemeLight)
 		config.Themes = map[string]ThemeSpec{DefaultThemeName: {Dark: config.Theme, Light: config.ThemeLight}}
 		config.ThemeName = DefaultThemeName
+		seedBundledThemes(&config, defaultTheme)
 		if err := SaveConfig(config); err != nil {
 			return Config{}, err
 		}
@@ -167,6 +171,14 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		// A missing selection falls back to the default pack rather than
 		// painting with empty colors.
 		config.ThemeName = DefaultThemeName
+		rewrote = true
+	}
+	// Seed the bundled palettes once per config file: user packs and
+	// hand-edited bundles keep their keys, deleted bundles stay deleted.
+	// The flag flip itself counts as a rewrite so it persists even when
+	// every bundle was already present.
+	if !config.BundledThemes {
+		seedBundledThemes(&config, defaultTheme)
 		rewrote = true
 	}
 	if rewrote {
