@@ -177,12 +177,98 @@ func (a *app) cycleThemeName(dir int) {
 	configuredThemesDark = spec.Dark
 	configuredThemesLight = spec.Light
 	configuredTheme = configuredThemesDark
+	// The save-as name follows the pack switch: a name typed for the
+	// previous pack would silently rename this one, so the field goes
+	// back to the suggestion.
+	if a.settingsSaveAs != nil {
+		a.settingsSaveAsSuggestion = suggestedThemeName()
+		a.settingsSaveAs.SetText(a.settingsSaveAsSuggestion)
+	}
 	a.previewThemeColors()
 	a.rebuildSettingsForm()
 }
 
 func configuredThemeMode() providers.ThemeMode {
 	return providers.ParseThemeMode(configuredTheme.Mode)
+}
+
+// suggestedThemeName seeds the save-as field: a bundled pack offers its
+// fork name (monokai-custom), a custom pack offers its own name so typing
+// something else creates a copy under that name.
+func suggestedThemeName() string {
+	if providers.IsBundledThemeName(configuredThemeName) {
+		return providers.CustomThemeForkName(configuredThemeName, configuredThemeNameSet())
+	}
+	return configuredThemeName
+}
+
+// configuredThemeNameSet collects the pack names the fork-name picker must
+// dodge, as the set CustomThemeForkName expects.
+func configuredThemeNameSet() map[string]bool {
+	set := make(map[string]bool, len(configuredThemePacks))
+	for name := range configuredThemePacks {
+		set[name] = true
+	}
+	return set
+}
+
+// forkBundledTheme moves a color edit off a bundled seed: the selected pack
+// renames to the fork name and the seed returns to its shipped palette in
+// the pack map, so saving writes the fork while monokai stays monokai.
+// Runs right after a color edit lands in the section (the changed callback
+// calls it after key.set), so the fork snapshot carries the edit, and does
+// nothing once the pack is already custom.
+func (a *app) forkBundledTheme() {
+	if !providers.IsBundledThemeName(configuredThemeName) {
+		return
+	}
+	seedName := configuredThemeName
+	forkName := providers.CustomThemeForkName(seedName, configuredThemeNameSet())
+	// The seed slot goes back to the pristine palette the bundle shipped;
+	// the fork carries the seed palette plus the edit in flight.
+	configuredThemePacks[seedName] = providers.BundledThemeSpecs()[seedName]
+	configuredThemePacks[forkName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	configuredThemeName = forkName
+	if a.sessionForks == nil {
+		a.sessionForks = map[string]bool{}
+	}
+	a.sessionForks[forkName] = true
+	// The Theme row and the save-as field follow the rename unless the
+	// user typed a save-as name already.
+	a.relabelThemeRow(seedName)
+	a.syncSaveAsField()
+	a.statusInfo(seedName + " edits forked as " + forkName)
+}
+
+// syncSaveAsField keeps the save-as name in step with the selected pack
+// while the user has not typed over it: the field offers the fork name of
+// a bundled seed or the pack's own name. It runs after renames and pack
+// switches, and respects whatever the user typed on top.
+func (a *app) syncSaveAsField() {
+	if a.settingsSaveAs == nil {
+		return
+	}
+	if a.settingsSaveAs.GetText() == a.settingsSaveAsSuggestion {
+		newSuggestion := suggestedThemeName()
+		a.settingsSaveAs.SetText(newSuggestion)
+		a.settingsSaveAsSuggestion = newSuggestion
+	}
+}
+
+// relabelThemeRow repaints the Theme row label after a rename without a
+// full rebuild, so the caret stays in the color field being edited. The
+// next rebuild refreshes the rest of the form.
+func (a *app) relabelThemeRow(seedName string) {
+	if a.settingsForm == nil {
+		return
+	}
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		item := a.settingsForm.GetFormItem(i)
+		if cb, ok := item.(*focusCheckbox); ok && cb.base == "Theme: "+seedName {
+			cb.base = "Theme: " + configuredThemeName
+			cb.SetLabel(cb.base)
+		}
+	}
 }
 
 func setConfiguredThemeMode(mode providers.ThemeMode) {
@@ -219,7 +305,7 @@ func (a *app) buildSettingsPage() {
 	// The key summary spans the overlay width under the form, outside the
 	// form itself so no label column eats its space. It is not focusable,
 	// so tab never lands on it and the focus chain stays form, buttons,
-	// then esc closes.
+	// then esc saves and closes.
 	hint := tview.NewTextView().SetDynamicColors(false).SetText(settingsUsageHint)
 	hint.SetTextColor(theme.settingsLabelColor())
 	a.settingsHint = hint
@@ -249,12 +335,13 @@ const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrow
 
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
-// color inputs, config path), the leading blank line inside the border, a
-// blank line before and after the button row, and the border itself.
-// On very short screens the flex hands the form a smaller height and tview
-// scrolls it to the focused item, so every field stays reachable.
+// theme name input, color inputs, config path), the leading blank line
+// inside the border, a blank line before and after the button row, and the
+// border itself. On very short screens the flex hands the form a smaller
+// height and tview scrolls it to the focused item, so every field stays
+// reachable.
 func settingsFormHeight(a *app) int {
-	return len(a.settingsRows()) + len(themeColorKeys) + 7
+	return len(a.settingsRows()) + len(themeColorKeys) + 8
 }
 
 // themeColorCycle is the curated list the color fields cycle through with
@@ -302,6 +389,35 @@ func (a *app) rebuildSettingsForm() {
 		})
 		form.AddFormItem(checkbox)
 	}
+	// Save-as row: the name the current pack saves under. A bundled pack
+	// forks into the suggested name on its first color edit, so the seed
+	// stays pristine; typing a different name saves the colors as a new
+	// pack instead. A typed name survives the refill.
+	saveAs := tview.NewInputField()
+	saveAs.SetFieldWidth(16)
+	suggestion := suggestedThemeName()
+	text := suggestion
+	if a.settingsSaveAs != nil {
+		if typed := a.settingsSaveAs.GetText(); typed != "" && typed != a.settingsSaveAsSuggestion {
+			text = typed
+		}
+	}
+	saveAs.SetText(text)
+	a.settingsSaveAsSuggestion = suggestion
+	a.settingsSaveAs = saveAs
+	// Same focus marker as the checkbox and color rows, so every focusable
+	// row shows which one holds the caret.
+	markSaveAs := func() {
+		marker := noFocusMarker
+		if saveAs.HasFocus() {
+			marker = focusMarker
+		}
+		saveAs.SetLabel(marker + "Save theme as")
+	}
+	saveAs.SetFocusFunc(markSaveAs)
+	saveAs.SetBlurFunc(markSaveAs)
+	markSaveAs()
+	form.AddFormItem(saveAs)
 	section := activeThemeSection(a.settingsBackgroundKind())
 	for _, key := range themeColorKeys {
 		key := key
@@ -312,6 +428,7 @@ func (a *app) rebuildSettingsForm() {
 		field.SetText(key.get(*section))
 		field.SetChangedFunc(func(text string) {
 			key.set(section, text)
+			a.forkBundledTheme()
 			a.previewThemeColors()
 		})
 		// Up and down cycle the curated color list so the palette is
@@ -332,6 +449,11 @@ func (a *app) rebuildSettingsForm() {
 	path, _ := providers.ConfigFilePath()
 	form.AddTextView("Config file", path, 38, 1, false, false)
 	form.AddButton("Open in editor", func() { a.openConfigFile() })
+	// Delete stays honest about what it can do: bundled packs are seeds
+	// that would come back on the next seeding anyway, and deleting the
+	// selected pack needs a fallback, so the button only acts on custom
+	// packs and otherwise explains itself in the status line.
+	form.AddButton("Delete theme", func() { a.deleteTheme() })
 	form.AddButton("Close", func() { a.closeSettings() })
 	if wasFocused {
 		if item >= 0 && item < form.GetFormItemCount() {
@@ -589,12 +711,97 @@ func (a *app) openSettings() {
 	a.pages.ShowPage("settings")
 	a.tapp.SetFocus(a.settingsForm)
 	a.updateSettingsCursorStyle()
-	a.statusInfo("space toggles, arrows cycle colors, tab moves, enter runs a button, esc closes")
+	a.statusInfo("space toggles, arrows cycle colors, tab moves, enter runs a button, esc saves and closes")
+}
+
+// applyTypedThemeName consumes the save-as name at close time: a name typed
+// over the suggestion renames the current pack (an auto-fork from this
+// session is absorbed, leaving one pack behind), and a name that collides
+// with an existing pack or a bundled seed is refused so nothing is silently
+// overwritten. Reports whether the panel can close.
+func (a *app) applyTypedThemeName() bool {
+	if a.settingsSaveAs == nil {
+		return true
+	}
+	typed := strings.TrimSpace(a.settingsSaveAs.GetText())
+	// The untouched suggestion never renames anything: on a bundled pack
+	// it is only the fork preview, so closing without edits must not
+	// create a stray -custom copy.
+	if typed == "" || typed == configuredThemeName || typed == a.settingsSaveAsSuggestion {
+		return true
+	}
+	if _, exists := configuredThemePacks[typed]; exists || providers.IsBundledThemeName(typed) {
+		reason := "already in use"
+		if providers.IsBundledThemeName(typed) {
+			reason = "a bundled theme name"
+		}
+		a.statusText("[red]theme name " + typed + " is " + reason + "[-]")
+		// Keep the panel open with the caret on the offending row so the
+		// name is fixed or cleared instead of silently dropped.
+		a.settingsForm.SetFocus(len(a.settingsRows()))
+		a.tapp.SetFocus(a.settingsForm)
+		return false
+	}
+	if a.sessionForks[configuredThemeName] {
+		// The auto-fork was only a landing spot for the edits; the typed
+		// name replaces it, so no near-identical leftover stays behind.
+		delete(configuredThemePacks, configuredThemeName)
+	}
+	configuredThemeName = typed
+	return true
+}
+
+// deleteTheme removes the selected pack from the config. Bundled seeds
+// and the default pack always come back (the seed on the next config seed,
+// the default as the fallback), so deleting them would be a lie; the
+// button refuses both and says so. Deleting a custom pack persists the
+// loss, snaps the panel to the default pack, and previews it.
+func (a *app) deleteTheme() {
+	if providers.IsBundledThemeName(configuredThemeName) {
+		a.statusText("[red]" + configuredThemeName + " is a bundled theme and cannot be deleted[-]")
+		return
+	}
+	if configuredThemeName == providers.DefaultThemeName {
+		a.statusText("[red]" + configuredThemeName + " is the fallback theme and cannot be deleted[-]")
+		return
+	}
+	delete(configuredThemePacks, configuredThemeName)
+	if configuredThemePacks == nil {
+		configuredThemePacks = map[string]providers.ThemeSpec{}
+	}
+	// The default pack is the fallback selection, so it must exist to be
+	// selectable after a delete.
+	if _, ok := configuredThemePacks[providers.DefaultThemeName]; !ok {
+		configuredThemePacks[providers.DefaultThemeName] = providers.ThemeSpec{
+			Dark: defaultThemeConfig(), Light: providers.DefaultLightTheme(),
+		}
+	}
+	deleted := configuredThemeName
+	configuredThemeName = providers.DefaultThemeName
+	spec := configuredThemePacks[providers.DefaultThemeName]
+	configuredThemesDark = spec.Dark
+	configuredThemesLight = spec.Light
+	configuredTheme = configuredThemesDark
+	// A name typed for the deleted pack must not rename the fallback
+	// pack on close: the field falls back to the suggestion on rebuild.
+	if a.settingsSaveAs != nil {
+		a.settingsSaveAs.SetText("")
+	}
+	a.previewThemeColors()
+	a.rebuildSettingsForm()
+	a.applySettings()
+	a.statusInfo("deleted " + deleted)
 }
 
 func (a *app) closeSettings() {
 	// Color edits only live in memory until a checkbox save runs, so closing
-	// the panel persists them: Esc and the Close button both land here.
+	// the panel persists them: Esc and the Close button both land here. A
+	// typed save-as name renames the pack as part of the same save; a name
+	// collision keeps the panel open.
+	if !a.applyTypedThemeName() {
+		return
+	}
+	a.sessionForks = nil
 	a.applySettings()
 	a.pages.HidePage("settings")
 	a.tapp.SetFocus(a.info)

@@ -72,6 +72,17 @@ type app struct {
 	// settingsHint is the key summary under the settings form; kept on the
 	// app so applyThemeChrome can restyle it when the pack changes.
 	settingsHint *tview.TextView
+	// settingsSaveAs is the theme-name input on the settings form; the name
+	// typed there is the pack the panel saves to on close (a bundled seed
+	// forks into its suggested fork name on the first color edit).
+	settingsSaveAs *tview.InputField
+	// settingsSaveAsSuggestion tracks the suggested value of the save-as
+	// field so renames can follow it without clobbering a user-typed name.
+	settingsSaveAsSuggestion string
+	// sessionForks records the packs an auto-fork created this panel
+	// session, so a typed save-as name can absorb the intermediate copy
+	// instead of leaving two near-identical packs behind.
+	sessionForks map[string]bool
 }
 
 func newSummaryPanel() *tview.TextView {

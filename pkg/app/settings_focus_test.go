@@ -65,7 +65,7 @@ func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
 // TestFocusedColorFieldRowShowsMarker pins the same affordance on the color
 // swatch rows, whose labels live on the embedded InputField.
 func TestFocusedColorFieldRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 6) // first color field (Background)
+	_, rows := focusFormRows(t, 80, 7) // first color field (Background)
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, focusMarker+"Background") {
 		t.Errorf("focused color row is missing the %q marker; form:\n%s", focusMarker, joined)

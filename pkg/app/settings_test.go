@@ -134,9 +134,9 @@ func TestRebuildSettingsFormReflectsLiveValues(t *testing.T) {
 	configuredThemesDark = providers.Theme{Mode: "dark", Labels: "orange"}
 	configuredThemesLight = providers.DefaultLightTheme()
 	a.rebuildSettingsForm()
-	want := len(a.settingsRows()) + len(themeColorKeys) + 1
+	want := len(a.settingsRows()) + len(themeColorKeys) + 2
 	if got := a.settingsForm.GetFormItemCount(); got != want {
-		t.Errorf("form has %d items, want %d (toggles + color fields + config path)", got, want)
+		t.Errorf("form has %d items, want %d (toggles + save-as + color fields + config path)", got, want)
 	}
 	path, err := providers.ConfigFilePath()
 	if err != nil {
