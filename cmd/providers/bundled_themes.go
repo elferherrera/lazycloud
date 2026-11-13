@@ -28,6 +28,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 			DetailText:          "#f8f8f2",
 			ActiveRowText:       "#272822",
 			ActiveRowBackground: "#fd971f",
+			SettingsLabels:      "#a6e22e",
+			SettingsText:        "#f8f8f2",
 		}},
 		"dracula": {Dark: Theme{
 			Mode:                string(ModeDark),
@@ -47,6 +49,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 			DetailText:          "#f8f8f2",
 			ActiveRowText:       "#282a36",
 			ActiveRowBackground: "#ff79c6",
+			SettingsLabels:      "#ff79c6",
+			SettingsText:        "#f8f8f2",
 		}},
 		"nord": {Dark: Theme{
 			Mode:                string(ModeDark),
@@ -66,6 +70,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 			DetailText:          "#eceff4",
 			ActiveRowText:       "#2e3440",
 			ActiveRowBackground: "#88c0d0",
+			SettingsLabels:      "#88c0d0",
+			SettingsText:        "#eceff4",
 		}},
 		"gruvbox": {
 			Dark: Theme{
@@ -86,6 +92,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#ebdbb2",
 				ActiveRowText:       "#282828",
 				ActiveRowBackground: "#fabd2f",
+				SettingsLabels:      "#fabd2f",
+				SettingsText:        "#ebdbb2",
 			},
 			Light: Theme{
 				Mode:                string(ModeLight),
@@ -105,6 +113,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#3c3836",
 				ActiveRowText:       "#fbf1c7",
 				ActiveRowBackground: "#3c3836",
+				SettingsLabels:      "#af3a03",
+				SettingsText:        "#3c3836",
 			},
 		},
 		"solarized": {
@@ -126,6 +136,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#93a1a1",
 				ActiveRowText:       "#002b36",
 				ActiveRowBackground: "#93a1a1",
+				SettingsLabels:      "#b58900",
+				SettingsText:        "#93a1a1",
 			},
 			Light: Theme{
 				Mode:                string(ModeLight),
@@ -145,6 +157,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#657b83",
 				ActiveRowText:       "#fdf6e3",
 				ActiveRowBackground: "#586e75",
+				SettingsLabels:      "#b58900",
+				SettingsText:        "#657b83",
 			},
 		},
 		"tokyo-night": {Dark: Theme{
@@ -165,6 +179,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 			DetailText:          "#c0caf5",
 			ActiveRowText:       "#1a1b26",
 			ActiveRowBackground: "#7aa2f7",
+			SettingsLabels:      "#7aa2f7",
+			SettingsText:        "#c0caf5",
 		}},
 		"one-dark": {
 			Dark: Theme{
@@ -185,6 +201,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#abb2bf",
 				ActiveRowText:       "#282c34",
 				ActiveRowBackground: "#61afef",
+				SettingsLabels:      "#e5c07b",
+				SettingsText:        "#abb2bf",
 			},
 			Light: Theme{
 				Mode:                string(ModeLight),
@@ -204,6 +222,8 @@ func BundledThemeSpecs() map[string]ThemeSpec {
 				DetailText:          "#383a42",
 				ActiveRowText:       "#fafafa",
 				ActiveRowBackground: "#383a42",
+				SettingsLabels:      "#c18401",
+				SettingsText:        "#383a42",
 			},
 		},
 	}

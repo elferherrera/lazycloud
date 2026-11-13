@@ -40,7 +40,11 @@ func TestRunAppliesConfigThemeBeforeFailure(t *testing.T) {
 		applied = true
 		return providers.BackgroundDark
 	}
-	t.Cleanup(func() { detectBackground = originalDetect })
+	cachedBackground = ""
+	t.Cleanup(func() {
+		detectBackground = originalDetect
+		cachedBackground = ""
+	})
 
 	_ = Run()
 

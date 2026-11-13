@@ -96,6 +96,10 @@ var themeColorKeys = []themeColorKey{
 		set: func(t *providers.Theme, v string) { t.DetailLabels = v }},
 	{label: "Detail text", get: func(t providers.Theme) string { return t.DetailText },
 		set: func(t *providers.Theme, v string) { t.DetailText = v }},
+	{label: "Settings labels", get: func(t providers.Theme) string { return t.SettingsLabels },
+		set: func(t *providers.Theme, v string) { t.SettingsLabels = v }},
+	{label: "Settings text", get: func(t providers.Theme) string { return t.SettingsText },
+		set: func(t *providers.Theme, v string) { t.SettingsText = v }},
 	{label: "Active row text", get: func(t providers.Theme) string { return t.ActiveRowText },
 		set: func(t *providers.Theme, v string) { t.ActiveRowText = v }},
 	{label: "Active row background", get: func(t providers.Theme) string { return t.ActiveRowBackground },
@@ -217,7 +221,7 @@ func (a *app) buildSettingsPage() {
 	// so tab never lands on it and the focus chain stays form, buttons,
 	// then esc closes.
 	hint := tview.NewTextView().SetDynamicColors(false).SetText(settingsUsageHint)
-	hint.SetTextColor(theme.shortcutLabelColor())
+	hint.SetTextColor(theme.settingsLabelColor())
 	a.settingsHint = hint
 
 	row := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -277,11 +281,11 @@ func (a *app) rebuildSettingsForm() {
 	item, button := form.GetFocusedItemIndex()
 	wasFocused := form.HasFocus()
 	form.Clear(true)
-	form.SetLabelColor(theme.shortcutLabelColor())
-	form.SetFieldTextColor(theme.shortcutTextColor())
+	form.SetLabelColor(theme.settingsLabelColor())
+	form.SetFieldTextColor(theme.settingsTextColor())
 	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetButtonBackgroundColor(tcell.ColorDefault)
-	form.SetButtonTextColor(theme.shortcutTextColor())
+	form.SetButtonTextColor(theme.settingsTextColor())
 	// Focused buttons paint their whole box with the activated style, so
 	// the theme accent makes the focused button readable at a glance.
 	form.SetButtonActivatedStyle(tcell.StyleDefault.
@@ -394,7 +398,7 @@ func (c *focusCheckbox) update(focused bool) {
 		c.SetLabelStyle(tcell.StyleDefault.Foreground(theme.focusColor()))
 		c.SetActivatedStyle(theme.focusStyle())
 	} else {
-		c.SetLabelStyle(tcell.StyleDefault.Foreground(theme.shortcutLabelColor()))
+		c.SetLabelStyle(tcell.StyleDefault.Foreground(theme.settingsLabelColor()))
 	}
 }
 
@@ -472,7 +476,7 @@ func (f *colorPreviewField) applyFocusStyle() {
 	if f.HasFocus() {
 		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.focusColor()))
 	} else {
-		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.shortcutLabelColor()))
+		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.settingsLabelColor()))
 	}
 }
 
@@ -519,22 +523,22 @@ func isLightColor(color tcell.Color) bool {
 
 // previewThemeColors applies the edited colors to the running UI without
 // writing the config, so the user sees each keystroke take effect. It
-// resolves the mode against the cached terminal background (queried once
-// per panel open, not per keystroke), so in system mode on a light terminal
-// the preview paints the light section that closing will save.
+// resolves the mode against the terminal background cached at boot, so in
+// system mode on a light terminal the preview paints the light section that
+// closing will save.
 func (a *app) previewThemeColors() {
-	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, a.settingsBackgroundKind()))
+	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, terminalBackground()))
 	a.applyThemeToWidgets()
 	a.applyThemeChrome()
 }
 
-// settingsBackgroundKind returns the terminal background for the settings
-// panel, querying it on first use and caching it for the panel session.
+// terminalBackground is cached at boot (see run.go), so the settings panel
+// reads it instead of querying the terminal again: tcell owns stdin inside
+// the running TUI and consumes terminal replies, so a live query stalls for
+// the OSC timeout and falls back to COLORFGBG, which dark terminals often
+// report as light.
 func (a *app) settingsBackgroundKind() providers.BackgroundKind {
-	if a.settingsBackground == "" {
-		a.settingsBackground = detectBackground()
-	}
-	return a.settingsBackground
+	return terminalBackground()
 }
 
 // applySettings persists the toggled values and applies them live, then
@@ -577,10 +581,6 @@ func (a *app) applySettings() {
 }
 
 func (a *app) openSettings() {
-	// One terminal query per panel session; previewThemeColors caches it.
-	// Reset before the first build so the initial rebuild does not grow a
-	// second query.
-	a.settingsBackground = ""
 	if a.settingsForm == nil {
 		a.buildSettingsPage()
 	}

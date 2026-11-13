@@ -32,7 +32,11 @@ func TestCycleThemeNameRestylesOverlayChrome(t *testing.T) {
 	a := chromeTestApp(t)
 	originalDetect := detectBackground
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
-	t.Cleanup(func() { detectBackground = originalDetect })
+	cachedBackground = ""
+	t.Cleanup(func() {
+		detectBackground = originalDetect
+		cachedBackground = ""
+	})
 
 	configuredThemePacks = map[string]providers.ThemeSpec{
 		"default": {Dark: providers.Theme{

@@ -22,6 +22,8 @@ type themeColors struct {
 	summaryText         string
 	detailLabels        string
 	detailText          string
+	settingsLabels      string
+	settingsText        string
 	activeRowText       string
 	activeRowBackground string
 }
@@ -41,6 +43,8 @@ var theme = themeColors{
 	summaryText:         "white",
 	detailLabels:        "yellow",
 	detailText:          "white",
+	settingsLabels:      "yellow",
+	settingsText:        "white",
 	activeRowText:       "black",
 	activeRowBackground: "white",
 }
@@ -126,6 +130,18 @@ func (t themeColors) detailTextColor() tcell.Color {
 	return tcell.GetColor(t.detailText)
 }
 
+// settingsLabelColor paints the settings panel labels: the form's row
+// names, the checkbox labels and the key hint under the form.
+func (t themeColors) settingsLabelColor() tcell.Color {
+	return tcell.GetColor(t.settingsLabels)
+}
+
+// settingsTextColor paints the settings panel values: color field text,
+// the config path row and the button labels.
+func (t themeColors) settingsTextColor() tcell.Color {
+	return tcell.GetColor(t.settingsText)
+}
+
 func (t themeColors) activeRowTextColor() tcell.Color {
 	return tcell.GetColor(t.activeRowText)
 }
@@ -142,8 +158,24 @@ func themeColor(value, fallback string) string {
 }
 
 // detectBackground is the seam tests use to pin the terminal background
-// instead of querying the real terminal.
-var detectBackground = providers.DetectBackground
+// instead of querying the real terminal. cachedBackground holds the value
+// queried once at boot, before the tview screen starts; see Run.
+var (
+	detectBackground = providers.DetectBackground
+	cachedBackground providers.BackgroundKind
+)
+
+// terminalBackground returns the boot-time detection, re-querying only
+// when it has never run (tests that swap the seam after boot). The running
+// app never re-queries: tcell owns stdin then, so a fresh OSC 11 query can
+// only time out and fall back to COLORFGBG, which dark terminals often
+// report as light.
+func terminalBackground() providers.BackgroundKind {
+	if cachedBackground == "" {
+		cachedBackground = detectBackground()
+	}
+	return cachedBackground
+}
 
 // resolveTheme returns the palette the UI should paint with. Dark mode keeps
 // the theme section, light mode keeps themeLight (falling back to the
@@ -169,7 +201,7 @@ func resolveTheme(dark, light providers.Theme, background providers.BackgroundKi
 // applyConfigTheme resolves the configured theme mode against the current
 // terminal background and applies the resulting palette.
 func applyConfigTheme(dark, light providers.Theme) {
-	applyTheme(resolveTheme(dark, light, detectBackground()))
+	applyTheme(resolveTheme(dark, light, terminalBackground()))
 }
 
 // applyThemeChrome pushes the theme's box colors into the widgets that
@@ -270,9 +302,15 @@ func (a *app) applyThemeChrome() {
 	}
 	if a.settingsForm != nil {
 		a.settingsForm.SetTitleColor(theme.titleColor())
+		// Form.Draw restyles every item from these form-level colors on each
+		// draw, so the preview path must refresh them or the open panel keeps
+		// painting with the palette it was built with.
+		a.settingsForm.SetLabelColor(theme.settingsLabelColor())
+		a.settingsForm.SetFieldTextColor(theme.settingsTextColor())
+		a.settingsForm.SetButtonTextColor(theme.settingsTextColor())
 	}
 	if a.settingsHint != nil {
-		a.settingsHint.SetTextColor(theme.shortcutLabelColor())
+		a.settingsHint.SetTextColor(theme.settingsLabelColor())
 	}
 }
 
@@ -297,6 +335,8 @@ func applyTheme(config providers.Theme) {
 		summaryText:         themeColor(config.SummaryText, text),
 		detailLabels:        themeColor(config.DetailLabels, theme.detailLabels),
 		detailText:          themeColor(config.DetailText, text),
+		settingsLabels:      themeColor(config.SettingsLabels, theme.settingsLabels),
+		settingsText:        themeColor(config.SettingsText, text),
 		activeRowText:       themeColor(config.ActiveRowText, theme.activeRowText),
 		activeRowBackground: themeColor(config.ActiveRowBackground, text),
 	}
@@ -334,6 +374,8 @@ func defaultThemeConfig() providers.Theme {
 		SummaryText:         "white",
 		DetailLabels:        "yellow",
 		DetailText:          "white",
+		SettingsLabels:      "yellow",
+		SettingsText:        "white",
 		ActiveRowText:       "black",
 		ActiveRowBackground: "white",
 	}

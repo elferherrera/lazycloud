@@ -21,6 +21,8 @@ type Theme struct {
 	SummaryText         string `json:"summaryText" yaml:"summaryText"`
 	DetailLabels        string `json:"detailLabels" yaml:"detailLabels"`
 	DetailText          string `json:"detailText" yaml:"detailText"`
+	SettingsLabels      string `json:"settingsLabels" yaml:"settingsLabels"`
+	SettingsText        string `json:"settingsText" yaml:"settingsText"`
 	ActiveRowText       string `json:"activeRowText" yaml:"activeRowText"`
 	ActiveRowBackground string `json:"activeRowBackground" yaml:"activeRowBackground"`
 }
@@ -73,6 +75,8 @@ func DefaultLightTheme() Theme {
 		SummaryText:         "black",
 		DetailLabels:        "#705400",
 		DetailText:          "black",
+		SettingsLabels:      "#705400",
+		SettingsText:        "black",
 		ActiveRowText:       "white",
 		ActiveRowBackground: "black",
 	}
@@ -137,6 +141,12 @@ func mergeTheme(theme, defaults Theme) Theme {
 	}
 	if theme.DetailText == "" {
 		theme.DetailText = theme.Text
+	}
+	if theme.SettingsLabels == "" {
+		theme.SettingsLabels = defaults.SettingsLabels
+	}
+	if theme.SettingsText == "" {
+		theme.SettingsText = theme.Text
 	}
 	if theme.ActiveRowText == "" {
 		theme.ActiveRowText = defaults.ActiveRowText

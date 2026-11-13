@@ -281,7 +281,11 @@ func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	})
 
 	originalDetect := detectBackground
-	t.Cleanup(func() { detectBackground = originalDetect })
+	t.Cleanup(func() {
+		detectBackground = originalDetect
+		cachedBackground = ""
+	})
+	cachedBackground = ""
 
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundLight }
 	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
@@ -294,6 +298,9 @@ func TestApplyConfigThemeRespectsBackground(t *testing.T) {
 	}
 
 	detectBackground = func() providers.BackgroundKind { return providers.BackgroundDark }
+	// terminalBackground caches the boot detection, so a mid-test seam swap
+	// must clear the cache the same way a fresh process would start empty.
+	cachedBackground = ""
 	applyConfigTheme(providers.Theme{Mode: "system", Labels: "orange", Text: "silver"}, providers.DefaultLightTheme())
 	if theme.labels != "orange" || theme.text != "silver" {
 		t.Errorf("applyConfigTheme(dark bg) = %q %q, want configured palette", theme.labels, theme.text)
