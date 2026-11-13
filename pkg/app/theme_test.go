@@ -85,16 +85,16 @@ func TestApplyTheme(t *testing.T) {
 	}
 
 	applyTheme(providers.Theme{Labels: "not-a-color"})
-	if theme.labels != "aqua" {
-		t.Errorf("applyTheme() invalid labels = %q, want aqua fallback", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() invalid labels = %q, want the default yellow fallback", theme.labels)
 	}
-	if theme.background != "white" {
-		t.Errorf("applyTheme() background = %q, want white kept", theme.background)
+	if theme.background != "black" {
+		t.Errorf("applyTheme() background = %q, want the pack's own default black, not the previous pack's white", theme.background)
 	}
 
 	applyTheme(providers.Theme{Background: "not-a-color"})
-	if theme.background != "white" {
-		t.Errorf("applyTheme() invalid background = %q, want white fallback", theme.background)
+	if theme.background != "black" {
+		t.Errorf("applyTheme() invalid background = %q, want the default black fallback", theme.background)
 	}
 
 	applyTheme(providers.Theme{Labels: "#ff9900", Borders: "#00aa55"})
@@ -115,38 +115,40 @@ func TestApplyTheme(t *testing.T) {
 	if theme.focus != "orange" {
 		t.Errorf("applyTheme() focus = %q, want shortcut labels fallback", theme.focus)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	// Empty slots resolve inside the incoming pack: labels falls to the
+	// default yellow, never to the #ff9900 the previous call painted.
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow, not the previous pack's %q leaked", theme.labels, "#ff9900")
 	}
 	if theme.statusLabels != "yellow" {
-		t.Errorf("applyTheme() status labels = %q, want yellow kept", theme.statusLabels)
+		t.Errorf("applyTheme() status labels = %q, want default yellow", theme.statusLabels)
 	}
 
 	applyTheme(providers.Theme{StatusLabels: "aqua", StatusText: "silver"})
 	if theme.statusLabels != "aqua" || theme.statusText != "silver" {
 		t.Errorf("applyTheme() status colors = %q %q, want aqua silver", theme.statusLabels, theme.statusText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
-	if theme.shortcutLabels != "#ff9900" {
-		t.Errorf("applyTheme() shortcut labels = %q, want labels fallback", theme.shortcutLabels)
+	if theme.shortcutLabels != "yellow" {
+		t.Errorf("applyTheme() shortcut labels = %q, want the pack default yellow, not the previous pack's shortcut color leaked", theme.shortcutLabels)
 	}
 
 	applyTheme(providers.Theme{SummaryLabels: "orange", SummaryText: "silver"})
 	if theme.summaryLabels != "orange" || theme.summaryText != "silver" {
 		t.Errorf("applyTheme() summary colors = %q %q, want orange silver", theme.summaryLabels, theme.summaryText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{DetailLabels: "orange", DetailText: "silver"})
 	if theme.detailLabels != "orange" || theme.detailText != "silver" {
 		t.Errorf("applyTheme() detail colors = %q %q, want orange silver", theme.detailLabels, theme.detailText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{ActiveRowText: "orange", ActiveRowBackground: "silver"})
@@ -156,16 +158,16 @@ func TestApplyTheme(t *testing.T) {
 	if theme.activeRowTextColor() != tcell.GetColor("orange") || theme.activeRowBackgroundColor() != tcell.GetColor("silver") {
 		t.Errorf("applyTheme() active row colors resolve wrong: %v %v", theme.activeRowTextColor(), theme.activeRowBackgroundColor())
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{Focus: "orange"})
 	if theme.focus != "orange" {
 		t.Errorf("applyTheme() focus = %q, want orange", theme.focus)
 	}
-	if theme.shortcutLabels != "#ff9900" {
-		t.Errorf("applyTheme() shortcut labels = %q, want #ff9900 kept", theme.shortcutLabels)
+	if theme.shortcutLabels != "yellow" {
+		t.Errorf("applyTheme() shortcut labels = %q, want the pack default yellow, not the previous pack's orange leaked", theme.shortcutLabels)
 	}
 }
 

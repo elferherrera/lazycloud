@@ -238,7 +238,7 @@ func seedBundledThemes(config *Config, defaults Theme) bool {
 		if _, ok := config.Themes[name]; ok {
 			continue
 		}
-		pack = mergeTheme(pack, defaults)
+		pack = MergeTheme(pack, defaults)
 		if config.Themes == nil {
 			config.Themes = map[string]Theme{}
 		}

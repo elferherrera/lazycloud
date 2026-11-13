@@ -68,7 +68,10 @@ type app struct {
 	settingsForm   *tview.Form
 	settingsRow    *tview.Flex
 	settingsColumn *tview.Flex
-	settingsOpen   atomic.Bool
+	// settingsPanel is the shadow-wrapped panel body the settings row
+	// centers, kept for the small-screen height clamp.
+	settingsPanel tview.Primitive
+	settingsOpen  atomic.Bool
 	// settingsHint is the key summary under the settings form; kept on the
 	// app so applyThemeChrome can restyle it when the pack changes.
 	settingsHint *tview.TextView
@@ -79,6 +82,14 @@ type app struct {
 	// settingsSaveAsSuggestion tracks the suggested value of the save-as
 	// field so renames can follow it without clobbering a user-typed name.
 	settingsSaveAsSuggestion string
+	// settingsTypedName keeps a user-typed save-as name alive while
+	// follow-terminal mode hides the field, so toggling it off restores
+	// the typed name instead of silently resetting to the suggestion.
+	settingsTypedName string
+	// settingsDeletedPacks records the pack names deleted in this panel
+	// session, so saving does not resurrect them from the config file
+	// that still carries them.
+	settingsDeletedPacks map[string]bool
 	// sessionForks records the packs an auto-fork created this panel
 	// session, so a typed save-as name can absorb the intermediate copy
 	// instead of leaving two near-identical packs behind.

@@ -23,13 +23,21 @@ type settingsRow struct {
 func (a *app) settingsRows() []settingsRow {
 	return []settingsRow{
 		{label: "Follow terminal", get: func() bool { return configuredFollowTerminal },
-			set: func(on bool) { setConfiguredFollowTerminal(on) }},
-		{label: "Theme: " + configuredThemeName, get: func() bool { return false },
 			set: func(on bool) {
+				setConfiguredFollowTerminal(on)
 				if on {
-					a.cycleThemeName(1)
+					// The pack and any unsaved edits stay in memory; say
+					// where the rows went so the toggle does not look
+					// like it destroyed work.
+					a.statusInfo("following the terminal palette; theme rows hidden, uncheck to edit " + configuredThemeName)
 				}
 			}},
+		{label: "Theme: " + configuredThemeName, get: func() bool { return !configuredFollowTerminal },
+			// Space cycles on every press: the checkbox visual is the
+			// row's focus affordance (checked whenever a pack paints the
+			// UI), not a state to flip, so the value tview hands to set
+			// is ignored and the pack list advances instead.
+			set: func(_ bool) { a.cycleThemeName(1) }},
 		{label: "Shortcut bar", get: func() bool { return infobarEnabled },
 			set: func(on bool) { infobarEnabled = on }},
 		{label: "Auto update cache", get: func() bool { return a.staleAutoRefresh },
@@ -141,12 +149,28 @@ func (a *app) cycleThemeName(dir int) {
 	}
 	configuredThemePacks[configuredThemeName] = configuredTheme
 	names := configuredThemeNames()
-	idx := 0
+	// A name no longer in the map (pack deleted outside the panel)
+	// must not silently skip the first pack: start before the list so
+	// any direction lands on a real pack.
+	idx := -1
 	for i, name := range names {
 		if name == configuredThemeName {
 			idx = i
 			break
 		}
+	}
+	if idx < 0 {
+		// The selected name is gone; either direction restarts at the
+		// top of the list, the one anchor that cannot fall off it.
+		configuredThemeName = names[0]
+		configuredTheme = configuredThemePacks[configuredThemeName]
+		if a.settingsSaveAs != nil {
+			a.settingsSaveAsSuggestion = suggestedThemeName()
+			a.settingsSaveAs.SetText(a.settingsSaveAsSuggestion)
+		}
+		a.previewThemeColors()
+		a.rebuildSettingsForm()
+		return
 	}
 	configuredThemeName = names[(idx+dir+len(names))%len(names)]
 	configuredTheme = configuredThemePacks[configuredThemeName]
@@ -275,10 +299,17 @@ func (a *app) buildSettingsPage() {
 	hint.SetTextColor(theme.settingsLabelColor())
 	a.settingsHint = hint
 
+	// The form and its hint line form the panel body; the shadow wrapper
+	// adds the one-cell depth strip around it, and the spacers center the
+	// whole thing on screen like a floating window.
+	panel := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(form, settingsFormHeight(a), 1, true).
+		AddItem(hint, 2, 0, false)
+	shadow := newShadowedOverlay(panel)
+	a.settingsPanel = shadow
 	row := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(form, settingsFormHeight(a), 1, true).
-		AddItem(hint, 2, 0, false).
+		AddItem(shadow, settingsFormHeight(a)+2, 1, false).
 		AddItem(nil, 0, 1, false)
 	column := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -298,6 +329,11 @@ func (a *app) buildSettingsPage() {
 // values, and closing (esc or the Close button) persists the edits.
 const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrows cycle colors · esc saves and closes"
 
+// settingsUsageHintFollow is the follow-terminal variant: the theme and
+// color rows are hidden there, so the hint names only the keys that still
+// do something.
+const settingsUsageHintFollow = "tab moves · space toggles\nenter runs a button · esc saves and closes"
+
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
 // theme name input, color inputs, config path), the leading blank line
@@ -307,10 +343,49 @@ const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrow
 // hands the form a smaller height and tview scrolls it to the focused
 // item, so every field stays reachable.
 func settingsFormHeight(a *app) int {
+	// rows: toggles + theme row + save-as + color inputs + config path,
+	// plus the leading blank line inside the border, a blank line before
+	// and after the button row, and the border itself.
 	if configuredFollowTerminal {
-		return len(a.settingsRows()) + 6
+		return settingsFormRows(a) + 6
 	}
-	return len(a.settingsRows()) + len(themeColorKeys) + 8
+	return settingsFormRows(a) + 8
+}
+
+// settingsFormRows counts the item rows the rebuild adds, so the height
+// follows the actual form contents instead of a fragile constant.
+func settingsFormRows(a *app) int {
+	rows := len(a.settingsRows())
+	if configuredFollowTerminal {
+		rows-- // the Theme row hides
+	} else {
+		rows++ // the save-as input
+		rows += len(themeColorKeys)
+	}
+	rows++ // the Config file path
+	return rows
+}
+
+func (a *app) resizeSettingsOverlay() {
+	if a.settingsColumn == nil || a.screen == nil {
+		return
+	}
+	w, h := a.screen.Size()
+	if w <= 0 {
+		return
+	}
+	if width := overlayWidth(w); width > 56 {
+		a.settingsColumn.ResizeItem(a.settingsRow, width, 1)
+	}
+	// The panel scrolls to the focused row when the flex gives it less
+	// than it asks for, but only when it actually asks for more than the
+	// screen: clamp the requested height so a small terminal still shows
+	// the panel top-aligned with every row reachable by focus, instead
+	// of the flex centering a 30-row form in 22 rows and clipping the
+	// Follow terminal and Theme rows off the top.
+	if want := settingsFormHeight(a) + 2; want > h-2 {
+		a.settingsRow.ResizeItem(a.settingsPanel, h-2, 1)
+	}
 }
 
 // themeColorCycle is the curated list the color fields cycle through with
@@ -328,13 +403,27 @@ func (a *app) rebuildSettingsForm() {
 	if a.settingsForm == nil {
 		return
 	}
+	// The key summary follows the mode: follow-terminal hides the theme
+	// and color rows, so naming their keys would describe controls that
+	// are not on screen.
+	if a.settingsHint != nil {
+		if configuredFollowTerminal {
+			a.settingsHint.SetText(settingsUsageHintFollow)
+		} else {
+			a.settingsHint.SetText(settingsUsageHint)
+		}
+	}
 	form := a.settingsForm
 	// Keep the user's row through the refill: Clear resets focus to the
-	// first item, and applySettings rebuilds after every toggle. Without
-	// this, the caret would jump to the top after each change. Capture the
-	// indices before Clear destroys the old widgets, and only restore when
-	// this form's subtree (the form itself or any of its items) held focus.
+	// first item, and applySettings rebuilds after every toggle. The row
+	// is remembered by label, not index: toggling Follow terminal adds
+	// and removes rows, so a saved index can point at a different row or
+	// past the end. Only restore when this form's subtree held focus.
 	item, button := form.GetFocusedItemIndex()
+	restoreLabel := ""
+	if wasFocusedLabel, ok := a.settingsFocusLabel(); ok {
+		restoreLabel = wasFocusedLabel
+	}
 	wasFocused := form.HasFocus()
 	form.Clear(true)
 	form.SetLabelColor(theme.settingsLabelColor())
@@ -369,17 +458,28 @@ func (a *app) rebuildSettingsForm() {
 	// pack instead. A typed name survives the refill. Follow-terminal
 	// mode owns every color, so no pack gets saved or renamed.
 	if configuredFollowTerminal {
+		// The typed name outlives the toggle: stash it so turning
+		// follow-terminal off gives the user back what they typed
+		// instead of silently resetting to the suggestion.
+		if a.settingsSaveAs != nil {
+			if typed := a.settingsSaveAs.GetText(); typed != "" && typed != a.settingsSaveAsSuggestion {
+				a.settingsTypedName = typed
+			}
+		}
 		a.settingsSaveAs = nil
 	} else {
 		saveAs := tview.NewInputField()
 		saveAs.SetFieldWidth(16)
 		suggestion := suggestedThemeName()
 		text := suggestion
-		if a.settingsSaveAs != nil {
+		if a.settingsTypedName != "" {
+			text = a.settingsTypedName
+		} else if a.settingsSaveAs != nil {
 			if typed := a.settingsSaveAs.GetText(); typed != "" && typed != a.settingsSaveAsSuggestion {
 				text = typed
 			}
 		}
+		a.settingsTypedName = ""
 		saveAs.SetText(text)
 		a.settingsSaveAsSuggestion = suggestion
 		a.settingsSaveAs = saveAs
@@ -437,11 +537,7 @@ func (a *app) rebuildSettingsForm() {
 		// the UI; in follow-terminal mode both buttons would be no-ops.
 		form.AddButton("Close", func() { a.closeSettings() })
 		if wasFocused {
-			if item >= 0 && item < form.GetFormItemCount() {
-				form.SetFocus(item)
-			} else if button >= 0 && button < form.GetButtonCount() {
-				form.SetFocus(form.GetFormItemCount() + button)
-			}
+			a.restoreSettingsFocus(form, restoreLabel, item, button)
 			a.tapp.SetFocus(form)
 		}
 		return
@@ -453,11 +549,7 @@ func (a *app) rebuildSettingsForm() {
 	form.AddButton("Delete theme", func() { a.deleteTheme() })
 	form.AddButton("Close", func() { a.closeSettings() })
 	if wasFocused {
-		if item >= 0 && item < form.GetFormItemCount() {
-			form.SetFocus(item)
-		} else if button >= 0 && button < form.GetButtonCount() {
-			form.SetFocus(form.GetFormItemCount() + button)
-		}
+		a.restoreSettingsFocus(form, restoreLabel, item, button)
 		// SetFocus only blurs and focuses when the index changes; after a
 		// Clear nothing has focus, so for the restored row to actually
 		// receive the focus callbacks (and key events) the app must hand
@@ -473,6 +565,45 @@ const (
 	focusMarker   = "▸ "
 	noFocusMarker = "  "
 )
+
+// settingsFocusLabel returns the bare label of the form row that holds
+// focus, so a rebuild can put the caret back on the same row after
+// rows appear or vanish. Labels carry a focus-marker prefix while
+// focused, so the marker is stripped first.
+func (a *app) settingsFocusLabel() (string, bool) {
+	item, _ := a.settingsForm.GetFocusedItemIndex()
+	if item < 0 || item >= a.settingsForm.GetFormItemCount() {
+		return "", false
+	}
+	label := a.settingsForm.GetFormItem(item).GetLabel()
+	label = strings.TrimPrefix(label, focusMarker)
+	label = strings.TrimPrefix(label, noFocusMarker)
+	return label, true
+}
+
+// restoreSettingsFocus hands the caret back to the row the user was on:
+// by label when the row survived the rebuild (the row count changes
+// when Follow terminal toggles), falling back to the pre-Clear indices
+// for buttons and rows whose label legitimately changed (the Theme row
+// renames itself on pack switch).
+func (a *app) restoreSettingsFocus(form *tview.Form, label string, item, button int) {
+	if label != "" {
+		for i := 0; i < form.GetFormItemCount(); i++ {
+			row := form.GetFormItem(i).GetLabel()
+			row = strings.TrimPrefix(row, focusMarker)
+			row = strings.TrimPrefix(row, noFocusMarker)
+			if row == label {
+				form.SetFocus(i)
+				return
+			}
+		}
+	}
+	if item >= 0 && item < form.GetFormItemCount() {
+		form.SetFocus(item)
+	} else if button >= 0 && button < form.GetButtonCount() {
+		form.SetFocus(form.GetFormItemCount() + button)
+	}
+}
 
 // focusCheckbox is a settings toggle that shows which row is focused. The
 // marker is part of the stored label because Checkbox.Draw prints the
@@ -633,8 +764,8 @@ func (f *colorPreviewField) applyPreview() {
 	f.SetFieldStyle(tcell.StyleDefault.Background(color).Foreground(text))
 }
 
-// isLightColor reports whether a color reads as light, using the same
-// BT.601 luma test the terminal background detection uses.
+// isLightColor reports whether a color reads as light, using the
+// BT.601 luma test.
 func isLightColor(color tcell.Color) bool {
 	r, g, b := color.TrueColor().RGB()
 	return (299*int(r)+587*int(g)+114*int(b))/1000 > 127
@@ -666,6 +797,18 @@ func (a *app) applySettings() {
 	config.FollowTerminal = configuredFollowTerminal
 	config.Infobar.ShowShortcuts = infobarEnabled
 	config.AutoUpdate.Enabled = a.staleAutoRefresh
+	// The freshly loaded file is the source of truth for packs the
+	// panel never touched: a pack hand-edited (or added) while the
+	// panel was open must not be clobbered by the in-memory copy from
+	// before that edit. The in-memory map wins for the packs it still
+	// carries, and names the panel deleted stay deleted instead of
+	// being resurrected from the file.
+	for name := range a.settingsDeletedPacks {
+		delete(config.Themes, name)
+	}
+	for name, pack := range configuredThemePacks {
+		config.Themes[name] = pack
+	}
 	// Store the edited palette back and write the whole pack map: edits
 	// made to other packs during this panel session live in the map (kept
 	// there by cycleThemeName), and dropping them on save would lose work.
@@ -674,7 +817,8 @@ func (a *app) applySettings() {
 		configuredThemePacks = map[string]providers.Theme{}
 	}
 	configuredThemePacks[configuredThemeName] = configuredTheme
-	config.Themes = configuredThemePacks
+	config.Themes[configuredThemeName] = configuredTheme
+	configuredThemePacks = config.Themes
 	config.ThemeName = configuredThemeName
 	if err := providers.SaveConfig(config); err != nil {
 		a.statusText("[red]Failed to save config: [-]" + err.Error())
@@ -698,7 +842,11 @@ func (a *app) openSettings() {
 	a.pages.ShowPage("settings")
 	a.tapp.SetFocus(a.settingsForm)
 	a.updateSettingsCursorStyle()
-	a.statusInfo("space toggles, arrows cycle colors, tab moves, enter runs a button, esc saves and closes")
+	if configuredFollowTerminal {
+		a.statusInfo("space toggles, tab moves, enter runs a button, esc saves and closes")
+	} else {
+		a.statusInfo("space toggles, arrows cycle colors, tab moves, enter runs a button, esc saves and closes")
+	}
 }
 
 // applyTypedThemeName consumes the save-as name at close time: a name typed
@@ -722,7 +870,7 @@ func (a *app) applyTypedThemeName() bool {
 		if providers.IsBundledThemeName(typed) {
 			reason = "a bundled theme name"
 		}
-		a.statusText("[red]theme name " + typed + " is " + reason + "[-]")
+		a.statusText("[red]theme name " + typed + " is " + reason + "; edit the Save theme as row to pick another[-]")
 		// Keep the panel open with the caret on the offending row so the
 		// name is fixed or cleared instead of silently dropped.
 		a.settingsForm.SetFocus(len(a.settingsRows()))
@@ -733,6 +881,10 @@ func (a *app) applyTypedThemeName() bool {
 		// The auto-fork was only a landing spot for the edits; the typed
 		// name replaces it, so no near-identical leftover stays behind.
 		delete(configuredThemePacks, configuredThemeName)
+		if a.settingsDeletedPacks == nil {
+			a.settingsDeletedPacks = map[string]bool{}
+		}
+		a.settingsDeletedPacks[configuredThemeName] = true
 	}
 	configuredThemeName = typed
 	return true
@@ -762,6 +914,10 @@ func (a *app) deleteTheme() {
 		configuredThemePacks[providers.DefaultThemeName] = defaultThemeConfig()
 	}
 	deleted := configuredThemeName
+	if a.settingsDeletedPacks == nil {
+		a.settingsDeletedPacks = map[string]bool{}
+	}
+	a.settingsDeletedPacks[deleted] = true
 	configuredThemeName = providers.DefaultThemeName
 	configuredTheme = configuredThemePacks[providers.DefaultThemeName]
 	// A name typed for the deleted pack must not rename the fallback
@@ -784,6 +940,7 @@ func (a *app) closeSettings() {
 		return
 	}
 	a.sessionForks = nil
+	a.settingsDeletedPacks = nil
 	a.applySettings()
 	a.pages.HidePage("settings")
 	a.tapp.SetFocus(a.info)
@@ -813,17 +970,4 @@ func (a *app) restoreCursorStyle() {
 		return
 	}
 	a.screen.SetCursorStyle(tcell.CursorStyleDefault, tcell.ColorReset)
-}
-
-func (a *app) resizeSettingsOverlay() {
-	if a.settingsColumn == nil || a.screen == nil {
-		return
-	}
-	w, _ := a.screen.Size()
-	if w <= 0 {
-		return
-	}
-	if width := overlayWidth(w); width > 56 {
-		a.settingsColumn.ResizeItem(a.settingsRow, width, 1)
-	}
 }

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/pkg/providers"
+	"github.com/elferherrera/lazycloud/cmd/providers"
 )
 
 // themeForkTestState snapshots the globals the fork flow touches, so each

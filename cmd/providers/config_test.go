@@ -268,16 +268,16 @@ func TestConfigThemeMirrorFollowsSelection(t *testing.T) {
 
 func TestMergeThemeFillsEveryEmptyKey(t *testing.T) {
 	defaults := Theme{Background: "black", Labels: "yellow", Text: "white"}
-	merged := mergeTheme(Theme{}, defaults)
+	merged := MergeTheme(Theme{}, defaults)
 	if merged.Labels != "yellow" {
-		t.Errorf("mergeTheme() labels = %q, want default yellow", merged.Labels)
+		t.Errorf("MergeTheme() labels = %q, want default yellow", merged.Labels)
 	}
 	if merged.Background != "black" {
-		t.Errorf("mergeTheme() background = %q, want default black", merged.Background)
+		t.Errorf("MergeTheme() background = %q, want default black", merged.Background)
 	}
-	kept := mergeTheme(Theme{Background: "white"}, defaults)
+	kept := MergeTheme(Theme{Background: "white"}, defaults)
 	if kept.Background != "white" {
-		t.Errorf("mergeTheme() background = %q, want configured white kept", kept.Background)
+		t.Errorf("MergeTheme() background = %q, want configured white kept", kept.Background)
 	}
 }
 
@@ -640,6 +640,73 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		nord := got.Themes["nord"]
 		if nord.Labels != "lime" {
 			t.Fatalf("nord labels = %q, want the user's lime kept over the bundle", nord.Labels)
+		}
+	})
+}
+
+func TestConfigRenamesPristineDefaultPack(t *testing.T) {
+	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
+
+	t.Run("pristine default pack renames to lazycloud_dark", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		pack := lazycloudDarkPalette()
+		data, err := yaml.Marshal(map[string]map[string]Theme{
+			"themes": {legacyDefaultPackName: pack},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.Themes[legacyDefaultPackName]; ok {
+			t.Fatal("LoadConfig() kept the legacy default pack name")
+		}
+		if _, ok := got.Themes[DefaultThemeName]; !ok {
+			t.Fatalf("LoadConfig() lost the pack under %q", DefaultThemeName)
+		}
+		if got.ThemeName != DefaultThemeName {
+			t.Fatalf("ThemeName = %q, want rewired to %q", got.ThemeName, DefaultThemeName)
+		}
+	})
+
+	t.Run("user-edited lazycloud_dark keeps the legacy default pack", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		edited := lazycloudDarkPalette()
+		edited.Labels = "lime"
+		data, err := yaml.Marshal(map[string]map[string]Theme{
+			"themes": {legacyDefaultPackName: lazycloudDarkPalette(), DefaultThemeName: edited},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.Themes[legacyDefaultPackName]; !ok {
+			t.Fatal("LoadConfig() deleted the legacy default pack although lazycloud_dark was user-edited")
+		}
+		if got.Themes[DefaultThemeName].Labels != "lime" {
+			t.Fatalf("lazycloud_dark labels = %q, want the user's lime kept", got.Themes[DefaultThemeName].Labels)
+		}
+		if got.ThemeName != DefaultThemeName {
+			t.Fatalf("ThemeName = %q, want lazycloud_dark kept as the selection", got.ThemeName)
 		}
 	})
 }

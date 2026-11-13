@@ -292,29 +292,36 @@ func (a *app) applyThemeChrome() {
 }
 
 func applyTheme(config providers.Theme) {
-	background := themeColor(config.Background, theme.background)
-	labels := themeColor(config.Labels, theme.labels)
-	text := themeColor(config.Text, theme.text)
+	// Every fallback chain ends in the shipped default palette, never in
+	// the pack that painted before it: a pack switch must not leak the
+	// old pack's accents, and an invalid hand-edited value must resolve
+	// to a real color instead of poisoning the chain below it. Related
+	// slots still fall back to each other (shortcutLabels to labels,
+	// statusText to text) so a sparse pack stays coherent.
+	def := defaultThemeConfig()
+	background := themeColor(config.Background, def.Background)
+	labels := themeColor(config.Labels, def.Labels)
+	text := themeColor(config.Text, def.Text)
 	shortcutLabels := themeColor(config.ShortcutLabels, labels)
 	shortcutText := themeColor(config.ShortcutText, text)
 	theme = themeColors{
 		background:          background,
 		labels:              labels,
 		text:                text,
-		borders:             themeColor(config.Borders, theme.borders),
-		title:               themeColor(config.Title, theme.title),
+		borders:             themeColor(config.Borders, def.Borders),
+		title:               themeColor(config.Title, def.Title),
 		shortcutLabels:      shortcutLabels,
 		shortcutText:        shortcutText,
 		focus:               themeColor(config.Focus, shortcutLabels),
-		statusLabels:        themeColor(config.StatusLabels, theme.statusLabels),
+		statusLabels:        themeColor(config.StatusLabels, def.StatusLabels),
 		statusText:          themeColor(config.StatusText, text),
 		summaryLabels:       themeColor(config.SummaryLabels, labels),
 		summaryText:         themeColor(config.SummaryText, text),
-		detailLabels:        themeColor(config.DetailLabels, theme.detailLabels),
+		detailLabels:        themeColor(config.DetailLabels, def.DetailLabels),
 		detailText:          themeColor(config.DetailText, text),
-		settingsLabels:      themeColor(config.SettingsLabels, theme.settingsLabels),
+		settingsLabels:      themeColor(config.SettingsLabels, def.SettingsLabels),
 		settingsText:        themeColor(config.SettingsText, text),
-		activeRowText:       themeColor(config.ActiveRowText, theme.activeRowText),
+		activeRowText:       themeColor(config.ActiveRowText, def.ActiveRowText),
 		activeRowBackground: themeColor(config.ActiveRowBackground, text),
 	}
 	// These styles are set unconditionally, "default" included: ColorDefault

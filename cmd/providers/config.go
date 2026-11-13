@@ -89,22 +89,27 @@ type themeEntry struct {
 // dark section unless mode was light), a flat pack fills its empty keys
 // from defaults. An old entry with no section at all reports ok=false so
 // the caller drops it.
+// A pack with mode: light but no light section keeps its dark palette:
+// that is exactly what the old renderer painted (mode selected between
+// sections, and a missing section fell back to the dark one), so the
+// migration preserves the on-screen result instead of guessing a light
+// palette the user never saw.
 func (e themeEntry) collapse(defaults Theme) (Theme, bool) {
 	switch {
 	case e.Dark != nil && e.Light != nil:
 		if e.Dark.Mode == "light" {
-			return mergeTheme(e.Light.Theme, defaults), true
+			return MergeTheme(e.Light.Theme, defaults), true
 		}
-		return mergeTheme(e.Dark.Theme, defaults), true
+		return MergeTheme(e.Dark.Theme, defaults), true
 	case e.Dark != nil:
-		return mergeTheme(e.Dark.Theme, defaults), true
+		return MergeTheme(e.Dark.Theme, defaults), true
 	case e.Light != nil:
-		return mergeTheme(e.Light.Theme, defaults), true
+		return MergeTheme(e.Light.Theme, defaults), true
 	default:
 		if e.Theme == (Theme{}) {
 			return Theme{}, false
 		}
-		return mergeTheme(e.Theme, defaults), true
+		return MergeTheme(e.Theme, defaults), true
 	}
 }
 
@@ -149,7 +154,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		if err != nil {
 			return Config{}, err
 		}
-		config.Theme = mergeTheme(config.Theme, defaultTheme)
+		config.Theme = MergeTheme(config.Theme, defaultTheme)
 		config.Themes = map[string]Theme{DefaultThemeName: config.Theme}
 		config.ThemeName = DefaultThemeName
 		seedBundledThemes(&config, defaultTheme)
@@ -176,7 +181,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	}
 	rewrote := false
 	if sections.Theme != nil {
-		merged := mergeTheme(config.Theme, defaultTheme)
+		merged := MergeTheme(config.Theme, defaultTheme)
 		if merged != config.Theme {
 			config.Theme = merged
 			rewrote = true
@@ -202,7 +207,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	if sections.Entries == nil {
 		pack := config.Theme
 		if sections.ThemeLight != nil && sections.Theme != nil && sections.Theme.Mode == "light" {
-			pack = mergeTheme(sections.ThemeLight.Theme, defaultTheme)
+			pack = MergeTheme(sections.ThemeLight.Theme, defaultTheme)
 		}
 		config.Themes = map[string]Theme{DefaultThemeName: pack}
 		if config.ThemeName == "" {
@@ -261,15 +266,19 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	// lazycloud_dark; rename it so the cycle list does not carry the
 	// same palette twice. An edited pack keeps its name: it is a custom
 	// pack now, and the user picked those colors.
+	// A user-authored lazycloud_dark (hand-edited file) also keeps the
+	// legacy pack alive: rewiring the selection onto it would repaint
+	// the UI with colors the user never selected under that name.
 	if pack, ok := config.Themes[legacyDefaultPackName]; ok && pack == lazycloudDarkPalette() {
-		if _, exists := config.Themes[DefaultThemeName]; !exists {
+		samePalette, exists := config.Themes[DefaultThemeName]
+		if !exists || samePalette == pack {
 			config.Themes[DefaultThemeName] = pack
+			delete(config.Themes, legacyDefaultPackName)
+			if config.ThemeName == legacyDefaultPackName {
+				config.ThemeName = DefaultThemeName
+			}
+			rewrote = true
 		}
-		delete(config.Themes, legacyDefaultPackName)
-		if config.ThemeName == legacyDefaultPackName {
-			config.ThemeName = DefaultThemeName
-		}
-		rewrote = true
 	}
 	// The mirror section follows the selected pack so hand edits of the
 	// file stay meaningful.

@@ -66,10 +66,11 @@ func themePath() (string, error) {
 	return filepath.Join(home, ".config", "lazycloud", "theme.json"), nil
 }
 
-// mergeTheme fills the empty keys of theme from defaults. Deriving roles
+// MergeTheme fills the empty keys of theme from defaults. Deriving roles
 // with real fallback chains (shortcutLabels falls back to labels) rather
 // than the same defaults table keeps a partially-specified pack coherent.
-func mergeTheme(theme, defaults Theme) Theme {
+// MergeTheme returns theme with every empty key filled from defaults.
+func MergeTheme(theme, defaults Theme) Theme {
 	if theme.Background == "" {
 		theme.Background = defaults.Background
 	}

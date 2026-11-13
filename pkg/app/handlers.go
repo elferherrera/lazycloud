@@ -104,6 +104,7 @@ func init() {
 			{":snapshots", "show disk snapshots", viewSnapshots},
 			{":iam", "show iam policy", viewIAM},
 			{":roles", "show custom roles", viewRoles},
+			{":search", "open the search side panel", ""},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},

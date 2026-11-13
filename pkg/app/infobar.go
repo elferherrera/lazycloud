@@ -113,7 +113,6 @@ var infobarShortDesc = map[string]string{
 	"focus command": "commands",
 	"filter list ('- x' excludes, Tab details)":     "filter",
 	"toggle all projects":                           "all projects",
-	"search all resources (Ctrl-P)":                 "search",
 	"show projects":                                 "projects",
 	"open log file in editor":                       "log file",
 	"show dns records for zone":                     "dns records",
