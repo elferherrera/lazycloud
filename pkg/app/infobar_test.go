@@ -17,6 +17,19 @@ func infobarFittedAt(t *testing.T, budget int) []shortcut {
 	return fitted
 }
 
+// infobarSimScreen returns an initialized simulation screen sized w x h, so
+// infobar width fitting sees a known terminal.
+func infobarSimScreen(t *testing.T, w, h int) tcell.Screen {
+	t.Helper()
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sim.Fini)
+	sim.SetSize(w, h)
+	return sim
+}
+
 func TestRefreshInfobarRefillsWhenScreenKnown(t *testing.T) {
 	original := infobarEnabled
 	t.Cleanup(func() { infobarEnabled = original })
@@ -438,6 +451,140 @@ func TestInfobarEveryKeyHasDescription(t *testing.T) {
 				t.Errorf("view %q infobar pair %q has no key or no description", kind, pair)
 			}
 		}
+	}
+}
+
+func TestInfobarShowsCommandSuggestionsInCmdMode(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeCmd
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.tapp.SetFocus(a.cmd)
+	a.refreshInfobar()
+	if !strings.Contains(a.infobar.GetText(true), ":accounts") {
+		t.Fatal("cmd mode infobar does not list commands")
+	}
+	if !strings.Contains(a.infobar.GetText(true), "show service accounts") {
+		t.Fatal("cmd mode infobar does not describe the listed command")
+	}
+	if !strings.Contains(a.infobar.GetText(true), "more") {
+		t.Fatal("cmd mode infobar does not hint at the commands left out")
+	}
+
+	a.tapp.SetFocus(a.info)
+	a.refreshInfobar()
+	if strings.Contains(a.infobar.GetText(true), ":accounts") {
+		t.Fatal("infobar keeps listing commands once the input loses focus")
+	}
+}
+
+func TestInfobarCommandsFilterAsTyped(t *testing.T) {
+	view := newInfobarPanel()
+
+	populateInfobarCommands(view, "", 200)
+	text := view.GetText(true)
+	if !strings.Contains(text, ":accounts") {
+		t.Fatal("unfiltered command list is missing :accounts")
+	}
+	if !strings.Contains(text, "more") {
+		t.Fatal("unfiltered command list does not hint at the overflow")
+	}
+
+	populateInfobarCommands(view, "vm", 200)
+	text = view.GetText(true)
+	if !strings.Contains(text, ":vms") || !strings.Contains(text, "show VMs") {
+		t.Fatalf("typing vm does not surface :vms, got %q", text)
+	}
+	for _, hidden := range []string{":projects", ":sort", ":networks", "more"} {
+		if strings.Contains(text, hidden) {
+			t.Errorf("typing vm still shows %s", hidden)
+		}
+	}
+
+	populateInfobarCommands(view, "VM", 200)
+	if !strings.Contains(view.GetText(true), ":vms") {
+		t.Fatal("command filter is not case-insensitive")
+	}
+
+	populateInfobarCommands(view, "sort asc", 200)
+	if got := view.GetText(true); got != "" {
+		t.Errorf("arguments typed still suggest commands, got %q", got)
+	}
+
+	populateInfobarCommands(view, "zzz", 200)
+	if got := view.GetText(true); got != "" {
+		t.Errorf("unmatched text still suggests commands, got %q", got)
+	}
+}
+
+func TestCommandSuggestionsCoverEveryCommand(t *testing.T) {
+	suggestions := commandSuggestions()
+	if len(suggestions) != len(commandNames()) {
+		t.Fatalf("commandSuggestions has %d entries, want one per command (%d)", len(suggestions), len(commandNames()))
+	}
+	byName := make(map[string]commandSuggestion, len(suggestions))
+	for _, s := range suggestions {
+		if byName[s.name].name != "" {
+			t.Errorf("command %q suggested twice", s.name)
+		}
+		byName[s.name] = s
+	}
+	if byName["gke"].desc != byName["clusters"].desc {
+		t.Errorf("alias gke desc = %q, want clusters' %q", byName["gke"].desc, byName["clusters"].desc)
+	}
+	if byName["vpcs"].desc != byName["networks"].desc {
+		t.Errorf("alias vpcs desc = %q, want networks' %q", byName["vpcs"].desc, byName["networks"].desc)
+	}
+	for _, name := range []string{"sort", "write", "search", "peerings", "psc", "vms", "projects"} {
+		if byName[name].desc == "" {
+			t.Errorf("command %s has no suggestion description", name)
+		}
+	}
+}
+
+func TestInfobarRestoresShortcutsWhenCommandRuns(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeCmd
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.tapp.SetFocus(a.cmd)
+	a.cmd.SetText("projects")
+	if !strings.Contains(a.infobar.GetText(true), ":projects") {
+		t.Fatal("typing a command does not filter the infobar suggestions")
+	}
+
+	a.commandEnter()
+	if strings.Contains(a.infobar.GetText(true), ":projects") {
+		t.Fatal("infobar lists commands after the command ran")
+	}
+}
+
+func TestInfobarRestoresShortcutsOnEscapeFromCmdMode(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeCmd
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.tapp.SetFocus(a.cmd)
+	a.refreshInfobar()
+	if !strings.Contains(a.infobar.GetText(true), ":accounts") {
+		t.Fatal("cmd mode infobar does not list commands")
+	}
+
+	a.escapePressed()
+	if strings.Contains(a.infobar.GetText(true), ":accounts") {
+		t.Fatal("infobar lists commands after Esc")
 	}
 }
 

@@ -476,6 +476,7 @@ func (a *app) focusCmd() {
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(": ")
 	a.tapp.SetFocus(a.cmd)
+	a.refreshInfobar()
 }
 
 func (a *app) startFilter() {
@@ -1297,6 +1298,7 @@ func (a *app) escapePressed() {
 		a.applyFilter()
 	}
 	a.tapp.SetFocus(a.info)
+	a.refreshInfobar()
 }
 
 func (a *app) done(key tcell.Key) {
@@ -1375,4 +1377,5 @@ func (a *app) commandEnter() {
 		viewCommands[text](a)
 	}
 	a.tapp.SetFocus(a.info)
+	a.refreshInfobar()
 }

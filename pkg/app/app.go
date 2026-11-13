@@ -18,25 +18,25 @@ import (
 )
 
 type app struct {
-	tapp             *tview.Application
-	uiMu             sync.Mutex
-	bg               sync.WaitGroup
-	cmd              *tview.InputField
-	info             *tview.Table
-	summary          *tview.TextView
-	status           *tview.TextView
-	pages            *tview.Pages
-	infobar          *tview.TextView
-	mainView         *tview.Flex
-	rootView         *tview.Flex
-	cache            *providers.Cache
-	logger           *providers.Logger
-	shortcuts        *tview.Table
-	helpRow          *tview.Flex
-	helpColumn       *tview.Flex
-	shortcutsSummary *tview.Table
-	screen           tcell.Screen
-	uiRunning        atomic.Bool
+	tapp                 *tview.Application
+	uiMu                 sync.Mutex
+	bg                   sync.WaitGroup
+	cmd                  *tview.InputField
+	info                 *tview.Table
+	summary              *tview.TextView
+	status               *tview.TextView
+	pages                *tview.Pages
+	infobar              *tview.TextView
+	mainView             *tview.Flex
+	rootView             *tview.Flex
+	cache                *providers.Cache
+	logger               *providers.Logger
+	shortcuts            *tview.Table
+	helpRow              *tview.Flex
+	helpColumn           *tview.Flex
+	shortcutsSummary     *tview.Table
+	screen               tcell.Screen
+	uiRunning            atomic.Bool
 	infobarRenderedWidth int
 
 	viewHeaders      []string
@@ -49,18 +49,19 @@ type app struct {
 	autoFetched      map[string]bool
 	staleAutoRefresh bool
 
-	searchIndex      *searchIndex
-	searchQuery      string
-	searchHits       []searchEntry
-	searchInput      *tview.InputField
-	searchResults    *tview.Table
-	searchPanel      *tview.Flex
-	searchColumn     *tview.Flex
-	searchGroupRows  []searchGroupRow
-	searchRowGroups  []int
+	searchIndex       *searchIndex
+	searchQuery       string
+	searchHits        []searchEntry
+	searchInput       *tview.InputField
+	searchResults     *tview.Table
+	searchPanel       *tview.Flex
+	searchColumn      *tview.Flex
+	searchGroupRows   []searchGroupRow
+	searchRowGroups   []int
 	searchRowProjects []string
-	searchPanelFocus bool
-	searchOpen       atomic.Bool
+	searchPanelFocus  bool
+	searchOpen        atomic.Bool
+	cmdFocused        bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -406,6 +407,10 @@ func (a *app) exitFilterMode() {
 func (a *app) changed(text string) {
 	if appState.CmdMode == modeFilter {
 		a.applyFilter()
+		return
+	}
+	if a.cmdFocused {
+		a.refreshInfobar()
 	}
 }
 

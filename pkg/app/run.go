@@ -124,9 +124,11 @@ func bootApp() (*app, func(), error) {
 	a.cmd.SetChangedFunc(a.changed)
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetFocusFunc(func() {
+		a.cmdFocused = true
 		a.mainView.ResizeItem(a.cmd, 3, 1)
 	})
 	a.cmd.SetBlurFunc(func() {
+		a.cmdFocused = false
 		a.mainView.ResizeItem(a.cmd, 0, 0)
 	})
 

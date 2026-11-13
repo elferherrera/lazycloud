@@ -35,6 +35,8 @@ func newFilterTestApp(t *testing.T) *app {
 	a.info.SetBorder(true)
 	a.cmd.SetDoneFunc(a.done)
 	a.cmd.SetChangedFunc(a.changed)
+	a.cmd.SetFocusFunc(func() { a.cmdFocused = true })
+	a.cmd.SetBlurFunc(func() { a.cmdFocused = false })
 	if err := a.cache.SaveProjects([]providers.Project{{ProjectID: "p1", Name: "P One", ProjectNumber: "111"}}); err != nil {
 		t.Fatalf("SaveProjects() error = %v", err)
 	}

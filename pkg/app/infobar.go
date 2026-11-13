@@ -1,6 +1,7 @@
 package app
 
 import (
+	"reflect"
 	"sort"
 	"strings"
 
@@ -182,16 +183,143 @@ func (a *app) infobarWidth() int {
 	return w
 }
 
+type commandSuggestion struct {
+	name string
+	desc string
+}
+
+// infobarCommandDescs carries descriptions for commands the : help listing
+// does not cover: the argument-taking commands and the view commands that
+// never made it into the : entry's command rows.
+var infobarCommandDescs = map[string]string{
+	"sort":                    "sort rows by a column",
+	"write":                   "write the view to a file",
+	"search":                  "open the search panel",
+	"peerings":                "show VPC peerings",
+	"peering":                 "show VPC peerings",
+	"psc":                     "show private service connect",
+	"private-service-connect": "show private service connect",
+}
+
+// infobarCommands caches the suggestion list built once at startup: building
+// it reads viewCommands, which refreshInfobar reaches through setView, so a
+// lazy build would form an initialization cycle (the shortcuts table uses the
+// same init trick).
+var infobarCommands []commandSuggestion
+
+func init() {
+	infobarCommands = commandSuggestions()
+}
+
+// commandSuggestions returns every runnable :command sorted by name with the
+// description shown in the help panel. Aliases inherit the description of the
+// command they dispatch to, resolved by comparing the underlying func
+// pointer, and anything still unmatched falls back to infobarCommandDescs.
+func commandSuggestions() []commandSuggestion {
+	names := commandNames()
+	descs := make(map[string]string, len(names))
+	for _, s := range shortcuts {
+		for _, c := range s.commands {
+			descs[strings.TrimPrefix(c.cmd, ":")] = c.desc
+		}
+	}
+	pointers := make(map[uintptr]string, len(viewCommands))
+	for name, run := range viewCommands {
+		if descs[name] != "" {
+			pointers[reflect.ValueOf(run).Pointer()] = descs[name]
+		}
+	}
+	suggestions := make([]commandSuggestion, 0, len(names))
+	for _, name := range names {
+		desc := descs[name]
+		if desc == "" {
+			if run, ok := viewCommands[name]; ok {
+				desc = pointers[reflect.ValueOf(run).Pointer()]
+			}
+		}
+		if desc == "" {
+			desc = infobarCommandDescs[name]
+		}
+		suggestions = append(suggestions, commandSuggestion{name: name, desc: desc})
+	}
+	return suggestions
+}
+
+// infobarCommandMatches filters the suggestions by a case-insensitive prefix
+// of the typed text. Multi-token input (arguments already typed) matches
+// nothing, since suggestions apply to the command name only.
+func infobarCommandMatches(suggestions []commandSuggestion, text string) []commandSuggestion {
+	text = strings.ToLower(strings.TrimSpace(text))
+	if strings.Contains(text, " ") {
+		return nil
+	}
+	matches := make([]commandSuggestion, 0, len(suggestions))
+	for _, s := range suggestions {
+		if strings.HasPrefix(strings.ToLower(s.name), text) {
+			matches = append(matches, s)
+		}
+	}
+	return matches
+}
+
+// infobarCommandLine renders the matched commands as :name desc pairs in the
+// same style as the shortcuts line, fitted to the character budget with the
+// overflow hinted as +N more.
+func infobarCommandLine(matches []commandSuggestion, budget int) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, 2*len(matches)+1)
+	width := 0
+	dropped := 0
+	for i, s := range matches {
+		w := 1 + len(s.name) + 1 + len(s.desc) + 1
+		if width+w > budget {
+			dropped++
+			continue
+		}
+		width += w
+		if i > 0 {
+			parts = append(parts, "  ")
+		}
+		parts = append(parts, "["+theme.shortcutLabels+"]:"+s.name+"[-]")
+		if s.desc != "" {
+			parts = append(parts, "["+theme.shortcutText+"]"+s.desc+"[-]")
+		}
+	}
+	if dropped > 0 {
+		parts = append(parts, "  ["+theme.shortcutLabels+"]+"+itoa(dropped)+" more[-]")
+	}
+	return strings.Join(parts, " ")
+}
+
+func populateInfobarCommands(view *tview.TextView, text string, screenWidth int) {
+	view.SetText(infobarCommandLine(infobarCommandMatches(infobarCommands, text), infobarBudgetFor(screenWidth)))
+}
+
+// infobarShowsCommands reports whether the infobar should list :command
+// suggestions instead of the view shortcuts: command mode with the bottom
+// input focused. The focus state is a plain flag kept by the input's
+// Focus/Blur hooks, not tview's GetFocus, because the before-draw refresh
+// runs while tview holds its own lock.
+func (a *app) infobarShowsCommands() bool {
+	return appState.CmdMode == modeCmd && a.cmdFocused
+}
+
 func populateInfobarPanel(view *tview.TextView, screenWidth int) {
 	entries, dropped := infobarShortcuts(infobarBudgetFor(screenWidth), infobarSortOrder)
 	view.SetText(infobarLine(entries, dropped))
 }
 
 func (a *app) refreshInfobar() {
-	if !infobarEnabled {
+	if !infobarEnabled || a.infobar == nil {
 		return
 	}
 	a.infobarRenderedWidth = a.infobarWidth()
+	if a.infobarShowsCommands() {
+		populateInfobarCommands(a.infobar, a.cmd.GetText(), a.infobarRenderedWidth)
+		return
+	}
 	populateInfobarPanel(a.infobar, a.infobarRenderedWidth)
 }
 
