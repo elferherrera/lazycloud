@@ -172,6 +172,110 @@ func applyConfigTheme(dark, light providers.Theme) {
 	applyTheme(resolveTheme(dark, light, detectBackground()))
 }
 
+// applyThemeChrome pushes the theme's box colors into the widgets that
+// were built before this palette existed. tview's Box-backed primitives
+// copy Styles.PrimitiveBackgroundColor and Styles.BorderColor at
+// construction and never read the globals again, so a pack switch that
+// only mutates tview.Styles leaves every widget built earlier painted
+// with the startup palette: the settings overlay kept its old backdrop,
+// border and title after a switch. Repaint the box chrome of every
+// widget the app keeps alive; things created later (info table cells,
+// detail overlays) read the already-updated globals or the live theme
+// var at construction. Text, fields and cells are handled by
+// applyThemeToWidgets, which runs next to this in both callers.
+func (a *app) applyThemeChrome() {
+	bg := tcell.GetColor(theme.background)
+	border := theme.borderColor()
+	// All of these embed *tview.Box, which is reachable from outside, so
+	// one pass repaints background and border for the whole live tree:
+	// the Pages backdrop, every layout flex and every panel.
+	boxes := make([]*tview.Box, 0, 20)
+	if a.pages != nil {
+		boxes = append(boxes, a.pages.Box)
+	}
+	if a.rootView != nil {
+		boxes = append(boxes, a.rootView.Box)
+	}
+	if a.mainView != nil {
+		boxes = append(boxes, a.mainView.Box)
+	}
+	if a.searchColumn != nil {
+		boxes = append(boxes, a.searchColumn.Box)
+	}
+	if a.searchPanel != nil {
+		boxes = append(boxes, a.searchPanel.Box)
+	}
+	if a.searchInput != nil {
+		boxes = append(boxes, a.searchInput.Box)
+	}
+	if a.searchResults != nil {
+		boxes = append(boxes, a.searchResults.Box)
+	}
+	if a.info != nil {
+		boxes = append(boxes, a.info.Box)
+	}
+	if a.summary != nil {
+		boxes = append(boxes, a.summary.Box)
+	}
+	if a.status != nil {
+		boxes = append(boxes, a.status.Box)
+	}
+	if a.infobar != nil {
+		boxes = append(boxes, a.infobar.Box)
+	}
+	if a.cmd != nil {
+		boxes = append(boxes, a.cmd.Box)
+	}
+	if a.shortcutsSummary != nil {
+		boxes = append(boxes, a.shortcutsSummary.Box)
+	}
+	if a.helpText != nil {
+		boxes = append(boxes, a.helpText.Box)
+	}
+	if a.helpRow != nil {
+		boxes = append(boxes, a.helpRow.Box)
+	}
+	if a.helpColumn != nil {
+		boxes = append(boxes, a.helpColumn.Box)
+	}
+	if a.settingsForm != nil {
+		boxes = append(boxes, a.settingsForm.Box)
+	}
+	if a.settingsHint != nil {
+		boxes = append(boxes, a.settingsHint.Box)
+	}
+	if a.settingsRow != nil {
+		boxes = append(boxes, a.settingsRow.Box)
+	}
+	if a.settingsColumn != nil {
+		boxes = append(boxes, a.settingsColumn.Box)
+	}
+	for _, b := range boxes {
+		b.SetBackgroundColor(bg)
+		b.SetBorderColor(border)
+	}
+	// Chrome beyond box colors: titles and the selected row follow the
+	// theme var, and the widgets cannot pick that up on their own.
+	if a.info != nil {
+		a.info.SetTitleColor(theme.titleColor())
+		a.info.SetSelectedStyle(tcell.StyleDefault.
+			Foreground(theme.activeRowTextColor()).
+			Background(theme.activeRowBackgroundColor()))
+	}
+	if a.searchResults != nil {
+		a.searchResults.SetTitleColor(theme.titleColor())
+	}
+	if a.helpText != nil {
+		a.helpText.SetTitleColor(theme.titleColor())
+	}
+	if a.settingsForm != nil {
+		a.settingsForm.SetTitleColor(theme.titleColor())
+	}
+	if a.settingsHint != nil {
+		a.settingsHint.SetTextColor(theme.shortcutLabelColor())
+	}
+}
+
 func applyTheme(config providers.Theme) {
 	background := themeColor(config.Background, theme.background)
 	labels := themeColor(config.Labels, theme.labels)

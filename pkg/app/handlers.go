@@ -1153,6 +1153,7 @@ func (a *app) reloadConfig() {
 	infobarSortOrder = config.Infobar.SortOrder
 	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
 	a.applyThemeToWidgets()
+	a.applyThemeChrome()
 	a.statusText("[green]Config reloaded[-]")
 }
 

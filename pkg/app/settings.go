@@ -212,9 +212,18 @@ func (a *app) buildSettingsPage() {
 	a.settingsForm = form
 	a.rebuildSettingsForm()
 
+	// The key summary spans the overlay width under the form, outside the
+	// form itself so no label column eats its space. It is not focusable,
+	// so tab never lands on it and the focus chain stays form, buttons,
+	// then esc closes.
+	hint := tview.NewTextView().SetDynamicColors(false).SetText(settingsUsageHint)
+	hint.SetTextColor(theme.shortcutLabelColor())
+	a.settingsHint = hint
+
 	row := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
 		AddItem(form, settingsFormHeight(a), 1, true).
+		AddItem(hint, 2, 0, false).
 		AddItem(nil, 0, 1, false)
 	column := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -224,6 +233,15 @@ func (a *app) buildSettingsPage() {
 	a.settingsColumn = column
 	a.pages.AddPage("settings", column, true, false)
 }
+
+// settingsUsageHint is the two-line key summary the settings overlay draws
+// under the form. It sits outside the form because the form's vertical
+// layout starts every item's text after the widest label column, which
+// would leave the hint a third of the overlay width. Every key named here
+// is one the panel actually handles: tab moves between rows, space toggles
+// a checkbox (and on the Theme row cycles the pack), arrows cycle color
+// values, and closing (esc or the Close button) persists the edits.
+const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrows cycle colors · esc saves and closes"
 
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
@@ -507,6 +525,7 @@ func isLightColor(color tcell.Color) bool {
 func (a *app) previewThemeColors() {
 	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, a.settingsBackgroundKind()))
 	a.applyThemeToWidgets()
+	a.applyThemeChrome()
 }
 
 // settingsBackgroundKind returns the terminal background for the settings
@@ -551,6 +570,7 @@ func (a *app) applySettings() {
 	}
 	applyConfigTheme(config.Theme, config.ThemeLight)
 	a.applyThemeToWidgets()
+	a.applyThemeChrome()
 	a.setInfobarEnabled(infobarEnabled)
 	a.rebuildSettingsForm()
 	a.statusText("[green]Settings saved[-]")

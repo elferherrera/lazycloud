@@ -72,6 +72,9 @@ type app struct {
 	// of one settings panel session so color previews do not re-query the
 	// terminal on every keystroke. Empty means not queried yet.
 	settingsBackground providers.BackgroundKind
+	// settingsHint is the key summary under the settings form; kept on the
+	// app so applyThemeChrome can restyle it when the pack changes.
+	settingsHint *tview.TextView
 }
 
 func newSummaryPanel() *tview.TextView {
