@@ -76,13 +76,10 @@ func bootApp() (*app, func(), error) {
 		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
-	applyConfigTheme(config.Theme, config.ThemeLight)
+	setConfiguredThemes(config)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
 	infobarSortOrder = config.Infobar.SortOrder
-	configuredTheme = config.Theme
-	configuredThemesDark = config.Theme
-	configuredThemesLight = config.ThemeLight
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {

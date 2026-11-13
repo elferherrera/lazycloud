@@ -27,7 +27,7 @@ type themeColors struct {
 }
 
 var theme = themeColors{
-	background:         "black",
+	background:          "black",
 	labels:              "yellow",
 	text:                "white",
 	borders:             "white",
@@ -179,7 +179,7 @@ func applyTheme(config providers.Theme) {
 	shortcutLabels := themeColor(config.ShortcutLabels, labels)
 	shortcutText := themeColor(config.ShortcutText, text)
 	theme = themeColors{
-		background:         background,
+		background:          background,
 		labels:              labels,
 		text:                text,
 		borders:             themeColor(config.Borders, theme.borders),

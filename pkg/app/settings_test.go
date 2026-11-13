@@ -39,6 +39,10 @@ func TestSettingsRowsCoverPanelToggles(t *testing.T) {
 }
 
 func TestThemeModeTogglesAreExclusive(t *testing.T) {
+	// The theme pack row previews its pack live, which repaints the global
+	// palette; restore it so later theme tests see the palette they expect.
+	originalTheme := theme
+	t.Cleanup(func() { theme = originalTheme })
 	setConfiguredThemeMode(providers.ModeLight)
 	if configuredThemeMode() != providers.ModeLight {
 		t.Fatal("light mode not stored")
@@ -56,6 +60,65 @@ func TestThemeModeTogglesAreExclusive(t *testing.T) {
 	}
 	if !dark || !system {
 		t.Errorf("toggles did not set modes: dark=%v system=%v", dark, system)
+	}
+}
+
+// TestCycleThemeNameSwitchesAndSavesPacks pins the pack row: cycling moves
+// the selection through the packs in name order, previews the new pack's
+// palette, keeps edits made to a pack before switching away, and saving
+// writes the selected pack plus the edits parked in the other packs.
+func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	originalTheme := theme
+	t.Cleanup(func() { theme = originalTheme })
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Mode: string(providers.ModeDark), Labels: "yellow"}
+	configuredThemesDark = configuredTheme
+	configuredThemesLight = providers.DefaultLightTheme()
+	configuredThemePacks = map[string]providers.ThemeSpec{
+		"default": {Dark: configuredTheme, Light: configuredThemesLight},
+		"ocean":   {Dark: providers.Theme{Mode: string(providers.ModeDark), Labels: "aqua"}, Light: providers.DefaultLightTheme()},
+	}
+	configuredThemeName = "default"
+
+	a.cycleThemeName(1)
+	if configuredThemeName != "ocean" {
+		t.Fatalf("cycleThemeName(1) selected %q, want ocean", configuredThemeName)
+	}
+	if configuredThemesDark.Labels != "aqua" {
+		t.Fatalf("cycled dark labels = %q, want the ocean pack's aqua", configuredThemesDark.Labels)
+	}
+	if theme.labels != "aqua" {
+		t.Fatalf("preview labels = %q, want the ocean pack painted live", theme.labels)
+	}
+
+	// Wrapping past the end returns to the first pack.
+	a.cycleThemeName(1)
+	if configuredThemeName != "default" {
+		t.Fatalf("cycleThemeName(1) wrap selected %q, want default", configuredThemeName)
+	}
+
+	// Edits made to the default pack before switching away survive the
+	// switch and the save.
+	configuredThemesDark.Labels = "teal"
+	a.cycleThemeName(1) // default -> ocean
+	a.applySettings()
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ThemeName != "ocean" {
+		t.Fatalf("saved themeName = %q, want ocean", config.ThemeName)
+	}
+	if config.Theme.Labels != "aqua" {
+		t.Fatalf("saved legacy labels = %q, want the ocean pack mirrored", config.Theme.Labels)
+	}
+	if got := config.Themes["default"].Dark.Labels; got != "teal" {
+		t.Fatalf("saved default pack dark labels = %q, want the parked teal edit", got)
+	}
+	if got := config.Themes["ocean"].Dark.Labels; got != "aqua" {
+		t.Fatalf("saved ocean pack dark labels = %q, want aqua kept", got)
 	}
 }
 
@@ -117,18 +180,23 @@ func TestActiveThemeSectionFollowsMode(t *testing.T) {
 	configuredTheme = providers.Theme{Mode: string(providers.ModeDark)}
 	configuredThemesDark = configuredTheme
 	configuredThemesLight = providers.DefaultLightTheme()
-	if activeThemeSection() != &configuredThemesDark {
+	if activeThemeSection(providers.BackgroundDark) != &configuredThemesDark {
 		t.Error("activeThemeSection(dark) did not return the dark section")
 	}
 	configuredTheme.Mode = string(providers.ModeLight)
 	configuredThemesDark.Mode = string(providers.ModeLight)
-	if activeThemeSection() != &configuredThemesLight {
+	if activeThemeSection(providers.BackgroundDark) != &configuredThemesLight {
 		t.Error("activeThemeSection(light) did not return the light section")
 	}
+	// System mode follows the terminal: dark terminal edits the dark
+	// section, light terminal edits the light one the UI actually paints.
 	configuredTheme.Mode = string(providers.ModeSystem)
 	configuredThemesDark.Mode = string(providers.ModeSystem)
-	if activeThemeSection() != &configuredThemesDark {
-		t.Error("activeThemeSection(system) did not return the dark section")
+	if activeThemeSection(providers.BackgroundDark) != &configuredThemesDark {
+		t.Error("activeThemeSection(system, dark terminal) did not return the dark section")
+	}
+	if activeThemeSection(providers.BackgroundLight) != &configuredThemesLight {
+		t.Error("activeThemeSection(system, light terminal) did not return the light section")
 	}
 }
 

@@ -365,3 +365,94 @@ func TestConfigThemeLightSectionMergesAgainstLightPalette(t *testing.T) {
 		t.Fatalf("config file light labels = %q, want orange persisted", onDisk.ThemeLight.Labels)
 	}
 }
+
+// TestConfigThemesMapMigration pins the pack migration: a file with only
+// the legacy sections gets them wrapped into a default pack, while a file
+// that already carries packs keeps them, gets their empty keys filled in
+// and persisted, and falls back to the default pack when the selection
+// points at a pack that does not exist.
+func TestConfigThemesMapMigration(t *testing.T) {
+	defaultTheme := Theme{Mode: "system", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
+
+	t.Run("legacy sections become the default pack", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		spec, ok := got.Themes[DefaultThemeName]
+		if !ok || len(got.Themes) != 1 {
+			t.Fatalf("LoadConfig() themes = %+v, want a single %q pack", got.Themes, DefaultThemeName)
+		}
+		if spec.Dark.Labels != "aqua" || spec.Dark.Text != defaultTheme.Text {
+			t.Fatalf("default pack dark = %+v, want explicit labels with filled text", spec.Dark)
+		}
+		if got.ThemeName != DefaultThemeName {
+			t.Fatalf("LoadConfig() themeName = %q, want %q", got.ThemeName, DefaultThemeName)
+		}
+		onDisk := readConfigFile(t, dir)
+		if onDisk.Themes[DefaultThemeName].Dark.Labels != "aqua" {
+			t.Fatalf("config file default pack dark = %+v, want aqua persisted", onDisk.Themes[DefaultThemeName].Dark)
+		}
+	})
+
+	t.Run("existing packs are kept, filled in and persisted", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		content := "themeName: ocean\nthemes:\n  ocean:\n    dark:\n      labels: aqua\n    light:\n      labels: teal\n  forest:\n    dark:\n      labels: olive\n"
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if len(got.Themes) != 2 {
+			t.Fatalf("LoadConfig() themes = %+v, want ocean and forest kept", got.Themes)
+		}
+		ocean := got.Themes["ocean"]
+		if ocean.Dark.Labels != "aqua" || ocean.Dark.Text != defaultTheme.Text {
+			t.Fatalf("ocean dark = %+v, want explicit labels with filled text", ocean.Dark)
+		}
+		if ocean.Light.Labels != "teal" || ocean.Light.Text != DefaultLightTheme().Text {
+			t.Fatalf("ocean light = %+v, want explicit labels with light palette fill", ocean.Light)
+		}
+		if got.ThemeName != "ocean" {
+			t.Fatalf("LoadConfig() themeName = %q, want ocean kept", got.ThemeName)
+		}
+		// The fill-in must persist: a partial pack on disk comes back
+		// complete on the next load without rewriting it again.
+		onDisk := readConfigFile(t, dir)
+		if onDisk.Themes["ocean"].Dark.Text != defaultTheme.Text {
+			t.Fatalf("config file ocean dark text = %q, want filled-in value persisted", onDisk.Themes["ocean"].Dark.Text)
+		}
+	})
+
+	t.Run("missing selection falls back to the default pack", func(t *testing.T) {
+		dir := testConfigDir(t)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating config dir: %v", err)
+		}
+		content := "themeName: no-such-pack\nthemes:\n  default:\n    dark:\n      labels: aqua\n"
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatalf("writing config file: %v", err)
+		}
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if got.ThemeName != DefaultThemeName {
+			t.Fatalf("LoadConfig() themeName = %q, want fallback to %q", got.ThemeName, DefaultThemeName)
+		}
+	})
+}

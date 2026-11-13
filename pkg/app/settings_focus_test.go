@@ -52,7 +52,7 @@ func focusFormRows(t *testing.T, width, focusIndex int) (*app, []string) {
 // checkbox row carries the ▸ prefix and an accent-colored label, while
 // unfocused rows keep their plain labels so the column stays aligned.
 func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 0)
+	_, rows := focusFormRows(t, 80, 1) // Light theme, first toggleable row
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, focusMarker+"Light theme") {
 		t.Errorf("focused checkbox row is missing the %q marker; form:\n%s", focusMarker, joined)
@@ -65,7 +65,7 @@ func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
 // TestFocusedColorFieldRowShowsMarker pins the same affordance on the color
 // swatch rows, whose labels live on the embedded InputField.
 func TestFocusedColorFieldRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 5) // first color field (Background)
+	_, rows := focusFormRows(t, 80, 6) // first color field (Background)
 	joined := strings.Join(rows, "\n")
 	if !strings.Contains(joined, focusMarker+"Background") {
 		t.Errorf("focused color row is missing the %q marker; form:\n%s", focusMarker, joined)
@@ -90,17 +90,17 @@ func TestRebuildSettingsFormKeepsFocusedRow(t *testing.T) {
 	a.buildSettingsPage()
 	form := a.settingsForm
 
-	// Focus the Shortcut bar row (index 3) and rebuild, like a toggle does.
-	form.SetFocus(3)
+	// Focus the Shortcut bar row (index 4) and rebuild, like a toggle does.
+	form.SetFocus(4)
 	a.rebuildSettingsForm()
 
 	item, button := form.GetFocusedItemIndex()
-	if item != 3 || button != -1 {
-		t.Fatalf("after rebuild focused item=%d button=%d, want item=3 button=-1", item, button)
+	if item != 4 || button != -1 {
+		t.Fatalf("after rebuild focused item=%d button=%d, want item=4 button=-1", item, button)
 	}
-	checkbox, ok := form.GetFormItem(3).(*focusCheckbox)
+	checkbox, ok := form.GetFormItem(4).(*focusCheckbox)
 	if !ok {
-		t.Fatalf("form item 3 is %T, want *focusCheckbox", form.GetFormItem(3))
+		t.Fatalf("form item 4 is %T, want *focusCheckbox", form.GetFormItem(4))
 	}
 	if !strings.HasPrefix(checkbox.GetLabel(), focusMarker) {
 		t.Errorf("rebuilt focused checkbox label = %q, want %q prefix", checkbox.GetLabel(), focusMarker)

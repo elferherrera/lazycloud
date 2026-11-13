@@ -68,6 +68,10 @@ type app struct {
 	settingsForm   *tview.Form
 	settingsRow    *tview.Flex
 	settingsColumn *tview.Flex
+	// settingsBackground caches the terminal background query for the life
+	// of one settings panel session so color previews do not re-query the
+	// terminal on every keystroke. Empty means not queried yet.
+	settingsBackground providers.BackgroundKind
 }
 
 func newSummaryPanel() *tview.TextView {

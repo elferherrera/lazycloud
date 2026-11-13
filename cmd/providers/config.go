@@ -28,12 +28,27 @@ const (
 )
 
 type Config struct {
-	Theme      Theme             `yaml:"theme"`
-	ThemeLight Theme             `yaml:"themeLight"`
-	Shortcuts  map[string]string `yaml:"shortcuts"`
-	AutoUpdate AutoUpdate        `yaml:"autoupdate"`
-	Infobar    Infobar           `yaml:"infobar"`
+	Theme      Theme `yaml:"theme"`
+	ThemeLight Theme `yaml:"themeLight"`
+	// Themes holds every named palette pack; ThemeName selects one.
+	// Kept alongside the two legacy sections so old files load and the
+	// settings panel can switch packs without a second file.
+	Themes     map[string]ThemeSpec `yaml:"themes,omitempty"`
+	ThemeName  string               `yaml:"themeName,omitempty"`
+	Shortcuts  map[string]string    `yaml:"shortcuts"`
+	AutoUpdate AutoUpdate           `yaml:"autoupdate"`
+	Infobar    Infobar              `yaml:"infobar"`
 }
+
+// ThemeSpec is one named theme pack: a palette for each terminal
+// background, so a single themeName works on dark and light terminals.
+type ThemeSpec struct {
+	Dark  Theme `yaml:"dark"`
+	Light Theme `yaml:"light"`
+}
+
+// DefaultThemeName is the built-in pack users get on a fresh config.
+const DefaultThemeName = "default"
 
 func ConfigFilePath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -74,6 +89,8 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		}
 		config.Theme = mergeTheme(config.Theme, defaultTheme)
 		config.ThemeLight = CompleteLightTheme(config.ThemeLight)
+		config.Themes = map[string]ThemeSpec{DefaultThemeName: {Dark: config.Theme, Light: config.ThemeLight}}
+		config.ThemeName = DefaultThemeName
 		if err := SaveConfig(config); err != nil {
 			return Config{}, err
 		}
@@ -84,9 +101,10 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		return Config{}, err
 	}
 	var sections struct {
-		AutoUpdate *AutoUpdate `yaml:"autoupdate"`
-		Infobar    *Infobar    `yaml:"infobar"`
-		ThemeLight *Theme       `yaml:"themeLight"`
+		AutoUpdate *AutoUpdate          `yaml:"autoupdate"`
+		Infobar    *Infobar             `yaml:"infobar"`
+		ThemeLight *Theme               `yaml:"themeLight"`
+		Themes     map[string]ThemeSpec `yaml:"themes"`
 	}
 	if err := yaml.Unmarshal(data, &sections); err != nil {
 		return Config{}, err
@@ -116,6 +134,39 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		rewrote = true
 	} else if config.Infobar.SortOrder == "" {
 		config.Infobar.SortOrder = defaultInfobar.SortOrder
+		rewrote = true
+	}
+	// Files without a themes map predate multi-theme support; their
+	// active palette lives in the two legacy sections. Move it into a
+	// pack named DefaultThemeName so the settings panel treats it like
+	// any other pack. Files that already carry packs keep them; only the
+	// empty keys of each pack are filled in.
+	if sections.Themes == nil {
+		config.Themes = map[string]ThemeSpec{DefaultThemeName: {Dark: config.Theme, Light: config.ThemeLight}}
+		if config.ThemeName == "" {
+			config.ThemeName = DefaultThemeName
+		}
+		rewrote = true
+	} else {
+		for name, spec := range config.Themes {
+			mergedDark := mergeTheme(spec.Dark, defaultTheme)
+			mergedLight := CompleteLightTheme(spec.Light)
+			if mergedDark != spec.Dark || mergedLight != spec.Light {
+				rewrote = true
+			}
+			spec.Dark = mergedDark
+			spec.Light = mergedLight
+			config.Themes[name] = spec
+		}
+		if config.ThemeName == "" {
+			config.ThemeName = DefaultThemeName
+			rewrote = true
+		}
+	}
+	if _, ok := config.Themes[config.ThemeName]; !ok {
+		// A missing selection falls back to the default pack rather than
+		// painting with empty colors.
+		config.ThemeName = DefaultThemeName
 		rewrote = true
 	}
 	if rewrote {

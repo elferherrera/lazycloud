@@ -1,6 +1,7 @@
 package app
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -17,9 +18,15 @@ type settingsRow struct {
 }
 
 // settingsRows returns the toggleable entries in panel order: appearance
-// first (theme mode, shortcut bar), then behavior (auto update).
+// first (theme pack, theme mode, shortcut bar), then behavior (auto update).
 func (a *app) settingsRows() []settingsRow {
 	return []settingsRow{
+		{label: "Theme: " + configuredThemeName, get: func() bool { return false },
+			set: func(on bool) {
+				if on {
+					a.cycleThemeName(1)
+				}
+			}},
 		{label: "Light theme", get: func() bool { return configuredThemeMode() == providers.ModeLight },
 			set: func(on bool) {
 				mode := providers.ModeDark
@@ -95,18 +102,80 @@ var themeColorKeys = []themeColorKey{
 		set: func(t *providers.Theme, v string) { t.ActiveRowBackground = v }},
 }
 
-// configuredThemes holds both theme sections of the loaded config so the
-// settings panel can read and write them without touching the config file
-// on disk until the user saves. configuredThemesDark is the dark section
-// (the legacy "theme" key); configuredThemesLight is the light section.
+// configuredThemes holds the theme packs of the loaded config plus the
+// selected pack's two sections, so the settings panel can read and write
+// them without touching the config file on disk until the user saves.
+// configuredThemesDark and configuredThemesLight are the selected pack's
+// sections; configuredTheme aliases the dark section for existing call
+// sites that only care about the mode key living there.
 var (
+	configuredThemePacks  map[string]providers.ThemeSpec
+	configuredThemeName   string
 	configuredThemesDark  providers.Theme
 	configuredThemesLight providers.Theme
 )
 
-// configuredTheme aliases the dark section for existing call sites that only
-// care about the mode key living in the dark section.
 var configuredTheme providers.Theme
+
+// setConfiguredThemes resolves the config's selected pack into the
+// configured sections and applies it. Run and reloadConfig hand the whole
+// loaded file over; the pack map stays in sync so a later save keeps every
+// pack, not just the active one.
+func setConfiguredThemes(config providers.Config) {
+	configuredThemePacks = config.Themes
+	configuredThemeName = config.ThemeName
+	spec, ok := config.Themes[config.ThemeName]
+	if !ok {
+		configuredThemeName = providers.DefaultThemeName
+		spec = config.Themes[configuredThemeName]
+	}
+	configuredThemesDark = spec.Dark
+	configuredThemesLight = spec.Light
+	configuredTheme = configuredThemesDark
+	applyConfigTheme(configuredThemesDark, configuredThemesLight)
+}
+
+// configuredThemeNames lists the pack names in the order the settings row
+// cycles them: alphabetical, so a growing list stays predictable.
+func configuredThemeNames() []string {
+	names := make([]string, 0, len(configuredThemePacks))
+	for name := range configuredThemePacks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		names = append(names, providers.DefaultThemeName)
+	}
+	return names
+}
+
+// cycleThemeName switches the selected pack, snaps the panel's sections to
+// the new pack, previews it live, and repaints the row so the label shows
+// the selection. Unsaved edits to the current pack are stored back into the
+// pack map first so switching away and back does not lose them; the new
+// pack keeps its own mode, which the mode rows and color fields pick up on
+// the next rebuild.
+func (a *app) cycleThemeName(dir int) {
+	if configuredThemePacks == nil {
+		configuredThemePacks = map[string]providers.ThemeSpec{}
+	}
+	configuredThemePacks[configuredThemeName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	names := configuredThemeNames()
+	idx := 0
+	for i, name := range names {
+		if name == configuredThemeName {
+			idx = i
+			break
+		}
+	}
+	configuredThemeName = names[(idx+dir+len(names))%len(names)]
+	spec := configuredThemePacks[configuredThemeName]
+	configuredThemesDark = spec.Dark
+	configuredThemesLight = spec.Light
+	configuredTheme = configuredThemesDark
+	a.previewThemeColors()
+	a.rebuildSettingsForm()
+}
 
 func configuredThemeMode() providers.ThemeMode {
 	return providers.ParseThemeMode(configuredTheme.Mode)
@@ -118,13 +187,14 @@ func setConfiguredThemeMode(mode providers.ThemeMode) {
 }
 
 // activeThemeSection returns the section the color fields should edit: the
-// light section in light mode, the dark one otherwise. System mode edits
-// the dark section; the terminal-resolved palette is not editable in place.
-func activeThemeSection() *providers.Theme {
-	if configuredThemeMode() == providers.ModeLight {
-		return &configuredThemesLight
+// section the resolved mode paints with, so an edit always lands where the
+// user sees it. System mode resolves against the given terminal background;
+// on a light terminal that is the light section.
+func activeThemeSection(background providers.BackgroundKind) *providers.Theme {
+	if resolveTheme(configuredThemesDark, configuredThemesLight, background) == configuredThemesDark {
+		return &configuredThemesDark
 	}
-	return &configuredThemesDark
+	return &configuredThemesLight
 }
 
 // buildSettingsPage creates the settings overlay: a bordered form with the
@@ -210,7 +280,7 @@ func (a *app) rebuildSettingsForm() {
 		})
 		form.AddFormItem(checkbox)
 	}
-	section := activeThemeSection()
+	section := activeThemeSection(a.settingsBackgroundKind())
 	for _, key := range themeColorKeys {
 		key := key
 		field := newColorPreviewField()
@@ -426,17 +496,26 @@ func (f *colorPreviewField) applyPreview() {
 // BT.601 luma test the terminal background detection uses.
 func isLightColor(color tcell.Color) bool {
 	r, g, b := color.TrueColor().RGB()
-	return (299*int(r) + 587*int(g) + 114*int(b)) / 1000 > 127
+	return (299*int(r)+587*int(g)+114*int(b))/1000 > 127
 }
 
 // previewThemeColors applies the edited colors to the running UI without
 // writing the config, so the user sees each keystroke take effect. It
-// resolves the mode against the real terminal background, so in system mode
-// on a light terminal the preview paints the light section that closing
-// will save, not the dark one.
+// resolves the mode against the cached terminal background (queried once
+// per panel open, not per keystroke), so in system mode on a light terminal
+// the preview paints the light section that closing will save.
 func (a *app) previewThemeColors() {
-	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, detectBackground()))
+	applyTheme(resolveTheme(configuredThemesDark, configuredThemesLight, a.settingsBackgroundKind()))
 	a.applyThemeToWidgets()
+}
+
+// settingsBackgroundKind returns the terminal background for the settings
+// panel, querying it on first use and caching it for the panel session.
+func (a *app) settingsBackgroundKind() providers.BackgroundKind {
+	if a.settingsBackground == "" {
+		a.settingsBackground = detectBackground()
+	}
+	return a.settingsBackground
 }
 
 // applySettings persists the toggled values and applies them live, then
@@ -456,6 +535,16 @@ func (a *app) applySettings() {
 	config.Infobar.ShowShortcuts = infobarEnabled
 	config.AutoUpdate.Enabled = a.staleAutoRefresh
 	config.Theme.Mode = configuredTheme.Mode
+	// Store the edited sections back and write the whole pack map: edits
+	// made to other packs during this panel session live in the map (kept
+	// there by cycleThemeName), and dropping them on save would lose work.
+	// A nil map (no config file yet) gets a fresh one-pack map.
+	if configuredThemePacks == nil {
+		configuredThemePacks = map[string]providers.ThemeSpec{}
+	}
+	configuredThemePacks[configuredThemeName] = providers.ThemeSpec{Dark: configuredThemesDark, Light: configuredThemesLight}
+	config.Themes = configuredThemePacks
+	config.ThemeName = configuredThemeName
 	if err := providers.SaveConfig(config); err != nil {
 		a.statusText("[red]Failed to save config: [-]" + err.Error())
 		return
@@ -468,6 +557,10 @@ func (a *app) applySettings() {
 }
 
 func (a *app) openSettings() {
+	// One terminal query per panel session; previewThemeColors caches it.
+	// Reset before the first build so the initial rebuild does not grow a
+	// second query.
+	a.settingsBackground = ""
 	if a.settingsForm == nil {
 		a.buildSettingsPage()
 	}

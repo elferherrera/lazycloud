@@ -1147,11 +1147,8 @@ func (a *app) reloadConfig() {
 		return
 	}
 	applyShortcutConfig(config.Shortcuts)
-	applyConfigTheme(config.Theme, config.ThemeLight)
+	setConfiguredThemes(config)
 	applyAutoUpdateConfig(config.AutoUpdate)
-	configuredTheme = config.Theme
-	configuredThemesDark = config.Theme
-	configuredThemesLight = config.ThemeLight
 	a.staleAutoRefresh = config.AutoUpdate.Enabled
 	infobarSortOrder = config.Infobar.SortOrder
 	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
