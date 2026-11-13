@@ -89,6 +89,36 @@ func isDim(style tcell.Style) bool {
 	return attrs&tcell.AttrDim != 0
 }
 
+// TestShadowBackgroundDistinctFromEveryPack pins the fix that made the
+// shadow read as depth on the default dark pack: the strip color must
+// differ from the surface it darkens for every bundled background, and the
+// difference must be the darkening direction (darker, or the floor when
+// the surface is too dark to scale visibly). The old floor sat at the same
+// gray as lazycloud_dark, which flattened the strip back onto the view.
+func TestShadowBackgroundDistinctFromEveryPack(t *testing.T) {
+	for name, pack := range providers.BundledThemes() {
+		surface := tcell.GetColor(pack.Background)
+		shadow := shadowBackgroundColor(surface)
+		if shadow == surface {
+			t.Errorf("%s: shadow color %v equals the surface %v, the strip would be invisible", name, shadow, surface)
+		}
+	}
+}
+
+// TestShadowBackgroundFloorCoversBlack pins the floor: pure black scales
+// to black, which reads as no shadow, so the strip falls back to a fixed
+// dark gray instead. Scaling cannot darken black, so the floor is the
+// only way the strip shows over the default pack.
+func TestShadowBackgroundFloorCoversBlack(t *testing.T) {
+	black := tcell.GetColor("black")
+	if got := shadowBackgroundColor(black); got != shadowFloorColor {
+		t.Errorf("shadow over black = %v, want the floor %v", got, shadowFloorColor)
+	}
+	if shadowFloorColor == black {
+		t.Errorf("floor %v equals black, the strip would be invisible", shadowFloorColor)
+	}
+}
+
 // TestShadowedPrimitiveDelegatesFocus pins the wrapper's delegation: the
 // shadow is a paint pass, not a focus target, so focus, input and mouse
 // all belong to the wrapped panel.

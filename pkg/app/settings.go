@@ -382,10 +382,15 @@ func (a *app) resizeSettingsOverlay() {
 	// screen: clamp the requested height so a small terminal still shows
 	// the panel top-aligned with every row reachable by focus, instead
 	// of the flex centering a 30-row form in 22 rows and clipping the
-	// Follow terminal and Theme rows off the top.
-	if want := settingsFormHeight(a) + 2; want > h-2 {
-		a.settingsRow.ResizeItem(a.settingsPanel, h-2, 1)
+	// Follow terminal and Theme rows off the top. The clamp tracks the
+	// terminal both ways: once a taller terminal can fit the form, the
+	// request goes back to its natural size so the panel floats centered
+	// and the shadow strip below it stays on screen.
+	height := settingsFormHeight(a) + 2
+	if height > h-2 {
+		height = h - 2
 	}
+	a.settingsRow.ResizeItem(a.settingsPanel, height, 1)
 }
 
 // themeColorCycle is the curated list the color fields cycle through with
