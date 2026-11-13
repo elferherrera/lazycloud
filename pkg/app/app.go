@@ -407,6 +407,7 @@ func (a *app) exitFilterMode() {
 func (a *app) changed(text string) {
 	if appState.CmdMode == modeFilter {
 		a.applyFilter()
+		a.refreshInfobar()
 		return
 	}
 	if a.cmdFocused {

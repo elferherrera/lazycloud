@@ -452,6 +452,7 @@ func assertCmdText(t *testing.T, a *app, want string) {
 
 func newFilterCompletionTestApp(t *testing.T) *app {
 	t.Helper()
+	t.Cleanup(func() { appState.CmdMode = modeCmd })
 	a := newFilterTestApp(t)
 	appState.ViewKind = viewVMs
 	appState.ProjectID = "p1"

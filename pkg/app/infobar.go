@@ -297,6 +297,61 @@ func populateInfobarCommands(view *tview.TextView, text string, screenWidth int)
 	view.SetText(infobarCommandLine(infobarCommandMatches(infobarCommands, text), infobarBudgetFor(screenWidth)))
 }
 
+// infobarShowsFilterPaths reports whether the infobar should list the view's
+// detail-filter paths instead of the view shortcuts: filter mode.
+func (a *app) infobarShowsFilterPaths() bool {
+	return appState.CmdMode == modeFilter
+}
+
+// infobarFilterPathMatches filters the cached paths by a case-insensitive
+// prefix of the head token — the text before the first space, the same token
+// Tab completion rotates.
+func infobarFilterPathMatches(paths []string, text string) []string {
+	head, _, _ := strings.Cut(text, " ")
+	head = strings.ToLower(strings.TrimSpace(head))
+	matches := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if strings.HasPrefix(strings.ToLower(p), head) {
+			matches = append(matches, p)
+		}
+	}
+	return matches
+}
+
+// infobarFilterPathsLine renders the matched paths as label-coloured tokens
+// fitted to the character budget, overflow hinted as +N more.
+func infobarFilterPathsLine(paths []string, budget int) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	tokens := make([]string, 0, len(paths)+1)
+	width := 0
+	dropped := 0
+	for i, p := range paths {
+		w := len(p)
+		if i > 0 {
+			w += 2
+		}
+		if width+w > budget {
+			dropped++
+			continue
+		}
+		width += w
+		tokens = append(tokens, "["+theme.shortcutLabels+"]"+p+"[-]")
+	}
+	if len(tokens) == 0 {
+		return ""
+	}
+	if dropped > 0 {
+		tokens = append(tokens, "["+theme.shortcutLabels+"]+"+itoa(dropped)+" more[-]")
+	}
+	return strings.Join(tokens, "  ")
+}
+
+func populateInfobarFilterPaths(view *tview.TextView, kind viewKind, text string, screenWidth int) {
+	view.SetText(infobarFilterPathsLine(infobarFilterPathMatches(detailPaths(views[kind].samples), text), infobarBudgetFor(screenWidth)))
+}
+
 // infobarShowsCommands reports whether the infobar should list :command
 // suggestions instead of the view shortcuts: command mode with the bottom
 // input focused. The focus state is a plain flag kept by the input's
@@ -318,6 +373,10 @@ func (a *app) refreshInfobar() {
 	a.infobarRenderedWidth = a.infobarWidth()
 	if a.infobarShowsCommands() {
 		populateInfobarCommands(a.infobar, a.cmd.GetText(), a.infobarRenderedWidth)
+		return
+	}
+	if a.infobarShowsFilterPaths() {
+		populateInfobarFilterPaths(a.infobar, appState.ViewKind, a.cmd.GetText(), a.infobarRenderedWidth)
 		return
 	}
 	populateInfobarPanel(a.infobar, a.infobarRenderedWidth)

@@ -33,9 +33,12 @@ func infobarSimScreen(t *testing.T, w, h int) tcell.Screen {
 func TestRefreshInfobarRefillsWhenScreenKnown(t *testing.T) {
 	original := infobarEnabled
 	t.Cleanup(func() { infobarEnabled = original })
+	originalMode := appState.CmdMode
+	t.Cleanup(func() { appState.CmdMode = originalMode })
 
 	infobarEnabled = true
 	appState.ViewKind = viewProjects
+	appState.CmdMode = modeCmd
 	a := newFilterTestApp(t)
 
 	a.refreshInfobar()
@@ -335,8 +338,11 @@ func TestRefreshInfobarSkippedWhenDisabled(t *testing.T) {
 func TestRefreshInfobarRepopulatesWhenEnabled(t *testing.T) {
 	original := infobarEnabled
 	t.Cleanup(func() { infobarEnabled = original })
+	originalMode := appState.CmdMode
+	t.Cleanup(func() { appState.CmdMode = originalMode })
 
 	appState.ViewKind = viewClusters
+	appState.CmdMode = modeCmd
 	a := newFilterTestApp(t)
 	infobarEnabled = true
 	a.infobar.SetText("")
@@ -585,6 +591,123 @@ func TestInfobarRestoresShortcutsOnEscapeFromCmdMode(t *testing.T) {
 	a.escapePressed()
 	if strings.Contains(a.infobar.GetText(true), ":accounts") {
 		t.Fatal("infobar lists commands after Esc")
+	}
+}
+
+func TestInfobarShowsFilterPathsInFilterMode(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeFilter
+	appState.ViewKind = viewVMs
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.tapp.SetFocus(a.cmd)
+	a.refreshInfobar()
+	text := a.infobar.GetText(true)
+	if !strings.Contains(text, "BootDisk") {
+		t.Fatal("filter mode infobar does not list the VM detail paths")
+	}
+	if !strings.Contains(text, "more") {
+		t.Fatal("filter mode infobar does not hint at the overflow")
+	}
+
+	a.cmd.SetText("labels")
+	text = a.infobar.GetText(true)
+	if !strings.Contains(text, "Labels") {
+		t.Fatalf("typing labels does not reduce the list to Labels, got %q", text)
+	}
+	if strings.Contains(text, "ServiceAccounts") {
+		t.Errorf("typing labels still shows ServiceAccounts paths, got %q", text)
+	}
+
+	a.cmd.SetText("n1")
+	if got := a.infobar.GetText(true); got != "" {
+		t.Errorf("plain substring with no path match still suggests paths, got %q", got)
+	}
+}
+
+func TestInfobarFilterPathsReduceAsTyped(t *testing.T) {
+	view := newInfobarPanel()
+
+	populateInfobarFilterPaths(view, viewVMs, "", 200)
+	text := view.GetText(true)
+	if !strings.Contains(text, "BootDisk") || !strings.Contains(text, "more") {
+		t.Fatalf("unfiltered VM path list is missing detail paths, got %q", text)
+	}
+
+	populateInfobarFilterPaths(view, viewVMs, "service", 200)
+	text = view.GetText(true)
+	if !strings.Contains(text, "ServiceAccounts.*.Email") {
+		t.Fatalf("typing service does not reduce to ServiceAccounts paths, got %q", text)
+	}
+	if strings.Contains(text, "Labels") {
+		t.Errorf("typing service still shows Labels, got %q", text)
+	}
+
+	populateInfobarFilterPaths(view, viewVMs, "LAB", 200)
+	if !strings.Contains(view.GetText(true), "Labels") {
+		t.Fatal("path filter is not case-insensitive")
+	}
+
+	populateInfobarFilterPaths(view, viewVMs, "Labels env=prod", 200)
+	if !strings.Contains(view.GetText(true), "Labels") {
+		t.Fatal("typing a path value hides the path in use")
+	}
+
+	populateInfobarFilterPaths(view, viewVMs, "- staging", 200)
+	if got := view.GetText(true); got != "" {
+		t.Errorf("exclusion term still suggests paths, got %q", got)
+	}
+
+	populateInfobarFilterPaths(view, viewVMs, "zzz", 200)
+	if got := view.GetText(true); got != "" {
+		t.Errorf("unmatched head still suggests paths, got %q", got)
+	}
+}
+
+func TestInfobarFilterPathsTrackViewSwitch(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.CmdMode = modeFilter
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+	a.setView(viewVMs)
+	if !strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("filter mode infobar does not follow the switched view's paths")
+	}
+	a.setView(viewProjects)
+	if !strings.Contains(a.infobar.GetText(true), "ProjectNumber") {
+		t.Fatal("filter mode infobar does not switch to the projects view's paths")
+	}
+	if strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("filter mode infobar keeps the previous view's paths after a switch")
+	}
+}
+
+func TestInfobarFilterPathsEnterAndLeave(t *testing.T) {
+	originalMode := appState.CmdMode
+	savedView := appState.ViewKind
+	t.Cleanup(func() { appState.CmdMode = originalMode; appState.ViewKind = savedView })
+
+	appState.ViewKind = viewVMs
+	a := newFilterTestApp(t)
+	a.screen = infobarSimScreen(t, 200, 40)
+
+	a.startFilter()
+	if !strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("entering filter mode does not list the view's detail paths")
+	}
+	if appState.CmdMode != modeFilter {
+		t.Fatalf("CmdMode after / = %v, want modeFilter", appState.CmdMode)
+	}
+
+	a.escapePressed()
+	if strings.Contains(a.infobar.GetText(true), "BootDisk") {
+		t.Fatal("infobar lists detail paths after leaving filter mode")
 	}
 }
 

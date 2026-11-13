@@ -498,6 +498,7 @@ func (a *app) startFilter() {
 	}
 	a.enterFilterMode()
 	a.tapp.SetFocus(a.cmd)
+	a.refreshInfobar()
 }
 
 func (a *app) completeFilterDetail(forward bool) {
