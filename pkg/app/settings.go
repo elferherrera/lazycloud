@@ -181,18 +181,34 @@ func (a *app) rebuildSettingsForm() {
 		return
 	}
 	form := a.settingsForm
+	// Keep the user's row through the refill: Clear resets focus to the
+	// first item, and applySettings rebuilds after every toggle. Without
+	// this, the caret would jump to the top after each change. Capture the
+	// indices before Clear destroys the old widgets, and only restore when
+	// this form's subtree (the form itself or any of its items) held focus.
+	item, button := form.GetFocusedItemIndex()
+	wasFocused := form.HasFocus()
 	form.Clear(true)
 	form.SetLabelColor(theme.shortcutLabelColor())
 	form.SetFieldTextColor(theme.shortcutTextColor())
 	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(theme.shortcutTextColor())
+	// Focused buttons paint their whole box with the activated style, so
+	// the theme accent makes the focused button readable at a glance.
+	form.SetButtonActivatedStyle(tcell.StyleDefault.
+		Background(theme.focusColor()).
+		Foreground(readableOnColor(theme.focusColor())))
 	for _, row := range a.settingsRows() {
 		row := row
-		form.AddCheckbox(row.label, row.get(), func(checked bool) {
+		checkbox := newFocusCheckbox()
+		checkbox.SetLabel(row.label)
+		checkbox.SetChecked(row.get())
+		checkbox.SetChangedFunc(func(checked bool) {
 			row.set(checked)
 			a.applySettings()
 		})
+		form.AddFormItem(checkbox)
 	}
 	section := activeThemeSection()
 	for _, key := range themeColorKeys {
@@ -225,6 +241,81 @@ func (a *app) rebuildSettingsForm() {
 	form.AddTextView("Config file", path, 38, 1, false, false)
 	form.AddButton("Open in editor", func() { a.openConfigFile() })
 	form.AddButton("Close", func() { a.closeSettings() })
+	if wasFocused {
+		if item >= 0 && item < form.GetFormItemCount() {
+			form.SetFocus(item)
+		} else if button >= 0 && button < form.GetButtonCount() {
+			form.SetFocus(form.GetFormItemCount() + button)
+		}
+		// SetFocus only blurs and focuses when the index changes; after a
+		// Clear nothing has focus, so for the restored row to actually
+		// receive the focus callbacks (and key events) the app must hand
+		// focus to the form again, which delegates to focusedElement.
+		a.tapp.SetFocus(form)
+	}
+}
+
+// focusMarker prefixes the focused row's label, noFocusMarker pads the
+// unfocused rows so the label column never shifts sideways when focus
+// moves between rows.
+const (
+	focusMarker   = "▸ "
+	noFocusMarker = "  "
+)
+
+// focusCheckbox is a settings toggle that shows which row is focused. The
+// marker is part of the stored label because Checkbox.Draw prints the
+// stored label directly, but the prefix keeps a constant width (▸ and two
+// spaces both measure 2 cells) so the label column never shifts sideways
+// when focus moves. The accent colors survive the form's per-draw restyle
+// by being re-applied in SetFormAttributes, which Form.Draw calls after
+// its own styling — the same trick colorPreviewField uses for its swatch.
+type focusCheckbox struct {
+	*tview.Checkbox
+	base string
+}
+
+func newFocusCheckbox() *focusCheckbox {
+	c := &focusCheckbox{Checkbox: tview.NewCheckbox()}
+	c.SetFocusFunc(func() { c.update(true) })
+	c.SetBlurFunc(func() { c.update(false) })
+	return c
+}
+
+// SetLabel records the bare row label and displays it behind the current
+// focus prefix.
+func (c *focusCheckbox) SetLabel(label string) *tview.Checkbox {
+	c.base = label
+	return c.Checkbox.SetLabel(c.labeled())
+}
+
+// labeled returns the row label with the focus prefix of the current state.
+func (c *focusCheckbox) labeled() string {
+	if c.HasFocus() {
+		return focusMarker + c.base
+	}
+	return noFocusMarker + c.base
+}
+
+// update repaints the row for the focused state: accent-colored label and
+// a filled focus style for the checkbox square, so the focused row reads
+// at a glance instead of white-on-white.
+func (c *focusCheckbox) update(focused bool) {
+	c.Checkbox.SetLabel(c.labeled())
+	if focused {
+		c.SetLabelStyle(tcell.StyleDefault.Foreground(theme.focusColor()))
+		c.SetActivatedStyle(theme.focusStyle())
+	} else {
+		c.SetLabelStyle(tcell.StyleDefault.Foreground(theme.shortcutLabelColor()))
+	}
+}
+
+// SetFormAttributes re-applies the focused state after the form's per-draw
+// restyle.
+func (c *focusCheckbox) SetFormAttributes(labelWidth int, labelColor, bgColor, fieldTextColor, fieldBgColor tcell.Color) tview.FormItem {
+	c.Checkbox.SetFormAttributes(labelWidth, labelColor, bgColor, fieldTextColor, fieldBgColor)
+	c.update(c.HasFocus())
+	return c
 }
 
 // cycleThemeColor moves the section value for one key through the curated
@@ -253,6 +344,7 @@ func cycleThemeColor(section *providers.Theme, key themeColorKey, dir int, field
 type colorPreviewField struct {
 	*tview.InputField
 	userChanged func(text string)
+	baseLabel   string
 }
 
 func newColorPreviewField() *colorPreviewField {
@@ -263,7 +355,37 @@ func newColorPreviewField() *colorPreviewField {
 		}
 		f.applyPreview()
 	})
+	f.SetFocusFunc(f.applyFocusStyle)
+	f.SetBlurFunc(f.applyFocusStyle)
 	return f
+}
+
+// SetLabel records the bare row label and displays it with the current
+// focus prefix; the swatch field needs the same marker the checkboxes
+// carry so every row shows focus the same way.
+func (f *colorPreviewField) SetLabel(label string) *tview.InputField {
+	f.baseLabel = label
+	return f.InputField.SetLabel(f.labeled())
+}
+
+// labeled returns the row label with the focus prefix of the current state.
+func (f *colorPreviewField) labeled() string {
+	if f.HasFocus() {
+		return focusMarker + f.baseLabel
+	}
+	return noFocusMarker + f.baseLabel
+}
+
+// applyFocusStyle repaints the label style for the focused state; the
+// accent is re-applied here because Form.Draw's per-draw restyle flattens
+// styles set outside SetFormAttributes.
+func (f *colorPreviewField) applyFocusStyle() {
+	f.InputField.SetLabel(f.labeled())
+	if f.HasFocus() {
+		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.focusColor()))
+	} else {
+		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.shortcutLabelColor()))
+	}
 }
 
 // SetChangedFunc chains the caller's handler with the swatch repaint, so
@@ -279,6 +401,7 @@ func (f *colorPreviewField) SetChangedFunc(handler func(text string)) *tview.Inp
 // field style, so the preview survives redraws.
 func (f *colorPreviewField) SetFormAttributes(labelWidth int, labelColor, bgColor, fieldTextColor, fieldBgColor tcell.Color) tview.FormItem {
 	f.InputField.SetFormAttributes(labelWidth, labelColor, bgColor, fieldTextColor, fieldBgColor)
+	f.applyFocusStyle()
 	f.applyPreview()
 	return f
 }
@@ -352,6 +475,7 @@ func (a *app) openSettings() {
 	a.resizeSettingsOverlay()
 	a.pages.ShowPage("settings")
 	a.tapp.SetFocus(a.settingsForm)
+	a.updateSettingsCursorStyle()
 	a.statusInfo("space toggles, arrows cycle colors, tab moves, enter runs a button, esc closes")
 }
 
@@ -361,6 +485,32 @@ func (a *app) closeSettings() {
 	a.applySettings()
 	a.pages.HidePage("settings")
 	a.tapp.SetFocus(a.info)
+	a.restoreCursorStyle()
+}
+
+// updateSettingsCursorStyle switches the terminal cursor to a steady block
+// in the theme accent color while the settings form has focus, so even rows
+// without a painted box (text views, fields painted by a swatch) carry a
+// visible focus signal. InputField.ShowCursor keeps the caret visible on the
+// fields themselves.
+func (a *app) updateSettingsCursorStyle() {
+	if a.screen == nil {
+		return
+	}
+	a.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock, theme.focusColor())
+}
+
+// restoreCursorStyle hands the cursor back to the terminal default when the
+// settings page loses focus. The explicit ColorReset matters: SetCursorStyle
+// without a color passes ColorNone, which tcell treats as "leave the color
+// alone", so the theme accent would stick to the cursor after close.
+// tcell also resets the cursor style and color on shutdown, so a crash
+// cannot leave the terminal with a styled cursor either.
+func (a *app) restoreCursorStyle() {
+	if a.screen == nil {
+		return
+	}
+	a.screen.SetCursorStyle(tcell.CursorStyleDefault, tcell.ColorReset)
 }
 
 func (a *app) resizeSettingsOverlay() {

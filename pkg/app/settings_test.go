@@ -146,10 +146,11 @@ func TestSettingsColorFieldsEditActiveSection(t *testing.T) {
 	a.buildSettingsPage()
 
 	// Find the Labels input field and type into it the way the form does.
+	// Labels carry a focus prefix, so match the recorded base label.
 	var field *tview.InputField
 	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
 		item := a.settingsForm.GetFormItem(i)
-		if pf, ok := item.(*colorPreviewField); ok && pf.GetLabel() == "Labels" {
+		if pf, ok := item.(*colorPreviewField); ok && pf.baseLabel == "Labels" {
 			field = pf.InputField
 			break
 		}
@@ -195,7 +196,7 @@ func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	// Edit a color field without toggling any checkbox.
 	var field *tview.InputField
 	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
-		if pf, ok := a.settingsForm.GetFormItem(i).(*colorPreviewField); ok && pf.GetLabel() == "Labels" {
+		if pf, ok := a.settingsForm.GetFormItem(i).(*colorPreviewField); ok && pf.baseLabel == "Labels" {
 			field = pf.InputField
 			break
 		}

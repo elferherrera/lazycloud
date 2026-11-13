@@ -63,6 +63,33 @@ func (t themeColors) focusBorderColor() tcell.Color {
 	return t.borderColor()
 }
 
+// focusColor drives every focused-control affordance in the settings form:
+// checkbox box, label marker, button activation, and the row caret.
+func (t themeColors) focusColor() tcell.Color {
+	if c := tcell.GetColor(t.focus); c != tcell.ColorDefault {
+		return c
+	}
+	return tcell.GetColor(t.labels)
+}
+
+// focusStyle styles the focused checkbox: accent box background with
+// readable black-or-white check text, matching how color swatches pick
+// their text color.
+func (t themeColors) focusStyle() tcell.Style {
+	return tcell.StyleDefault.
+		Background(t.focusColor()).
+		Foreground(readableOnColor(t.focusColor()))
+}
+
+// readableOnColor returns the text color that stays legible on a given
+// background: black on light, white otherwise.
+func readableOnColor(color tcell.Color) tcell.Color {
+	if color == tcell.ColorDefault || isLightColor(color) {
+		return tcell.ColorBlack
+	}
+	return tcell.ColorWhite
+}
+
 func (t themeColors) titleColor() tcell.Color {
 	return tcell.GetColor(t.title)
 }
