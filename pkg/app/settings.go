@@ -469,7 +469,7 @@ func (a *app) rebuildSettingsForm() {
 		a.settingsSaveAs = nil
 	} else {
 		saveAs := tview.NewInputField()
-		saveAs.SetFieldWidth(16)
+		saveAs.SetFieldWidth(24)
 		suggestion := suggestedThemeName()
 		text := suggestion
 		if a.settingsTypedName != "" {

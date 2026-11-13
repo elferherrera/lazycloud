@@ -10,9 +10,10 @@ import (
 
 // TestSettingsOverlayPaintsDropShadow draws the settings overlay over a
 // painted main view and pins the depth effect: the cells one step right
-// of and one row below the panel carry the dim attribute, and the cells
-// on the panel edge and inside it do not. The strip is what makes the
-// panel read as a floating window instead of a flat region.
+// of and one row below the panel carry the dim attribute and a darker
+// background than the painted surface, and the cells on the panel edge
+// and inside it do not. The strip is what makes the panel read as a
+// floating window instead of a flat region.
 func TestSettingsOverlayPaintsDropShadow(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -30,10 +31,12 @@ func TestSettingsOverlayPaintsDropShadow(t *testing.T) {
 	screen.SetSize(80, 40)
 
 	// Paint a main view behind the overlay so the shadow has real
-	// content to dim: every cell gets an x on the default style.
+	// content to darken: an x on the pack background, like a dark pack's
+	// main view paints it.
+	bgPaint := tcell.GetColor("black")
 	for y := 0; y < 40; y++ {
 		for x := 0; x < 80; x++ {
-			screen.SetContent(x, y, 'x', nil, tcell.StyleDefault)
+			screen.SetContent(x, y, 'x', nil, tcell.StyleDefault.Background(bgPaint))
 		}
 	}
 
@@ -54,12 +57,20 @@ func TestSettingsOverlayPaintsDropShadow(t *testing.T) {
 		t.Fatalf("panel bottom edge %d leaves no room for the shadow strip", py+ph)
 	}
 
-	// The strip below the panel and right of it is dim.
+	// The strip below the panel and right of it is dim and darkened.
+	wantBg := shadowBackgroundColor(bgPaint)
+	if wantBg == bgPaint {
+		t.Fatalf("shadow background %v does not darken %v, test cannot pin the effect", wantBg, bgPaint)
+	}
 	if style, ok := cellStyle(screen, px, py+ph); !ok || !isDim(style) {
 		t.Errorf("cell below the panel left corner (%d,%d) is not dim", px, py+ph)
+	} else if _, bg, _ := style.Decompose(); bg != wantBg {
+		t.Errorf("cell below the panel left corner (%d,%d) keeps its background %v, want the darkened %v", px, py+ph, bg, wantBg)
 	}
 	if style, ok := cellStyle(screen, px+pw, py); !ok || !isDim(style) {
 		t.Errorf("cell right of the panel top (%d,%d) is not dim", px+pw, py)
+	} else if _, bg, _ := style.Decompose(); bg != wantBg {
+		t.Errorf("cell right of the panel top (%d,%d) keeps its background %v, want the darkened %v", px+pw, py, bg, wantBg)
 	}
 	// Inside the panel nothing is dim: the effect is only the depth
 	// strip, the rows keep their palette contrast.
