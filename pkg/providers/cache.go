@@ -1419,9 +1419,18 @@ func (c *Cache) ListAllVMs() ([]VM, error) {
 	return scanVMs(rows)
 }
 
+// GetVM selects one VM by project, name, and zone when the cloud has
+// zones. An empty zone matches any zone, so zone-less clouds resolve
+// by project/name alone.
 func (c *Cache) GetVM(projectID, zone, name string) (*VM, error) {
+	where := " WHERE project_id = ? AND name = ?"
+	args := []any{projectID, name}
+	if zone != "" {
+		where += " AND zone = ?"
+		args = append(args, zone)
+	}
 	rows, err := c.db.Query(`SELECT project_id, name, instance_id, zone, machine_type, status, labels, network_tags, service_accounts, instance_template, interfaces, boot_disk, data_disks, updated_at
-		FROM vms WHERE project_id = ? AND name = ? AND zone = ?`, projectID, name, zone)
+		FROM vms` + where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1494,9 +1503,17 @@ func (c *Cache) ListAllDisks() ([]Disk, error) {
 	return scanDisks(rows)
 }
 
+// GetDisk selects one disk like GetVM: zone narrows the match when
+// present, empty means any zone.
 func (c *Cache) GetDisk(projectID, zone, name string) (*Disk, error) {
+	where := " WHERE project_id = ? AND name = ?"
+	args := []any{projectID, name}
+	if zone != "" {
+		where += " AND zone = ?"
+		args = append(args, zone)
+	}
 	rows, err := c.db.Query(`SELECT project_id, name, zone, size_gb, type, status, source_image, users, updated_at
-		FROM disks WHERE project_id = ? AND name = ? AND zone = ?`, projectID, name, zone)
+		FROM disks` + where, args...)
 	if err != nil {
 		return nil, err
 	}

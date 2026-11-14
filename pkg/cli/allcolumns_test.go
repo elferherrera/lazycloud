@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // TestProjectIDAllTypes locks the all-projects Project column: every

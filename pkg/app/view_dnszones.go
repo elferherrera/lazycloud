@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func dnsZoneRows(zones []providers.DNSZone) [][]string {
