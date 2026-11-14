@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func ipAddressResource(a *app, projectID, name, address string) (any, error) {

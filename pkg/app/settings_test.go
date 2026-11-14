@@ -7,7 +7,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // settingsTestApp builds an app with the widgets applySettings touches:

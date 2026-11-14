@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers/gcp"
 )
 
 const (
@@ -26,12 +27,12 @@ func pscEndpointTargetProject(r providers.ForwardingRule) string {
 	if r.TargetURL == "" {
 		return ""
 	}
-	return providers.ResourceProjectName(r.TargetURL)
+	return gcp.ResourceProjectName(r.TargetURL)
 }
 
 func pscEndpointTargetRef(r providers.ForwardingRule) string {
 	if r.TargetURL != "" {
-		return providers.ResourcePath(r.TargetURL)
+		return gcp.ResourcePath(r.TargetURL)
 	}
 	return r.Target
 }

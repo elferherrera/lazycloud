@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/cloud"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // errBadSelector reports a get selector with the wrong number of parts
@@ -28,7 +29,7 @@ type resourceDef struct {
 	get func(*providers.Cache, []string) (any, error)
 	// selectorHint documents the selector shape in usage errors.
 	selectorHint string
-	// refresh fetches from GCP and saves to the cache.
+	// refresh fetches from the active cloud and saves to the cache.
 	refresh func(*providers.Cache, string) error
 	// headers are the --table columns, same set as the TUI view.
 	headers []string
@@ -47,35 +48,11 @@ type resourceDef struct {
 	viewKind string
 }
 
-// Fetchers is the GCP-facing side of the registry. New wires the real
-// providers functions; tests inject fakes, so every refresh path is
-// covered without network access.
-type Fetchers struct {
-	Projects        func() ([]providers.Project, error)
-	VMs             func(string) ([]providers.VM, error)
-	Disks           func(string) ([]providers.Disk, error)
-	Clusters        func(string) ([]providers.Cluster, error)
-	Networks        func(string) ([]providers.Network, error)
-	Subnetworks     func(string) ([]providers.Subnetwork, error)
-	Buckets         func(string) ([]providers.Bucket, error)
-	ServiceAccounts func(string) ([]providers.ServiceAccount, error)
-	IAMBindings     func(string) ([]providers.IAMBinding, error)
-}
-
-// DefaultFetchers returns the real GCP fetchers used by New.
-func DefaultFetchers() Fetchers {
-	return Fetchers{
-		Projects:        providers.ListGcloudProjects,
-		VMs:             providers.ListProjectVMs,
-		Disks:           providers.ListProjectDisks,
-		Clusters:        providers.ListProjectClusters,
-		Networks:        providers.ListProjectNetworks,
-		Subnetworks:     providers.ListProjectSubnetworks,
-		Buckets:         providers.ListProjectBuckets,
-		ServiceAccounts: providers.ListProjectServiceAccounts,
-		IAMBindings:     providers.ListProjectIAMPolicy,
-	}
-}
+// Fetchers is the cloud-facing side of the registry: an alias of the
+// pkg/cloud Fetchers type, so every cloud's fetcher set carries the
+// same signatures and the CLI stays provider-agnostic. New clouds are
+// registered in pkg/cloud, not here.
+type Fetchers = cloud.Fetchers
 
 // genericAll and genericProject adapt the typed cache methods to the
 // registry's []any shape, so each entry stays a one-liner.
@@ -150,16 +127,24 @@ func projectRow(v any) []string {
 	return []string{p.ProjectID, p.Name, p.ProjectNumber}
 }
 
-// getVM selects by project/zone/name.
+// getVM selects by project/zone/name, or project/name when the cloud
+// has no zones (Nebius stores an empty zone, which the cache matches).
 func getVM(c *providers.Cache, sel []string) (any, error) {
-	if len(sel) != 3 {
-		return nil, errBadSelector
+	switch len(sel) {
+	case 2:
+		vm, err := c.GetVM(sel[0], "", sel[1])
+		if err != nil || vm == nil {
+			return nil, err
+		}
+		return *vm, nil
+	case 3:
+		vm, err := c.GetVM(sel[0], sel[1], sel[2])
+		if err != nil || vm == nil {
+			return nil, err
+		}
+		return *vm, nil
 	}
-	vm, err := c.GetVM(sel[0], sel[1], sel[2])
-	if err != nil || vm == nil {
-		return nil, err
-	}
-	return *vm, nil
+	return nil, errBadSelector
 }
 
 func vmRow(v any) []string {
@@ -168,14 +153,21 @@ func vmRow(v any) []string {
 }
 
 func getDisk(c *providers.Cache, sel []string) (any, error) {
-	if len(sel) != 3 {
-		return nil, errBadSelector
+	switch len(sel) {
+	case 2:
+		d, err := c.GetDisk(sel[0], "", sel[1])
+		if err != nil || d == nil {
+			return nil, err
+		}
+		return *d, nil
+	case 3:
+		d, err := c.GetDisk(sel[0], sel[1], sel[2])
+		if err != nil || d == nil {
+			return nil, err
+		}
+		return *d, nil
 	}
-	d, err := c.GetDisk(sel[0], sel[1], sel[2])
-	if err != nil || d == nil {
-		return nil, err
-	}
-	return *d, nil
+	return nil, errBadSelector
 }
 
 func diskRow(v any) []string {
@@ -310,7 +302,7 @@ func defaultRegistry(f Fetchers) map[string]resourceDef {
 			all:          genericAll((*providers.Cache).ListAllVMs),
 			project:      genericProject((*providers.Cache).ListVMs),
 			get:          getVM,
-			selectorHint: "project/zone/name",
+			selectorHint: "project/name or project/zone/name",
 			refresh: func(c *providers.Cache, projectID string) error {
 				return refreshInto(c, projectID, f.VMs, c.SaveVMs)
 			},
@@ -322,7 +314,7 @@ func defaultRegistry(f Fetchers) map[string]resourceDef {
 			all:          genericAll((*providers.Cache).ListAllDisks),
 			project:      genericProject((*providers.Cache).ListDisks),
 			get:          getDisk,
-			selectorHint: "project/zone/name",
+			selectorHint: "project/name or project/zone/name",
 			refresh: func(c *providers.Cache, projectID string) error {
 				return refreshInto(c, projectID, f.Disks, c.SaveDisks)
 			},
