@@ -63,8 +63,9 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() on missing file error = %v", err)
 	}
@@ -77,6 +78,9 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	if got.AutoUpdate != defaultAutoUpdate {
 		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
 	}
+	if got.Info != defaultInfo {
+		t.Fatalf("LoadConfig() info = %+v, want defaults %+v", got.Info, defaultInfo)
+	}
 	onDisk := readConfigFile(t, dir)
 	if onDisk.Theme != defaultTheme {
 		t.Fatalf("config file theme = %+v, want defaults %+v", onDisk.Theme, defaultTheme)
@@ -86,6 +90,9 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	}
 	if onDisk.AutoUpdate != defaultAutoUpdate {
 		t.Fatalf("config file autoupdate = %+v, want defaults %+v", onDisk.AutoUpdate, defaultAutoUpdate)
+	}
+	if onDisk.Info != defaultInfo {
+		t.Fatalf("config file info = %+v, want defaults %+v", onDisk.Info, defaultInfo)
 	}
 }
 
@@ -99,8 +106,9 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -141,7 +149,7 @@ func TestConfigRoundtrip(t *testing.T) {
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
-	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -173,8 +181,9 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 	defaultShortcuts := map[string]string{"1": "vms", "2": "buckets", "0": "firewalls"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -212,8 +221,9 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 	defaultShortcuts := map[string]string{}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -233,7 +243,7 @@ func TestConfigThemeSectionKeepsValues(t *testing.T) {
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
-	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -250,7 +260,7 @@ func TestConfigThemeMirrorFollowsSelection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
-	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -302,8 +312,9 @@ func TestConfigPreservesExplicitInfobar(t *testing.T) {
 	defaultShortcuts := map[string]string{}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true, SortOrder: InfobarSortCurrent}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -331,8 +342,9 @@ func TestConfigPreservesExplicitInfobarSortOrder(t *testing.T) {
 	defaultShortcuts := map[string]string{}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true, SortOrder: InfobarSortCurrent}
+	defaultInfo := Info{ColumnBorders: true}
 
-	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -343,6 +355,35 @@ func TestConfigPreservesExplicitInfobarSortOrder(t *testing.T) {
 	onDisk := readConfigFile(t, dir)
 	if onDisk.Infobar != want {
 		t.Fatalf("config file infobar = %+v, want preserved %+v", onDisk.Infobar, want)
+	}
+}
+
+func TestConfigPreservesExplicitInfo(t *testing.T) {
+	dir := testConfigDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	existing := "theme:\n  labels: aqua\ninfo:\n  column_borders: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	defaultTheme := Theme{}
+	defaultShortcuts := map[string]string{}
+	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
+	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
+
+	got, err := LoadConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if got.Info.ColumnBorders {
+		t.Fatal("LoadConfig() info.column_borders = true, want the saved false kept")
+	}
+	onDisk := readConfigFile(t, dir)
+	if onDisk.Info.ColumnBorders {
+		t.Fatal("config file info.column_borders = true, want preserved false")
 	}
 }
 
@@ -358,7 +399,7 @@ func TestConfigThemeLightSectionBecomesPack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
-	got, err := LoadConfig(Theme{Background: "black"}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{Background: "black"}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -393,7 +434,7 @@ func TestConfigThemeModeSystemMigratesToFollow(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
-	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{})
+	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
@@ -417,6 +458,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
 	t.Run("legacy sections become the default pack", func(t *testing.T) {
 		dir := testConfigDir(t)
@@ -426,7 +468,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
@@ -458,7 +500,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
@@ -496,7 +538,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
@@ -515,7 +557,7 @@ func TestConfigThemesMapMigration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
@@ -533,6 +575,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
 	t.Run("upgraded config gains bundles and the flag", func(t *testing.T) {
 		dir := testConfigDir(t)
@@ -542,7 +585,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("theme:\n  labels: aqua\n"), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
 		}
@@ -580,7 +623,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar); err != nil {
+		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo); err != nil {
 			t.Fatal(err)
 		}
 		after, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
@@ -598,7 +641,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 			t.Fatalf("creating config dir: %v", err)
 		}
 		// Seed once, then hand-delete a bundle from the file.
-		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar); err != nil {
+		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo); err != nil {
 			t.Fatal(err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
@@ -612,7 +655,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(pruned), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -633,7 +676,7 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o644); err != nil {
 			t.Fatalf("writing config file: %v", err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -648,6 +691,7 @@ func TestConfigRenamesPristineDefaultPack(t *testing.T) {
 	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
+	defaultInfo := Info{ColumnBorders: true}
 
 	t.Run("pristine default pack renames to lazycloud_dark", func(t *testing.T) {
 		dir := testConfigDir(t)
@@ -664,7 +708,7 @@ func TestConfigRenamesPristineDefaultPack(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -695,7 +739,7 @@ func TestConfigRenamesPristineDefaultPack(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar)
+		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatal(err)
 		}

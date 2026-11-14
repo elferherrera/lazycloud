@@ -322,6 +322,45 @@ func TestReloadConfigAppliesInfobarSetting(t *testing.T) {
 	}
 }
 
+func TestReloadConfigAppliesInfoSetting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "lazycloud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	configYaml := "theme:\n  labels: orange\ninfo:\n  column_borders: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	originalInfoBorders := infoColumnBorders
+	originalTheme := theme
+	originalShortcuts := shortcuts
+	t.Cleanup(func() {
+		infoColumnBorders = originalInfoBorders
+		theme = originalTheme
+		shortcuts = originalShortcuts
+	})
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	infoColumnBorders = true
+	a.reloadConfig()
+	if infoColumnBorders {
+		t.Fatal("reloadConfig() with column_borders: false left the column borders on")
+	}
+
+	configYaml = "theme:\n  labels: orange\ninfo:\n  column_borders: true\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("rewriting config file: %v", err)
+	}
+	a.reloadConfig()
+	if !infoColumnBorders {
+		t.Fatal("reloadConfig() with column_borders: true left the column borders off")
+	}
+}
+
 func TestReloadConfigKeepsValuesOnBrokenFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

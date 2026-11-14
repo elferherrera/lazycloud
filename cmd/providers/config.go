@@ -19,6 +19,10 @@ type Infobar struct {
 	SortOrder     string `yaml:"sort_order"`
 }
 
+type Info struct {
+	ColumnBorders bool `yaml:"column_borders"`
+}
+
 const (
 	// InfobarSortCurrent keeps the built-in order: panel shortcuts first,
 	// then globals in infobarGlobalOrder.
@@ -52,6 +56,7 @@ type Config struct {
 	Shortcuts       map[string]string `yaml:"shortcuts"`
 	AutoUpdate      AutoUpdate        `yaml:"autoupdate"`
 	Infobar         Infobar           `yaml:"infobar"`
+	Info            Info              `yaml:"info"`
 }
 
 // DefaultThemeName is the built-in pack users get on a fresh config.
@@ -140,7 +145,7 @@ func SaveConfig(config Config) error {
 // schemas in place: two-section packs collapse to the palette their mode
 // selected, theme.mode "system" becomes followTerminal, and the bundled
 // packs seed once per file.
-func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar) (Config, error) {
+func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar, defaultInfo Info) (Config, error) {
 	path, err := ConfigFilePath()
 	if err != nil {
 		return Config{}, err
@@ -150,7 +155,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		if !os.IsNotExist(err) {
 			return Config{}, err
 		}
-		config, err := legacyConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar)
+		config, err := legacyConfig(defaultTheme, defaultShortcuts, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			return Config{}, err
 		}
@@ -171,6 +176,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	var sections struct {
 		AutoUpdate *AutoUpdate           `yaml:"autoupdate"`
 		Infobar    *Infobar              `yaml:"infobar"`
+		Info       *Info                 `yaml:"info"`
 		Theme      *legacySection        `yaml:"theme"`
 		ThemeLight *legacySection        `yaml:"themeLight"`
 		Follow     *bool                 `yaml:"followTerminal"`
@@ -199,6 +205,10 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		rewrote = true
 	} else if config.Infobar.SortOrder == "" {
 		config.Infobar.SortOrder = defaultInfobar.SortOrder
+		rewrote = true
+	}
+	if sections.Info == nil {
+		config.Info = defaultInfo
 		rewrote = true
 	}
 	// Files without a themes map predate multi-theme support; their
@@ -295,8 +305,8 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	return config, nil
 }
 
-func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar) (Config, error) {
-	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate, Infobar: defaultInfobar}
+func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar, defaultInfo Info) (Config, error) {
+	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate, Infobar: defaultInfobar, Info: defaultInfo}
 	themePath, err := themePath()
 	if err != nil {
 		return Config{}, err

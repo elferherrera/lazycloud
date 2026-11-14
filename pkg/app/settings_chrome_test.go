@@ -65,18 +65,12 @@ func TestCycleThemeNameRestylesOverlayChrome(t *testing.T) {
 	if got := a.info.GetBorderColor(); got != tcell.GetColor("aqua") {
 		t.Errorf("main table border = %v, want the ocean pack's aqua", got)
 	}
-	if a.settingsHint == nil {
-		t.Fatal("settings overlay must carry the usage hint text view")
-	}
-	if got := a.settingsHint.GetBackgroundColor(); got != tcell.GetColor("navy") {
-		t.Errorf("usage hint background = %v, want the ocean pack's navy", got)
-	}
 }
 
-// TestSettingsOverlayDrawsUsageHint renders the whole settings overlay
-// (column flex, not just the form) and pins that the key summary paints
-// below the form, so the flex wiring cannot silently drop it.
-func TestSettingsOverlayDrawsUsageHint(t *testing.T) {
+// TestOpenSettingsShowsUsageHintInStatus pins the relocated key summary:
+// the overlay no longer carries a hint text view, and the status bar shows
+// it while the panel is open, following the follow-terminal mode.
+func TestOpenSettingsShowsUsageHintInStatus(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
@@ -85,47 +79,43 @@ func TestSettingsOverlayDrawsUsageHint(t *testing.T) {
 	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 
-	screen := tcell.NewSimulationScreen("UTF-8")
-	if err := screen.Init(); err != nil {
-		t.Fatal(err)
-	}
-	defer screen.Fini()
-	screen.SetSize(80, 40)
-	a.settingsColumn.SetRect(0, 0, 80, 40)
-	a.settingsColumn.Draw(screen)
-	screen.Show()
-	cells, cw, _ := screen.GetContents()
-	var joined strings.Builder
-	for y := 0; y < 40; y++ {
-		for x := 0; x < cw; x++ {
-			joined.WriteRune(cells[y*cw+x].Runes[0])
+	a.openSettings()
+	got := a.status.GetText(false)
+	for _, want := range []string{"tab moves", "space toggles", "arrows cycle colors", "esc saves and closes"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("status = %q, want the %q key summary", got, want)
 		}
-		joined.WriteByte('\n')
 	}
-	rendered := joined.String()
-	for _, want := range []string{"tab moves", "space toggles", "esc saves and closes"} {
-		if !strings.Contains(rendered, want) {
-			t.Errorf("settings overlay render is missing %q; drawn:\n%s", want, rendered)
-		}
+	if !a.statusShowing {
+		t.Error("openSettings() left the status row collapsed, the hint would be invisible")
+	}
+
+	configuredFollowTerminal = true
+	a.openSettings()
+	if got := a.status.GetText(false); !strings.Contains(got, settingsStatusHintFollow) {
+		t.Errorf("follow-terminal status = %q, want %q", got, settingsStatusHintFollow)
+	}
+	if !a.statusShowing {
+		t.Error("openSettings() in follow-terminal mode left the status row collapsed")
 	}
 }
 
-// TestSettingsUsageHintNamesRealKeys guards the key summary the overlay
+// TestSettingsUsageHintNamesRealKeys guards the key summary the status bar
 // shows: every key named in the hint must be a key the panel actually
-// handles, because a wrong hint is worse than none.
+// handles, because a wrong hint is worse than none, and a one-row status
+// bar needs a single-line hint.
 func TestSettingsUsageHintNamesRealKeys(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	for _, key := range []string{"tab", "space", "arrows", "esc"} {
-		if !strings.Contains(settingsUsageHint, key) {
-			t.Errorf("usage hint is missing the %q key", key)
+	for _, hint := range []string{settingsStatusHint, settingsStatusHintFollow} {
+		if strings.Contains(hint, "\n") {
+			t.Errorf("usage hint %q spans several lines, want one status row", hint)
+		}
+		for _, key := range []string{"tab", "space", "esc"} {
+			if !strings.Contains(hint, key) {
+				t.Errorf("usage hint %q is missing the %q key", hint, key)
+			}
 		}
 	}
-	// The hint must also fit the overlay width so it never wraps.
-	if width := len(strings.Split(settingsUsageHint, "\n")[0]); width > 54 {
-		t.Errorf("usage hint line 1 is %d columns, want at most 54 to fit the 56-column overlay", width)
-	}
-	if width := len(strings.Split(settingsUsageHint, "\n")[1]); width > 54 {
-		t.Errorf("usage hint line 2 is %d columns, want at most 54 to fit the 56-column overlay", width)
+	if !strings.Contains(settingsStatusHint, "arrows") {
+		t.Errorf("usage hint %q is missing the %q key", settingsStatusHint, "arrows")
 	}
 }

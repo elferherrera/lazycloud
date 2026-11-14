@@ -70,7 +70,7 @@ func bootApp() (*app, func(), error) {
 		logger.Close()
 	}
 
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("loading config: %w", err)
@@ -80,6 +80,7 @@ func bootApp() (*app, func(), error) {
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
 	infobarSortOrder = config.Infobar.SortOrder
+	infoColumnBorders = config.Info.ColumnBorders
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {

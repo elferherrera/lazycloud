@@ -1,31 +1,11 @@
 package providers
 
-import "strconv"
-
 // IsBundledThemeName reports whether a pack name belongs to the seeded
-// bundle set. Color edits fork these packs into a custom name instead of
-// overwriting the seed, so a bundled palette can always be picked again in
-// its original form.
+// bundle set. Bundled packs are seeds: deleting them would be undone by the
+// next config seed, so the settings panel refuses and keeps them pristine.
 func IsBundledThemeName(name string) bool {
 	_, ok := BundledThemes()[name]
 	return ok
-}
-
-// CustomThemeForkName returns the name a bundled pack takes when the user
-// edits its colors: the seed name plus -custom, with a numeric suffix when
-// that name is already taken (monokai-custom, monokai-custom-2, ...). The
-// suffix never collides with an existing pack, including other forks.
-func CustomThemeForkName(seed string, existing map[string]bool) string {
-	base := seed + "-custom"
-	if !existing[base] {
-		return base
-	}
-	for n := 2; ; n++ {
-		candidate := base + "-" + strconv.Itoa(n)
-		if !existing[candidate] {
-			return candidate
-		}
-	}
 }
 
 // BundledThemes returns the palette packs shipped with lazycloud, keyed by

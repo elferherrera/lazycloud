@@ -18,6 +18,8 @@ func formRows(t *testing.T, width int) []string {
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black"}
 	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
 	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	form := a.settingsForm
@@ -43,13 +45,13 @@ func formRows(t *testing.T, width int) []string {
 }
 
 // TestSettingsFormShowsEveryRowAndButtons guards the settings form layout:
-// at the height the flex requests, the last color field, the config path and
-// both buttons must draw, because tview skips items that start at or below
-// the bottom limit.
+// at the height the flex requests, the last color field and both buttons
+// must draw, because tview skips items that start at or below the bottom
+// limit.
 func TestSettingsFormShowsEveryRowAndButtons(t *testing.T) {
 	rows := formRows(t, 80)
 	joined := strings.Join(rows, "\n")
-	for _, want := range []string{"Active row background", "Config file", "Open in editor", "Close"} {
+	for _, want := range []string{"Active row background", "Open in editor", "Close"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("settings form at height %d is missing %q; drawn rows:\n%s", len(rows), want, joined)
 		}
