@@ -478,11 +478,11 @@ func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 	}
 }
 
-// TestColorFieldSpaceCyclesAndTypingRejected pins the color rows' key
-// contract: space steps the curated color list (with wraparound) and the
-// preview follows, while typed input is rejected and the deletion keys
-// (backspace, delete) cannot clear the value.
-func TestColorFieldSpaceCyclesAndTypingRejected(t *testing.T) {
+// TestColorFieldTypedEditsAndSpaceCycles pins the color rows' key contract:
+// typed runes (including the vim letters j/k/g/G) edit the value instead of
+// navigating, backspace deletes, and space steps the curated list with the
+// preview following.
+func TestColorFieldTypedEditsAndSpaceCycles(t *testing.T) {
 	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black", Labels: "yellow"}
@@ -502,21 +502,20 @@ func TestColorFieldSpaceCyclesAndTypingRejected(t *testing.T) {
 		t.Fatal("settings form has no Labels color field")
 	}
 
-	field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone), nil)
-	if field.GetText() != "yellow" {
-		t.Fatalf("typed rune changed the color to %q, want yellow kept", field.GetText())
+	for _, r := range "orange" {
+		field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, r, tcell.ModNone), nil)
 	}
-	for _, ev := range []*tcell.EventKey{
-		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyCtrlU, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone),
-	} {
-		field.InputHandler()(ev, nil)
-		if field.GetText() != "yellow" {
-			t.Fatalf("deletion key %v changed the color to %q, want yellow kept", ev, field.GetText())
-		}
+	if got := field.GetText(); got != "yelloworange" {
+		t.Fatalf("typed value = %q, want yelloworange", got)
+	}
+	if configuredTheme.Labels != "yelloworange" {
+		t.Fatalf("palette labels = %q, want the typed value", configuredTheme.Labels)
+	}
+	for range "orange" {
+		field.InputHandler()(tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone), nil)
+	}
+	if got := field.GetText(); got != "yellow" {
+		t.Fatalf("after backspaces value = %q, want yellow back", got)
 	}
 
 	field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), nil)
@@ -591,10 +590,11 @@ func TestSettingsVimNavigation(t *testing.T) {
 	}
 }
 
-// TestSettingsFieldsHideCursor pins that the read-only fields never print
-// a terminal cursor: the embedded text area calls ShowCursor whenever its
-// field holds focus, which would draw a cursor over the value while
-// navigating with j/k.
+// TestSettingsFieldsHideCursor pins the cursor behaviour of the form's two
+// field kinds: the read-only Theme row never prints a terminal cursor (the
+// embedded text area calls ShowCursor on focus, which would draw a cursor
+// over the value while navigating with j/k), while the color fields are
+// real text inputs and keep theirs.
 func TestSettingsFieldsHideCursor(t *testing.T) {
 	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
@@ -612,8 +612,12 @@ func TestSettingsFieldsHideCursor(t *testing.T) {
 	screen.SetSize(90, 45)
 
 	for i := 0; i < form.GetFormItemCount(); i++ {
+		var wantCursor bool
 		switch form.GetFormItem(i).(type) {
-		case *themeSelectionField, *colorPreviewField:
+		case *themeSelectionField:
+			wantCursor = false
+		case *colorPreviewField:
+			wantCursor = true
 		default:
 			continue
 		}
@@ -621,8 +625,9 @@ func TestSettingsFieldsHideCursor(t *testing.T) {
 		a.settingsColumn.SetRect(0, 0, 90, 45)
 		a.settingsColumn.Draw(screen)
 		screen.Show()
-		if _, _, visible := screen.GetCursor(); visible {
-			t.Errorf("cursor visible while form item %d holds focus, want it hidden on the read-only value", i)
+		_, _, visible := screen.GetCursor()
+		if visible != wantCursor {
+			t.Errorf("form item %d cursor visible = %v, want %v", i, visible, wantCursor)
 		}
 	}
 }

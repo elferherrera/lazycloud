@@ -276,7 +276,9 @@ func (a *app) buildSettingsPage() {
 	// included), gg/G jump to the first/last row, and the up/down arrows
 	// do the same for keyboard layouts without vim habits. The capture
 	// sits on the form, ahead of the per-item captures, so it works from
-	// every row.
+	// every row — except the color fields, which are real text inputs:
+	// their runes must reach the field, or values like "orange" could
+	// never be typed (the j/k/g/G interception would eat their letters).
 	ggPending := false
 	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		total := form.GetFormItemCount() + form.GetButtonCount()
@@ -284,6 +286,12 @@ func (a *app) buildSettingsPage() {
 			return event
 		}
 		item, button := form.GetFocusedItemIndex()
+		if item >= 0 {
+			if _, ok := form.GetFormItem(item).(*colorPreviewField); ok && event.Key() == tcell.KeyRune {
+				ggPending = false
+				return event
+			}
+		}
 		current := item
 		if button >= 0 {
 			current = form.GetFormItemCount() + button
@@ -410,8 +418,8 @@ func (a *app) resizeSettingsOverlay() {
 
 // themeColorCycle is the curated list the color fields step through with
 // the space bar: the 16-color set plus the names terminals render
-// distinctly. The fields accept no typed input, so this list is the only
-// way to change a color from the panel.
+// distinctly. The fields also take typed input (hex values and any other
+// tcell name), so this list is the keyboard shortcut, not the boundary.
 var themeColorCycle = []string{
 	"black", "white", "gray", "silver",
 	"red", "green", "yellow", "blue", "magenta", "cyan",
@@ -479,21 +487,15 @@ func (a *app) rebuildSettingsForm() {
 			key.set(&configuredTheme, text)
 			a.previewThemeColors()
 		})
-		// The fields are cycle-only: space steps the curated color list, and the
-		// capture swallows every other key — the acceptance func alone
-		// cannot stop Backspace or Delete, which tview's text area would
-		// honour — except tab, backtab and enter, which the form needs
-		// to move focus.
+		// The color fields are real text inputs: typed runes edit the value
+		// (hex, tcell names), space steps the curated color list, and the
+		// swatch preview follows every change.
 		field.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-			switch event.Key() {
-			case tcell.KeyTab, tcell.KeyBacktab, tcell.KeyEnter:
-				return event
-			case tcell.KeyRune:
-				if event.Rune() == ' ' {
-					cycleThemeColor(&configuredTheme, key, 1, field.InputField)
-				}
+			if event.Key() == tcell.KeyRune && event.Rune() == ' ' {
+				cycleThemeColor(&configuredTheme, key, 1, field.InputField)
+				return nil
 			}
-			return nil
+			return event
 		})
 	}
 	form.AddButton("Open in editor", func() { a.openConfigFile() })
@@ -724,12 +726,13 @@ func cycleThemeColor(section *providers.Theme, key themeColorKey, dir int, field
 	field.SetText(themeColorCycle[idx])
 }
 
-// colorPreviewField is a read-only color cycle that paints its background
-// with the configured color and keeps the value text readable over it
-// (black or white by luma), like a color picker swatch — space steps the
-// curated list, typing is rejected. Form.Draw restyles every item on each
-// draw, so the preview re-applies itself in SetFormAttributes, which the
-// form calls right after its own styling.
+// colorPreviewField is a color text input that paints its background with
+// the configured color and keeps the value text readable over it (black or
+// white by luma), like a color picker swatch: typed runes edit the value,
+// space steps the curated list, and the preview follows every change.
+// Form.Draw restyles every item on each draw, so the preview re-applies
+// itself in SetFormAttributes, which the form calls right after its own
+// styling.
 type colorPreviewField struct {
 	*tview.InputField
 	userChanged func(text string)
@@ -738,7 +741,6 @@ type colorPreviewField struct {
 
 func newColorPreviewField() *colorPreviewField {
 	f := &colorPreviewField{InputField: tview.NewInputField()}
-	f.SetAcceptanceFunc(func(_ string, _ rune) bool { return false })
 	f.InputField.SetChangedFunc(func(text string) {
 		if f.userChanged != nil {
 			f.userChanged(text)
@@ -796,14 +798,6 @@ func (f *colorPreviewField) SetFormAttributes(labelWidth int, labelColor, bgColo
 	f.applyFocusStyle()
 	f.applyPreview()
 	return f
-}
-
-// Draw paints the swatch and then hides the cursor: the embedded text area
-// calls ShowCursor whenever the field holds focus, printing a terminal
-// cursor on the read-only value.
-func (f *colorPreviewField) Draw(screen tcell.Screen) {
-	f.InputField.Draw(screen)
-	screen.HideCursor()
 }
 
 // applyPreview paints the field background with the current value and picks
