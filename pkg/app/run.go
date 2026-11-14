@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -42,7 +44,29 @@ func Run() error {
 	}
 	defer cleanup()
 
+	// Signals that kill the process by default (terminal close, kill, pane
+	// destroy) skip tcell's teardown, leaving the terminal in raw mode with
+	// the theme's colors still applied. Route them through Stop() so the
+	// event loop unwinds and the screen reset runs. Ctrl-C never arrives
+	// here: raw mode turns it into a key event the input capture already
+	// quits on.
+	stopOnSignal(a.tapp)
+
 	return a.runUI()
+}
+
+// stopOnSignal forwards terminate-style signals to the app's quit path.
+// The handler only trips Stop, which is idempotent, so a second signal
+// during shutdown changes nothing. SIGINT is excluded on purpose: in raw
+// mode it is delivered as a key event, and a non-raw leftover (Suspend)
+// must keep Ctrl-C working as the input capture expects.
+func stopOnSignal(tapp *tview.Application) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		<-ch
+		tapp.Stop()
+	}()
 }
 
 // bootApp builds the app: cache, logger, config, widgets and layout. The
