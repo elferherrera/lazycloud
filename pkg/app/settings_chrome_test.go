@@ -81,7 +81,7 @@ func TestOpenSettingsShowsUsageHintInStatus(t *testing.T) {
 
 	a.openSettings()
 	got := a.status.GetText(false)
-	for _, want := range []string{"tab moves", "space toggles", "arrows cycle colors", "esc saves and closes"} {
+	for _, want := range []string{"tab moves", "space toggles or cycles a value", "esc saves and closes"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status = %q, want the %q key summary", got, want)
 		}
@@ -114,8 +114,5 @@ func TestSettingsUsageHintNamesRealKeys(t *testing.T) {
 				t.Errorf("usage hint %q is missing the %q key", hint, key)
 			}
 		}
-	}
-	if !strings.Contains(settingsStatusHint, "arrows") {
-		t.Errorf("usage hint %q is missing the %q key", settingsStatusHint, "arrows")
 	}
 }

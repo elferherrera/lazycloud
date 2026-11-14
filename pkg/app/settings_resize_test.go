@@ -35,7 +35,7 @@ func panelHeight(t *testing.T, a *app, screen tcell.SimulationScreen) (int, stri
 func themeCycleRow(t *testing.T, a *app) settingsRow {
 	t.Helper()
 	for _, row := range a.settingsRows() {
-		if strings.HasPrefix(row.label, "Theme: ") {
+		if row.label == themeRowLabel {
 			return row
 		}
 	}

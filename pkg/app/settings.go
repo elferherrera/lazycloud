@@ -11,10 +11,13 @@ import (
 )
 
 // settingsRow describes one togglable settings entry rendered by the panel.
+// themeRow marks the entry that renders as the theme cycle field instead
+// of a checkbox.
 type settingsRow struct {
-	label string
-	get   func() bool
-	set   func(on bool)
+	label    string
+	get      func() bool
+	set      func(on bool)
+	themeRow bool
 }
 
 // settingsRows returns the toggleable entries in panel order: behavior
@@ -29,12 +32,12 @@ func (a *app) settingsRows() []settingsRow {
 			set: func(on bool) { a.setInfoColumnBorders(on) }},
 		{label: "Shortcut bar", get: func() bool { return infobarEnabled },
 			set: func(on bool) { a.setInfobarEnabled(on) }},
-		{label: "Theme: " + themeSelectionLabel(), get: func() bool { return !configuredFollowTerminal },
-			// Space cycles on every press: the checkbox visual is the
-			// row's focus affordance (checked whenever a pack paints the
-			// UI), not a state to flip, so the value tview hands to set
-			// is ignored and the option list advances instead.
-			set: func(_ bool) { a.cycleThemeName(1) }},
+		{label: themeRowLabel, get: func() bool { return !configuredFollowTerminal },
+			// Space cycles on every press: the row's field shows the
+			// selection itself, so the value the checkbox contract would
+			// hand to set is unused and the option list advances instead.
+			set:      func(_ bool) { a.cycleThemeName(1) },
+			themeRow: true},
 	}
 }
 
@@ -251,9 +254,15 @@ func setConfiguredFollowTerminal(on bool) {
 	applyActiveThemeFn()
 }
 
+// settingsPanelWidth is the window width, sized to the widest option row
+// (the color-row labels plus the 12-column swatch field) with margin, so
+// the "Open in editor" button and tview's blank line above it fit without
+// the panel carrying dead space.
+const settingsPanelWidth = 44
+
 // buildSettingsPage creates the settings overlay: a bordered form with the
-// toggleable rows, one color input per key of the active mode's section, the
-// config file path, and buttons. The page is added to the Pages stack once
+// toggleable rows, one color input per key of the active mode's section,
+// and buttons. The page is added to the Pages stack once
 // and rebuilt on every open.
 func (a *app) buildSettingsPage() {
 	form := tview.NewForm()
@@ -276,36 +285,43 @@ func (a *app) buildSettingsPage() {
 		AddItem(nil, 0, 1, false)
 	column := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(row, 56, 1, true).
+		AddItem(row, settingsPanelWidth, 1, true).
 		AddItem(nil, 0, 1, false)
 	a.settingsRow = row
 	a.settingsColumn = column
 	a.pages.AddPage("settings", column, true, false)
 }
 
+// themeRowLabel is the Theme row's bare label: the current selection
+// shows in the row's field (space cycles it), so the label stays constant
+// while the value changes.
+const themeRowLabel = "Theme"
+
 // settingsStatusHint is the key summary the status bar shows while the
 // settings panel is open. Every key named here is one the panel actually
-// handles: tab moves between rows, space toggles a checkbox (and on the
-// Theme row cycles the pack), arrows cycle color values, and closing (esc
-// or the Close button) persists the edits.
-const settingsStatusHint = "tab moves · space toggles or cycles the theme · arrows cycle colors · esc saves and closes"
+// handles: tab moves between rows, and space is the only key that changes
+// a value — toggling a checkbox, cycling the theme selection, or stepping
+// a color through the curated list. Closing via esc persists the edits.
+const settingsStatusHint = "tab moves · space toggles or cycles a value · esc saves and closes"
 
-// settingsStatusHintFollow is the follow-terminal variant: the theme and
-// color rows are hidden there, so the hint names only the keys that still
-// do something.
-const settingsStatusHintFollow = "tab moves · space toggles · enter runs a button · esc saves and closes"
+// settingsStatusHintFollow is the follow-terminal variant: the color rows
+// are hidden there, so the hint names only the keys that still do
+// something — space toggles a checkbox or cycles the theme row back to a
+// pack.
+const settingsStatusHintFollow = "tab moves · space toggles or cycles the theme · enter runs a button · esc saves and closes"
 
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
-// color inputs), the leading blank line inside the border, a blank line
-// before and after the button row, and the border itself. Follow-terminal
-// mode and a config pack drop the color rows, so the panel shrinks with
-// them. On very short screens the flex hands the form a smaller height and
-// tview scrolls it to the focused item, so every field stays reachable.
+// color inputs), the leading blank line inside the border, tview's blank
+// line between the options and the buttons, one blank after the buttons,
+// and the border itself. Follow-terminal mode and a config pack drop the
+// color rows, so the panel shrinks with them. On very short screens the
+// flex hands the form a smaller height and tview scrolls it to the focused
+// item, so every field stays reachable.
 func settingsFormHeight(a *app) int {
 	// rows: toggles + color inputs, plus the leading blank line inside
-	// the border, a blank line before and after the button row, and the
-	// border itself.
+	// the border, the blank line between the options and the buttons,
+	// one blank line after the buttons, and the border itself.
 	return settingsFormRows(a) + 6
 }
 
@@ -323,13 +339,7 @@ func (a *app) resizeSettingsOverlay() {
 	if a.settingsColumn == nil || a.screen == nil {
 		return
 	}
-	w, h := a.screen.Size()
-	if w <= 0 {
-		return
-	}
-	if width := overlayWidth(w); width > 56 {
-		a.settingsColumn.ResizeItem(a.settingsRow, width, 1)
-	}
+	_, h := a.screen.Size()
 	// The panel scrolls to the focused row when the flex gives it less
 	// than it asks for, but only when it actually asks for more than the
 	// screen: clamp the requested height so a small terminal still shows
@@ -352,9 +362,10 @@ func (a *app) resizeSettingsOverlay() {
 	}
 }
 
-// themeColorCycle is the curated list the color fields cycle through with
-// the arrow keys: the 16-color set plus the names terminals render distinctly.
-// Hex values and any other tcell name still type directly into the field.
+// themeColorCycle is the curated list the color fields step through with
+// the space bar: the 16-color set plus the names terminals render
+// distinctly. The fields accept no typed input, so this list is the only
+// way to change a color from the panel.
 var themeColorCycle = []string{
 	"black", "white", "gray", "silver",
 	"red", "green", "yellow", "blue", "magenta", "cyan",
@@ -392,6 +403,10 @@ func (a *app) rebuildSettingsForm() {
 		Foreground(readableOnColor(theme.focusColor())))
 	for _, row := range a.settingsRows() {
 		row := row
+		if row.themeRow {
+			form.AddFormItem(newThemeSelectionField(a))
+			continue
+		}
 		checkbox := newFocusCheckbox()
 		checkbox.SetLabel(row.label)
 		checkbox.SetChecked(row.get())
@@ -418,39 +433,24 @@ func (a *app) rebuildSettingsForm() {
 			key.set(&configuredTheme, text)
 			a.previewThemeColors()
 		})
-		// Up and down cycle the curated color list so the palette is
-		// reachable without typing; the field stays open for hex and
-		// tcell names. Tab and shift-tab still move between fields.
+		// The fields are cycle-only: space steps the curated color list, and the
+		// capture swallows every other key — the acceptance func alone
+		// cannot stop Backspace or Delete, which tview's text area would
+		// honour — except tab, backtab and enter, which the form needs
+		// to move focus.
 		field.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 			switch event.Key() {
-			case tcell.KeyDown:
-				cycleThemeColor(&configuredTheme, key, 1, field.InputField)
-				return nil
-			case tcell.KeyUp:
-				cycleThemeColor(&configuredTheme, key, -1, field.InputField)
-				return nil
+			case tcell.KeyTab, tcell.KeyBacktab, tcell.KeyEnter:
+				return event
+			case tcell.KeyRune:
+				if event.Rune() == ' ' {
+					cycleThemeColor(&configuredTheme, key, 1, field.InputField)
+				}
 			}
-			return event
+			return nil
 		})
 	}
 	form.AddButton("Open in editor", func() { a.openConfigFile() })
-	if configuredFollowTerminal {
-		// Deleting or renaming packs only applies while a pack paints
-		// the UI; in follow-terminal mode both buttons would be no-ops.
-		form.AddButton("Close", func() { a.closeSettings() })
-		if wasFocused {
-			a.restoreSettingsFocus(form, restoreLabel, item, button)
-			a.tapp.SetFocus(form)
-		}
-		a.resizeSettingsOverlay()
-		return
-	}
-	// Delete stays honest about what it can do: bundled packs are seeds
-	// that would come back on the next seeding anyway, and deleting the
-	// selected pack needs a fallback, so the button only acts on custom
-	// packs and otherwise explains itself in the status line.
-	form.AddButton("Delete theme", func() { a.deleteTheme() })
-	form.AddButton("Close", func() { a.closeSettings() })
 	if wasFocused {
 		a.restoreSettingsFocus(form, restoreLabel, item, button)
 		// SetFocus only blurs and focuses when the index changes; after a
@@ -492,8 +492,7 @@ func (a *app) settingsFocusLabel() (string, bool) {
 // restoreSettingsFocus hands the caret back to the row the user was on:
 // by label when the row survived the rebuild (the row count changes
 // when Follow terminal toggles), falling back to the pre-Clear indices
-// for buttons and rows whose label legitimately changed (the Theme row
-// renames itself on pack switch).
+// for buttons and rows whose label legitimately changed.
 func (a *app) restoreSettingsFocus(form *tview.Form, label string, item, button int) {
 	if label != "" {
 		for i := 0; i < form.GetFormItemCount(); i++ {
@@ -568,6 +567,91 @@ func (c *focusCheckbox) SetFormAttributes(labelWidth int, labelColor, bgColor, f
 	return c
 }
 
+// themeSelectionField is the Theme row's cycle control: a read-only field
+// whose text is the current selection (config pack, custom, or follow
+// terminal), with space walking the option list — the only key that
+// changes a settings value. Every other key is swallowed in the capture —
+// the acceptance func cannot stop Backspace or Delete, which tview's text
+// area would happily honour — except tab, backtab and enter, which drive
+// the form's own focus movement. It carries the same focus marker and
+// accent styles as the checkboxes, and re-applies them in
+// SetFormAttributes because Form.Draw restyles every item on each draw.
+type themeSelectionField struct {
+	*tview.InputField
+	baseLabel string
+}
+
+func newThemeSelectionField(a *app) *themeSelectionField {
+	f := &themeSelectionField{InputField: tview.NewInputField()}
+	f.SetLabel(themeRowLabel)
+	f.SetText(themeSelectionLabel())
+	f.SetFieldWidth(themeSelectionFieldWidth())
+	f.SetAcceptanceFunc(func(_ string, _ rune) bool { return false })
+	f.SetFocusFunc(func() { f.update(true) })
+	f.SetBlurFunc(func() { f.update(false) })
+	f.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab, tcell.KeyBacktab, tcell.KeyEnter:
+			return event
+		case tcell.KeyRune:
+			if event.Rune() == ' ' {
+				a.cycleThemeName(1)
+			}
+		}
+		return nil
+	})
+	return f
+}
+
+// themeSelectionFieldWidth sizes the field to the longest option so every
+// selection name draws whole; the option list only grows with pack names.
+func themeSelectionFieldWidth() int {
+	w := 0
+	for _, name := range themeOptionNames() {
+		if len(name) > w {
+			w = len(name)
+		}
+	}
+	if w == 0 {
+		w = 1
+	}
+	return w
+}
+
+// SetLabel records the bare row label and displays it behind the current
+// focus prefix.
+func (f *themeSelectionField) SetLabel(label string) *tview.InputField {
+	f.baseLabel = label
+	return f.InputField.SetLabel(f.labeled())
+}
+
+// labeled returns the row label with the focus prefix of the current state.
+func (f *themeSelectionField) labeled() string {
+	if f.HasFocus() {
+		return focusMarker + f.baseLabel
+	}
+	return noFocusMarker + f.baseLabel
+}
+
+// update repaints the row for the focused state: accent-colored label when
+// focused, the settings label color otherwise.
+func (f *themeSelectionField) update(focused bool) {
+	f.InputField.SetLabel(f.labeled())
+	if focused {
+		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.focusColor()))
+	} else {
+		f.SetLabelStyle(tcell.StyleDefault.Foreground(theme.settingsLabelColor()))
+	}
+}
+
+// SetFormAttributes re-applies the focused state after the form's per-draw
+// restyle.
+func (f *themeSelectionField) SetFormAttributes(labelWidth int, labelColor, bgColor, fieldTextColor, fieldBgColor tcell.Color) tview.FormItem {
+	f.InputField.SetFormAttributes(labelWidth, labelColor, bgColor, fieldTextColor, fieldBgColor)
+	f.update(f.HasFocus())
+	return f
+}
+
 // cycleThemeColor moves the section value for one key through the curated
 // list and writes it into the field, which re-fires the changed callback so
 // the preview repaints. Values outside the list enter at the first entry in
@@ -586,11 +670,12 @@ func cycleThemeColor(section *providers.Theme, key themeColorKey, dir int, field
 	field.SetText(themeColorCycle[idx])
 }
 
-// colorPreviewField is a color input that paints its background with the
-// configured color and keeps the value text readable over it (black or
-// white by luma), like a color picker swatch. Form.Draw restyles every item
-// on each draw, so the preview re-applies itself in SetFormAttributes,
-// which the form calls right after its own styling.
+// colorPreviewField is a read-only color cycle that paints its background
+// with the configured color and keeps the value text readable over it
+// (black or white by luma), like a color picker swatch — space steps the
+// curated list, typing is rejected. Form.Draw restyles every item on each
+// draw, so the preview re-applies itself in SetFormAttributes, which the
+// form calls right after its own styling.
 type colorPreviewField struct {
 	*tview.InputField
 	userChanged func(text string)
@@ -599,6 +684,7 @@ type colorPreviewField struct {
 
 func newColorPreviewField() *colorPreviewField {
 	f := &colorPreviewField{InputField: tview.NewInputField()}
+	f.SetAcceptanceFunc(func(_ string, _ rune) bool { return false })
 	f.InputField.SetChangedFunc(func(text string) {
 		if f.userChanged != nil {
 			f.userChanged(text)
@@ -705,11 +791,7 @@ func (a *app) applySettings() {
 	// panel never touched: a pack hand-edited (or added) while the
 	// panel was open must not be clobbered by the in-memory copy from
 	// before that edit. The in-memory map wins for the packs it still
-	// carries, and names the panel deleted stay deleted instead of
-	// being resurrected from the file.
-	for name := range a.settingsDeletedPacks {
-		delete(config.Themes, name)
-	}
+	// carries.
 	for name, pack := range configuredThemePacks {
 		config.Themes[name] = pack
 	}
@@ -722,13 +804,12 @@ func (a *app) applySettings() {
 	}
 	configuredThemePacks[configuredThemeName] = configuredTheme
 	config.Themes[configuredThemeName] = configuredTheme
-	configuredThemePacks = config.Themes
 	config.ThemeName = configuredThemeName
+	configuredThemePacks = config.Themes
 	if err := providers.SaveConfig(config); err != nil {
 		a.statusText("[red]Failed to save config: [-]" + err.Error())
 		return
 	}
-	config.Theme = configuredTheme
 	applyActiveTheme()
 	a.applyThemeToWidgets()
 	a.applyThemeChrome()
@@ -753,51 +834,9 @@ func (a *app) openSettings() {
 	}
 }
 
-// deleteTheme removes the selected pack from the config. Bundled seeds
-// and the default pack always come back (the seed on the next config seed,
-// the default as the fallback), and the custom palette is the always-
-// available editing target, so deleting any of them would be a lie; the
-// button refuses them and says so. Deleting a user pack persists the
-// loss, snaps the panel to the default pack, and previews it.
-func (a *app) deleteTheme() {
-	if providers.IsBundledThemeName(configuredThemeName) {
-		a.statusText("[red]" + configuredThemeName + " is a bundled theme and cannot be deleted[-]")
-		return
-	}
-	if configuredThemeName == providers.DefaultThemeName {
-		a.statusText("[red]" + configuredThemeName + " is the fallback theme and cannot be deleted[-]")
-		return
-	}
-	if configuredThemeName == customThemeName {
-		a.statusText("[red]custom is the editing palette and cannot be deleted[-]")
-		return
-	}
-	delete(configuredThemePacks, configuredThemeName)
-	if configuredThemePacks == nil {
-		configuredThemePacks = map[string]providers.Theme{}
-	}
-	// The default pack is the fallback selection, so it must exist to be
-	// selectable after a delete.
-	if _, ok := configuredThemePacks[providers.DefaultThemeName]; !ok {
-		configuredThemePacks[providers.DefaultThemeName] = defaultThemeConfig()
-	}
-	deleted := configuredThemeName
-	if a.settingsDeletedPacks == nil {
-		a.settingsDeletedPacks = map[string]bool{}
-	}
-	a.settingsDeletedPacks[deleted] = true
-	configuredThemeName = providers.DefaultThemeName
-	configuredTheme = configuredThemePacks[providers.DefaultThemeName]
-	a.previewThemeColors()
-	a.rebuildSettingsForm()
-	a.applySettings()
-	a.statusInfo("deleted " + deleted)
-}
-
 func (a *app) closeSettings() {
-	// Color edits only live in memory until a checkbox save runs, so closing
-	// the panel persists them: Esc and the Close button both land here.
-	a.settingsDeletedPacks = nil
+	// Color edits only live in memory until a checkbox save runs, so
+	// closing the panel (Esc) persists them.
 	a.applySettings()
 	a.pages.HidePage("settings")
 	a.tapp.SetFocus(a.info)

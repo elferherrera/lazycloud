@@ -32,10 +32,6 @@ const (
 )
 
 type Config struct {
-	// Theme mirrors the selected pack's palette so hand edits of the
-	// file keep working; the settings panel writes both this section
-	// and the pack.
-	Theme Theme `yaml:"theme"`
 	// Themes holds every named palette pack; ThemeName selects one.
 	// Each pack is a single palette.
 	Themes    map[string]Theme `yaml:"themes,omitempty"`
@@ -44,28 +40,14 @@ type Config struct {
 	// with tcell palette colors and terminal defaults, so the user's
 	// terminal palette governs every color.
 	FollowTerminal bool `yaml:"followTerminal,omitempty"`
-	// BundledThemes records that the shipped palette packs were seeded
-	// into the themes map, so the seeding runs once per config file.
-	BundledThemes bool `yaml:"bundledThemes,omitempty"`
-	// BundledThemeSet names the bundle generation the seeding filled. A
-	// config written by an older lazycloud carries bundles from an
-	// earlier set under the same flag; the generation key lets the
-	// seeding re-run once for the new set while deletions keep
-	// persisting after it.
-	BundledThemeSet string            `yaml:"bundledThemeSet,omitempty"`
-	Shortcuts       map[string]string `yaml:"shortcuts"`
-	AutoUpdate      AutoUpdate        `yaml:"autoupdate"`
-	Infobar         Infobar           `yaml:"infobar"`
-	Info            Info              `yaml:"info"`
+	Shortcuts      map[string]string `yaml:"shortcuts"`
+	AutoUpdate     AutoUpdate        `yaml:"autoupdate"`
+	Infobar        Infobar           `yaml:"infobar"`
+	Info           Info              `yaml:"info"`
 }
 
 // DefaultThemeName is the built-in pack users get on a fresh config.
 const DefaultThemeName = "lazycloud_dark"
-
-// bundledThemeSetKey is the current bundle generation. Bump it when the
-// bundle set changes shape (renames, new packs, new palettes) so every
-// existing config seeds the new set once.
-const bundledThemeSetKey = "single-palette-1"
 
 // legacyDefaultPackName is the house pack name from before the redesign.
 // Its pristine palette is byte-identical to lazycloud_dark, so the
@@ -159,11 +141,7 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		if err != nil {
 			return Config{}, err
 		}
-		config.Theme = MergeTheme(config.Theme, defaultTheme)
-		config.Themes = map[string]Theme{DefaultThemeName: config.Theme}
-		config.ThemeName = DefaultThemeName
 		seedBundledThemes(&config, defaultTheme)
-		config.BundledThemeSet = bundledThemeSetKey
 		if err := SaveConfig(config); err != nil {
 			return Config{}, err
 		}
@@ -186,16 +164,6 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		return Config{}, err
 	}
 	rewrote := false
-	if sections.Theme != nil {
-		merged := MergeTheme(config.Theme, defaultTheme)
-		if merged != config.Theme {
-			config.Theme = merged
-			rewrote = true
-		}
-	} else {
-		config.Theme = defaultTheme
-		rewrote = true
-	}
 	if sections.AutoUpdate == nil {
 		config.AutoUpdate = defaultAutoUpdate
 		rewrote = true
@@ -215,7 +183,10 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 	// active palette lives in the legacy sections: theme.mode light was
 	// painting with themeLight, anything else with theme.
 	if sections.Entries == nil {
-		pack := config.Theme
+		pack := defaultTheme
+		if sections.Theme != nil {
+			pack = MergeTheme(sections.Theme.Theme, defaultTheme)
+		}
 		if sections.ThemeLight != nil && sections.Theme != nil && sections.Theme.Mode == "light" {
 			pack = MergeTheme(sections.ThemeLight.Theme, defaultTheme)
 		}
@@ -262,14 +233,11 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 		}
 		rewrote = true
 	}
-	// The bundled palettes seed once per bundle generation: user packs
-	// and hand-edited bundles keep their keys, deleted bundles stay
-	// deleted for the rest of that generation. A config from an older
-	// set re-seeds once so the new packs appear, then respects deletions
-	// again.
-	if !config.BundledThemes || config.BundledThemeSet != bundledThemeSetKey {
-		seedBundledThemes(&config, defaultTheme)
-		config.BundledThemeSet = bundledThemeSetKey
+	// The bundled palettes join every load: seeding fills only missing
+	// names, so user packs and hand-edited bundles keep their keys, and
+	// a bundle removed from the file comes back on the next load. The
+	// file is only rewritten when seeding actually added something.
+	if seedBundledThemes(&config, defaultTheme) {
 		rewrote = true
 	}
 	// The pristine legacy house pack is byte-identical to the new
@@ -290,15 +258,6 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 			rewrote = true
 		}
 	}
-	// The mirror section follows the selected pack so hand edits of the
-	// file stay meaningful.
-	if pack, ok := config.Themes[config.ThemeName]; ok {
-		mirrored := pack
-		if mirrored != config.Theme {
-			config.Theme = mirrored
-			rewrote = true
-		}
-	}
 	if rewrote {
 		_ = SaveConfig(config)
 	}
@@ -306,7 +265,11 @@ func LoadConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultA
 }
 
 func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaultAutoUpdate AutoUpdate, defaultInfobar Infobar, defaultInfo Info) (Config, error) {
-	config := Config{Theme: defaultTheme, Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate, Infobar: defaultInfobar, Info: defaultInfo}
+	config := Config{
+		ThemeName: DefaultThemeName,
+		Themes:    map[string]Theme{DefaultThemeName: defaultTheme},
+		Shortcuts: defaultShortcuts, AutoUpdate: defaultAutoUpdate, Infobar: defaultInfobar, Info: defaultInfo,
+	}
 	themePath, err := themePath()
 	if err != nil {
 		return Config{}, err
@@ -316,7 +279,7 @@ func legacyConfig(defaultTheme Theme, defaultShortcuts map[string]string, defaul
 		if err := json.Unmarshal(data, &theme); err != nil {
 			return Config{}, fmt.Errorf("reading legacy theme file: %w", err)
 		}
-		config.Theme = theme
+		config.Themes[DefaultThemeName] = MergeTheme(theme, defaultTheme)
 	} else if !os.IsNotExist(err) {
 		return Config{}, err
 	}

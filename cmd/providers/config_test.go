@@ -69,8 +69,8 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() on missing file error = %v", err)
 	}
-	if got.Theme != defaultTheme {
-		t.Fatalf("LoadConfig() theme = %+v, want defaults %+v", got.Theme, defaultTheme)
+	if pack := got.Themes[got.ThemeName]; pack != defaultTheme {
+		t.Fatalf("LoadConfig() default pack = %+v, want defaults %+v", pack, defaultTheme)
 	}
 	if !reflect.DeepEqual(got.Shortcuts, defaultShortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want defaults %v", got.Shortcuts, defaultShortcuts)
@@ -82,8 +82,8 @@ func TestConfigDefaultsOnFirstRun(t *testing.T) {
 		t.Fatalf("LoadConfig() info = %+v, want defaults %+v", got.Info, defaultInfo)
 	}
 	onDisk := readConfigFile(t, dir)
-	if onDisk.Theme != defaultTheme {
-		t.Fatalf("config file theme = %+v, want defaults %+v", onDisk.Theme, defaultTheme)
+	if pack := onDisk.Themes[onDisk.ThemeName]; pack != defaultTheme {
+		t.Fatalf("config file pack = %+v, want defaults %+v", pack, defaultTheme)
 	}
 	if !reflect.DeepEqual(onDisk.Shortcuts, defaultShortcuts) {
 		t.Fatalf("config file shortcuts = %v, want defaults %v", onDisk.Shortcuts, defaultShortcuts)
@@ -113,8 +113,8 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 	want := Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "aqua", ShortcutText: "gray", Focus: "aqua", StatusLabels: "yellow", StatusText: "gray", SummaryLabels: "aqua", SummaryText: "gray", DetailLabels: "yellow", DetailText: "gray", SettingsLabels: "yellow", SettingsText: "gray", ActiveRowText: "black", ActiveRowBackground: "gray"}
-	if got.Theme != want {
-		t.Fatalf("LoadConfig() theme = %+v, want migrated %+v", got.Theme, want)
+	if pack := got.Themes[got.ThemeName]; pack != want {
+		t.Fatalf("LoadConfig() pack = %+v, want migrated %+v", pack, want)
 	}
 	if !reflect.DeepEqual(got.Shortcuts, legacyShortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want legacy %v", got.Shortcuts, legacyShortcuts)
@@ -123,8 +123,8 @@ func TestConfigMigratesLegacyFiles(t *testing.T) {
 		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
 	}
 	onDisk := readConfigFile(t, dir)
-	if onDisk.Theme != want {
-		t.Fatalf("config file theme = %+v, want migrated %+v", onDisk.Theme, want)
+	if pack := onDisk.Themes[onDisk.ThemeName]; pack != want {
+		t.Fatalf("config file pack = %+v, want migrated %+v", pack, want)
 	}
 	if !reflect.DeepEqual(onDisk.Shortcuts, legacyShortcuts) {
 		t.Fatalf("config file shortcuts = %v, want legacy %v", onDisk.Shortcuts, legacyShortcuts)
@@ -141,7 +141,8 @@ func TestConfigRoundtrip(t *testing.T) {
 	testConfigDir(t)
 
 	custom := Config{
-		Theme:      Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", Focus: "red", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", SettingsText: "gray", ActiveRowText: "lime", ActiveRowBackground: "teal"},
+		Themes:    map[string]Theme{DefaultThemeName: {Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", ShortcutLabels: "red", ShortcutText: "silver", Focus: "red", StatusLabels: "teal", StatusText: "olive", SummaryLabels: "maroon", SummaryText: "navy", DetailLabels: "purple", DetailText: "pink", SettingsText: "gray", ActiveRowText: "lime", ActiveRowBackground: "teal"}},
+		ThemeName: DefaultThemeName,
 		Shortcuts:  map[string]string{"1": "clusters", "5": "ips"},
 		AutoUpdate: AutoUpdate{Enabled: false, ThresholdInMinutes: 30},
 		Infobar:    Infobar{ShowShortcuts: false},
@@ -153,8 +154,8 @@ func TestConfigRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got.Theme != custom.Theme {
-		t.Fatalf("LoadConfig() theme = %+v, want saved %+v", got.Theme, custom.Theme)
+	if pack := got.Themes[got.ThemeName]; pack != custom.Themes[DefaultThemeName] {
+		t.Fatalf("LoadConfig() pack = %+v, want saved %+v", pack, custom.Themes[DefaultThemeName])
 	}
 	if !reflect.DeepEqual(got.Shortcuts, custom.Shortcuts) {
 		t.Fatalf("LoadConfig() shortcuts = %v, want saved %v", got.Shortcuts, custom.Shortcuts)
@@ -188,8 +189,8 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 	want := Theme{Labels: "aqua", Text: "white", Borders: "green", Title: "white", ShortcutLabels: "aqua", ShortcutText: "white", Focus: "aqua", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "aqua", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
-	if got.Theme != want {
-		t.Fatalf("LoadConfig() theme = %+v, want merged %+v", got.Theme, want)
+	if pack := got.Themes[got.ThemeName]; pack != want {
+		t.Fatalf("LoadConfig() pack = %+v, want merged %+v", pack, want)
 	}
 	wantShortcuts := map[string]string{"1": "vms", "2": "buckets"}
 	if !reflect.DeepEqual(got.Shortcuts, wantShortcuts) {
@@ -199,8 +200,8 @@ func TestConfigMergesMissingThemeKeys(t *testing.T) {
 		t.Fatalf("LoadConfig() autoupdate = %+v, want defaults %+v", got.AutoUpdate, defaultAutoUpdate)
 	}
 	onDisk := readConfigFile(t, dir)
-	if onDisk.Theme != want {
-		t.Fatalf("config file theme = %+v, want merged %+v", onDisk.Theme, want)
+	if pack := onDisk.Themes[onDisk.ThemeName]; pack != want {
+		t.Fatalf("config file pack = %+v, want merged %+v", pack, want)
 	}
 	if onDisk.AutoUpdate != defaultAutoUpdate {
 		t.Fatalf("config file autoupdate = %+v, want defaults %+v", onDisk.AutoUpdate, defaultAutoUpdate)
@@ -239,7 +240,7 @@ func TestConfigPreservesExplicitAutoUpdate(t *testing.T) {
 
 func TestConfigThemeSectionKeepsValues(t *testing.T) {
 	testConfigDir(t)
-	custom := Config{Theme: Theme{Labels: "aqua"}}
+	custom := Config{Themes: map[string]Theme{DefaultThemeName: {Labels: "aqua"}}, ThemeName: DefaultThemeName}
 	if err := SaveConfig(custom); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
@@ -247,12 +248,15 @@ func TestConfigThemeSectionKeepsValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if got.Theme.Labels != "aqua" {
-		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
+	if pack := got.Themes[got.ThemeName]; pack.Labels != "aqua" {
+		t.Fatalf("LoadConfig() labels = %q, want aqua kept", pack.Labels)
 	}
 }
 
-func TestConfigThemeMirrorFollowsSelection(t *testing.T) {
+// TestConfigLegacyThemeSectionSeedsPack pins the pre-packs migration: a
+// config whose palette lives only in the legacy theme section gains the
+// pack built from it, so the hand-edited values keep painting.
+func TestConfigLegacyThemeSectionSeedsPack(t *testing.T) {
 	dir := testConfigDir(t)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating config dir: %v", err)
@@ -263,9 +267,6 @@ func TestConfigThemeMirrorFollowsSelection(t *testing.T) {
 	got, err := LoadConfig(Theme{Background: "black", Labels: "yellow"}, nil, AutoUpdate{}, Infobar{}, Info{ColumnBorders: true})
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if got.Theme.Labels != "aqua" {
-		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
 	}
 	pack, ok := got.Themes[got.ThemeName]
 	if !ok {
@@ -441,8 +442,8 @@ func TestConfigThemeModeSystemMigratesToFollow(t *testing.T) {
 	if !got.FollowTerminal {
 		t.Fatal("LoadConfig() followTerminal = false, want true from theme.mode system")
 	}
-	if got.Theme.Labels != "aqua" {
-		t.Fatalf("LoadConfig() labels = %q, want aqua kept", got.Theme.Labels)
+	if pack := got.Themes[got.ThemeName]; pack.Labels != "aqua" {
+		t.Fatalf("LoadConfig() pack labels = %q, want aqua kept", pack.Labels)
 	}
 	onDisk := readConfigFile(t, dir)
 	if !onDisk.FollowTerminal {
@@ -567,17 +568,17 @@ func TestConfigThemesMapMigration(t *testing.T) {
 	})
 }
 
-// TestConfigSeedsBundledThemesOnce pins the bundle seeding: a fresh or
-// upgraded config gains the shipped palettes plus the bundledThemes flag,
-// a user pack under a bundle name keeps its keys, and the flag stops the
-// seeding from running again so a deleted bundle stays deleted.
-func TestConfigSeedsBundledThemesOnce(t *testing.T) {
+// TestConfigSeedsBundledThemes pins the bundle seeding: every load adds
+// the shipped palettes that are missing from themes, a user pack under a
+// bundle name keeps its keys, and a config already holding every bundle
+// is not rewritten.
+func TestConfigSeedsBundledThemes(t *testing.T) {
 	defaultTheme := Theme{Background: "black", Labels: "yellow", Text: "white", Borders: "white", Title: "white", ShortcutLabels: "yellow", ShortcutText: "white", Focus: "yellow", StatusLabels: "yellow", StatusText: "white", SummaryLabels: "yellow", SummaryText: "white", DetailLabels: "yellow", DetailText: "white", SettingsLabels: "yellow", SettingsText: "white", ActiveRowText: "black", ActiveRowBackground: "white"}
 	defaultAutoUpdate := AutoUpdate{Enabled: true, ThresholdInMinutes: 60}
 	defaultInfobar := Infobar{ShowShortcuts: true}
 	defaultInfo := Info{ColumnBorders: true}
 
-	t.Run("upgraded config gains bundles and the flag", func(t *testing.T) {
+	t.Run("upgraded config gains bundles", func(t *testing.T) {
 		dir := testConfigDir(t)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("creating config dir: %v", err)
@@ -588,9 +589,6 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		got, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo)
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
-		}
-		if !got.BundledThemes {
-			t.Fatal("LoadConfig() did not set the bundledThemes flag")
 		}
 		monokai, ok := got.Themes["monokai"]
 		if !ok {
@@ -617,8 +615,8 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if got.Themes["one-dark"].Background != "#282c34" {
 			t.Fatalf("one-dark background = %q, want the bundled dark variant", got.Themes["one-dark"].Background)
 		}
-		// A second load must not rewrite the file: the flag already says
-		// the bundles are there.
+		// A second load must not rewrite the file: every bundle is already
+		// there, so seeding changed nothing.
 		before, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
 		if err != nil {
 			t.Fatal(err)
@@ -631,16 +629,16 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(before) != string(after) {
-			t.Fatal("LoadConfig() rewrote the config on the second load despite the bundledThemes flag")
+			t.Fatal("LoadConfig() rewrote the config on the second load despite every bundle being present")
 		}
 	})
 
-	t.Run("deleted bundle stays deleted once flagged", func(t *testing.T) {
+	t.Run("removed bundle returns and user pack kept", func(t *testing.T) {
 		dir := testConfigDir(t)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("creating config dir: %v", err)
 		}
-		// Seed once, then hand-delete a bundle from the file.
+		// Seed once, then hand-remove a bundle from the file.
 		if _, err := LoadConfig(defaultTheme, nil, defaultAutoUpdate, defaultInfobar, defaultInfo); err != nil {
 			t.Fatal(err)
 		}
@@ -659,11 +657,11 @@ func TestConfigSeedsBundledThemesOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := got.Themes["monokai"]; ok {
-			t.Fatal("LoadConfig() re-seeded the deleted monokai bundle despite the flag")
+		if _, ok := got.Themes["monokai"]; !ok {
+			t.Fatal("LoadConfig() did not re-add the removed monokai bundle")
 		}
 		if _, ok := got.Themes["monokai-gone"]; !ok {
-			t.Fatal("LoadConfig() lost the renamed pack")
+			t.Fatal("LoadConfig() lost the renamed user pack")
 		}
 	})
 

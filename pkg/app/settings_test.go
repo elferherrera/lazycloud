@@ -39,7 +39,7 @@ func TestSettingsRowsCoverPanelToggles(t *testing.T) {
 	}
 	sawTheme := false
 	for label := range labels {
-		if strings.HasPrefix(label, "Theme: ") {
+		if label == themeRowLabel {
 			sawTheme = true
 		}
 	}
@@ -80,7 +80,7 @@ func TestThemeCycleCoversCustomAndFollowTerminal(t *testing.T) {
 	a := settingsTestApp(t)
 	var themeRow settingsRow
 	for _, row := range a.settingsRows() {
-		if strings.HasPrefix(row.label, "Theme: ") {
+		if row.label == themeRowLabel {
 			themeRow = row
 		}
 	}
@@ -193,9 +193,6 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 	}
 	if config.ThemeName != "ocean" {
 		t.Fatalf("saved themeName = %q, want ocean", config.ThemeName)
-	}
-	if config.Theme.Labels != "aqua" {
-		t.Fatalf("saved mirror labels = %q, want the ocean pack mirrored", config.Theme.Labels)
 	}
 	if got := config.Themes["lazycloud_dark"].Labels; got != "teal" {
 		t.Fatalf("saved lazycloud_dark labels = %q, want the parked teal edit", got)
@@ -371,7 +368,7 @@ func TestSettingsColorFieldsEditPackPalette(t *testing.T) {
 }
 
 // TestCloseSettingsPersistsColorEdits pins the Close path: color edits live
-// in memory while the panel is open, so closing it (Close button or Esc) must
+// in memory while the panel is open, so closing it (Esc) must
 // persist them like a checkbox toggle does.
 func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	home := t.TempDir()
@@ -408,5 +405,121 @@ func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	}
 	if got := config.Themes[config.ThemeName].Labels; got != "teal" {
 		t.Errorf("saved pack labels = %q, want teal after closing the panel", got)
+	}
+}
+
+// themeFormItem returns the Theme row's field from the built form.
+func themeFormItem(t *testing.T, a *app) *themeSelectionField {
+	t.Helper()
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		if item, ok := a.settingsForm.GetFormItem(i).(*themeSelectionField); ok {
+			return item
+		}
+	}
+	t.Fatal("settings form is missing the Theme cycle row")
+	return nil
+}
+
+// TestThemeSelectionFieldShowsNameAndCyclesOnKeys pins the Theme row's
+// contract: the field text is the current selection (the checkbox mark is
+// gone), typing and the non-space keys are rejected, and space advances
+// the cycle — the only key that changes a value.
+func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
+	originalPacks := configuredThemePacks
+	originalName := configuredThemeName
+	originalPalette := configuredTheme
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		configuredThemePacks = originalPacks
+		configuredThemeName = originalName
+		configuredTheme = originalPalette
+		configuredFollowTerminal = originalFollow
+	})
+	configuredThemePacks = map[string]providers.Theme{
+		"alpha": {Background: "black", Labels: "yellow"},
+		"beta":  {Background: "black", Labels: "teal"},
+	}
+	configuredThemeName = "alpha"
+	configuredTheme = configuredThemePacks["alpha"]
+	configuredFollowTerminal = false
+
+	a := settingsTestApp(t)
+	a.buildSettingsPage()
+	item := themeFormItem(t, a)
+	if got := item.GetText(); got != "alpha" {
+		t.Fatalf("theme selection = %q, want the selected pack name alpha", got)
+	}
+
+	for _, ev := range []*tcell.EventKey{
+		tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
+	} {
+		item.InputHandler()(ev, nil)
+		if got := themeFormItem(t, a).GetText(); got != "alpha" {
+			t.Fatalf("key %v changed the selection to %q, want the read-only field to keep alpha", ev, got)
+		}
+	}
+
+	item.InputHandler()(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("space cycled to %q, want beta", configuredThemeName)
+	}
+	if got := themeFormItem(t, a).GetText(); got != "beta" {
+		t.Fatalf("theme selection = %q, want the field to follow the cycle", got)
+	}
+}
+
+// TestColorFieldSpaceCyclesAndTypingRejected pins the color rows' key
+// contract: space steps the curated color list (with wraparound) and the
+// preview follows, while typed input is rejected and the deletion keys
+// (backspace, delete) cannot clear the value.
+func TestColorFieldSpaceCyclesAndTypingRejected(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black", Labels: "yellow"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+
+	var field *colorPreviewField
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		if pf, ok := a.settingsForm.GetFormItem(i).(*colorPreviewField); ok && pf.baseLabel == "Labels" {
+			field = pf
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("settings form has no Labels color field")
+	}
+
+	field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone), nil)
+	if field.GetText() != "yellow" {
+		t.Fatalf("typed rune changed the color to %q, want yellow kept", field.GetText())
+	}
+	for _, ev := range []*tcell.EventKey{
+		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyCtrlU, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone),
+	} {
+		field.InputHandler()(ev, nil)
+		if field.GetText() != "yellow" {
+			t.Fatalf("deletion key %v changed the color to %q, want yellow kept", ev, field.GetText())
+		}
+	}
+
+	field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), nil)
+	if field.GetText() != "blue" {
+		t.Fatalf("space cycled the color to %q, want blue after yellow", field.GetText())
+	}
+	if configuredTheme.Labels != "blue" {
+		t.Fatalf("palette labels = %q, want blue after the space cycle", configuredTheme.Labels)
 	}
 }

@@ -72,10 +72,6 @@ type app struct {
 	// the small-screen height clamp.
 	settingsPanel tview.Primitive
 	settingsOpen  atomic.Bool
-	// settingsDeletedPacks records the pack names deleted in this panel
-	// session, so saving does not resurrect them from the config file
-	// that still carries them.
-	settingsDeletedPacks map[string]bool
 }
 
 func newSummaryPanel() *tview.TextView {

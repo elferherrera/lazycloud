@@ -45,16 +45,67 @@ func formRows(t *testing.T, width int) []string {
 }
 
 // TestSettingsFormShowsEveryRowAndButtons guards the settings form layout:
-// at the height the flex requests, the last color field and both buttons
+// at the height the flex requests, the last color field and the button
 // must draw, because tview skips items that start at or below the bottom
 // limit.
 func TestSettingsFormShowsEveryRowAndButtons(t *testing.T) {
 	rows := formRows(t, 80)
 	joined := strings.Join(rows, "\n")
-	for _, want := range []string{"Active row background", "Open in editor", "Close"} {
+	for _, want := range []string{"Active row background", "Open in editor"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("settings form at height %d is missing %q; drawn rows:\n%s", len(rows), want, joined)
 		}
+	}
+}
+
+// TestSettingsPanelWidthFitsButtons pins the window width: the single
+// button must draw complete with tview's blank line above it at
+// settingsPanelWidth, so the panel never widens beyond its content.
+func TestSettingsPanelWidthFitsButtons(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredThemePacks = map[string]providers.Theme{"ocean": configuredTheme}
+	configuredThemeName = "ocean"
+	a.buildSettingsPage()
+	form := a.settingsForm
+	h := settingsFormHeight(a)
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	screen.SetSize(settingsPanelWidth, h)
+	form.SetRect(0, 0, settingsPanelWidth, h)
+	form.Draw(screen)
+	screen.Show()
+	cells, cw, _ := screen.GetContents()
+	var lines []string
+	for y := 0; y < h; y++ {
+		var row strings.Builder
+		for x := 0; x < cw; x++ {
+			row.WriteRune(cells[y*cw+x].Runes[0])
+		}
+		lines = append(lines, row.String())
+	}
+	if form.GetButtonCount() != 1 {
+		t.Fatalf("form buttons = %d, want 1 (Open in editor)", form.GetButtonCount())
+	}
+	buttonRows := 0
+	for i, line := range lines {
+		if strings.Contains(line, "Open in editor") {
+			buttonRows++
+			// tview only inserts its blank line between the options and
+			// the buttons when the panel is wide enough for them to fit:
+			// at the exact fit the gap disappears.
+			if i == 0 || strings.TrimSpace(strings.Trim(lines[i-1], "│")) != "" {
+				t.Errorf("no blank line between the options and the buttons at settingsPanelWidth %d: %q", settingsPanelWidth, lines[i-1])
+			}
+		}
+	}
+	if buttonRows != 1 {
+		t.Errorf("button drew on %d rows at settingsPanelWidth %d, want one row", buttonRows, settingsPanelWidth)
 	}
 }
 
@@ -85,7 +136,7 @@ func TestColorPreviewFieldPaintsSwatch(t *testing.T) {
 	}
 }
 
-// TestCycleThemeColorStepsThroughTheList pins the arrow cycling: a value in
+// TestCycleThemeColorStepsThroughTheList pins the space cycling: a value in
 // the list moves to its neighbor with wraparound, an unknown value enters
 // at the first entry. The field text is what cycling writes; the section
 // only updates through the changed callback the form wires.
