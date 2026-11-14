@@ -11,7 +11,6 @@ import (
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
 )
@@ -105,6 +104,7 @@ func init() {
 			{":snapshots", "show disk snapshots", viewSnapshots},
 			{":iam", "show iam policy", viewIAM},
 			{":roles", "show custom roles", viewRoles},
+			{":search", "open the search side panel", ""},
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
@@ -185,8 +185,8 @@ func init() {
 		},
 		{
 			specialKey: tcell.KeyF1,
-			desc:       "open config file in editor",
-			run:        (*app).openConfigFile,
+			desc:       "open settings",
+			run:        (*app).openSettings,
 		},
 		{
 			key:     'b',
@@ -281,125 +281,6 @@ func init() {
 	}
 }
 
-func visibleShortcuts() []shortcut {
-	visible := make([]shortcut, 0, len(shortcuts))
-	for _, s := range shortcuts {
-		if s.key >= '0' && s.key <= '9' {
-			continue
-		}
-		if s.visible == nil || s.visible() {
-			visible = append(visible, s)
-		}
-	}
-	sort.SliceStable(visible, func(i, j int) bool {
-		return strings.ToLower(visible[i].label()) < strings.ToLower(visible[j].label())
-	})
-	return visible
-}
-
-func newShortcutsPanel() *tview.Table {
-	table := tview.NewTable().SetBorders(false).SetSelectable(false, false)
-	populateShortcutsPanel(table)
-	return table
-}
-
-func shortcutsRowCount() int {
-	count := 0
-	for _, s := range visibleShortcuts() {
-		count += 1 + len(s.commands)
-	}
-	return count
-}
-
-func shortcutKeyLabel(key rune) string {
-	if key == ' ' {
-		return "space"
-	}
-	return string(key)
-}
-
-func (s shortcut) label() string {
-	if s.specialKey != 0 {
-		if s.specialKey == tcell.KeyCtrlUnderscore {
-			return "Ctrl-/"
-		}
-		return tcell.KeyNames[s.specialKey]
-	}
-	return shortcutKeyLabel(s.key)
-}
-
-func (s shortcut) matches(event *tcell.EventKey) bool {
-	if s.specialKey != 0 {
-		return event.Key() == s.specialKey
-	}
-	return event.Rune() == s.key
-}
-
-func sortedCommands(commands []viewCommand) []viewCommand {
-	sorted := append([]viewCommand(nil), commands...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].cmd < sorted[j].cmd
-	})
-	return sorted
-}
-
-func populateShortcutsPanel(table *tview.Table) int {
-	table.Clear()
-	row := 0
-	for _, s := range visibleShortcuts() {
-		table.SetCell(row, 0, tview.NewTableCell(s.label()).
-			SetTextColor(theme.shortcutLabelColor()).
-			SetAttributes(tcell.AttrBold))
-		table.SetCell(row, 1, tview.NewTableCell(s.desc).SetExpansion(1).
-			SetTextColor(theme.shortcutTextColor()))
-		row++
-		for _, c := range sortedCommands(s.commands) {
-			desc := c.desc
-			if c.view != "" {
-				desc += " (" + string(c.view) + ")"
-			}
-			table.SetCell(row, 0, tview.NewTableCell(c.cmd).
-				SetTextColor(theme.shortcutLabelColor()))
-			table.SetCell(row, 1, tview.NewTableCell(desc).SetExpansion(1).
-				SetTextColor(theme.shortcutTextColor()))
-			row++
-		}
-	}
-	return row
-}
-
-// newHelpOverlay returns a centered floating window showing the shortcuts
-// table, meant to be stacked on top of the main view via Pages. The width
-// starts at a comfortable default and is refit to the terminal on every
-// open via resizeHelpOverlay.
-func newHelpOverlay(help *tview.Table) (overlay, row *tview.Flex) {
-	help.SetBorder(true).SetTitle(" Help ")
-	row = tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(nil, 0, 1, false).
-		AddItem(help, shortcutsRowCount()+2, 1, true).
-		AddItem(nil, 0, 1, false)
-	overlay = tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(row, overlayWidth(0), 1, true).
-		AddItem(nil, 0, 1, false)
-	return overlay, row
-}
-
-// resizeHelpOverlay fits the help window to the current terminal so long
-// entries like ":templates" are not clipped on wide terminals.
-func (a *app) resizeHelpOverlay() {
-	if a.helpColumn == nil || a.screen == nil {
-		return
-	}
-	w, h := a.screen.Size()
-	if w <= 0 || h <= 0 {
-		return
-	}
-	count := shortcutsRowCount()
-	a.helpRow.ResizeItem(a.shortcuts, overlayHeight(count, h), 1)
-	a.helpColumn.ResizeItem(a.helpRow, overlayWidth(w), 1)
-}
-
 func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
 	case tcell.KeyCtrlC:
@@ -444,6 +325,22 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		if focus == a.searchInput || focus == a.searchResults {
 			return event
 		}
+	}
+	// The settings form and the help text own their keys while focused:
+	// space toggles checkboxes and arrows scroll instead of firing the
+	// matching global shortcuts. Focus lands on the form's items (the
+	// checkboxes, buttons), so the page membership decides, and "?"
+	// still closes the help overlay.
+	focus := a.tapp.GetFocus()
+	if focus == a.helpText {
+		if event.Key() == tcell.KeyRune && event.Rune() == '?' {
+			a.toggleHelp()
+			return nil
+		}
+		return event
+	}
+	if page, _ := a.pages.GetFrontPage(); page == "settings" && a.settingsForm != nil {
+		return event
 	}
 	if a.tapp.GetFocus() == a.cmd {
 		return event
@@ -1251,12 +1148,13 @@ func (a *app) reloadConfig() {
 		return
 	}
 	applyShortcutConfig(config.Shortcuts)
-	applyTheme(config.Theme)
+	setConfiguredThemes(config)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	a.staleAutoRefresh = config.AutoUpdate.Enabled
 	infobarSortOrder = config.Infobar.SortOrder
 	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
 	a.applyThemeToWidgets()
+	a.applyThemeChrome()
 	a.statusText("[green]Config reloaded[-]")
 }
 
@@ -1269,6 +1167,7 @@ func (a *app) toggleHelp() {
 	a.refreshShortcuts()
 	a.resizeHelpOverlay()
 	a.pages.ShowPage("help")
+	a.tapp.SetFocus(a.helpText)
 }
 
 func (a *app) quit() {
@@ -1282,6 +1181,10 @@ func (a *app) escapePressed() {
 	}
 	// Detail overlays sit on top of the search panel, so they close first:
 	// Esc on an overlay dismisses it, the next Esc closes the search panel.
+	if name, _ := a.pages.GetFrontPage(); name == "settings" {
+		a.closeSettings()
+		return
+	}
 	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {
 		a.pages.RemovePage(name)
 		a.tapp.SetFocus(a.info)

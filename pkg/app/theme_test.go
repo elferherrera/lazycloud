@@ -26,20 +26,27 @@ func TestThemeColor(t *testing.T) {
 	if got := themeColor("not-a-color", "yellow"); got != "yellow" {
 		t.Errorf("themeColor(invalid) = %q, want yellow", got)
 	}
+	// "default" defers the slot to the terminal's own color instead of
+	// falling back, which is what follow-terminal mode paints with.
+	if got := themeColor("default", "yellow"); got != "default" {
+		t.Errorf("themeColor(default) = %q, want default so the terminal paints the slot", got)
+	}
 }
 
 func TestApplyTheme(t *testing.T) {
 	secondary, primary, border, title := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor, tview.Styles.BorderColor, tview.Styles.TitleColor
+	primitive := tview.Styles.PrimitiveBackgroundColor
 	original := theme
 	t.Cleanup(func() {
 		tview.Styles.SecondaryTextColor = secondary
 		tview.Styles.PrimaryTextColor = primary
 		tview.Styles.BorderColor = border
 		tview.Styles.TitleColor = title
+		tview.Styles.PrimitiveBackgroundColor = primitive
 		theme = original
 	})
 
-	applyTheme(providers.Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange"})
+	applyTheme(providers.Theme{Labels: "aqua", Text: "gray", Borders: "green", Title: "orange", Background: "white"})
 	if theme.labels != "aqua" || theme.text != "gray" || theme.borders != "green" || theme.title != "orange" {
 		t.Errorf("applyTheme() = %+v, want custom colors", theme)
 	}
@@ -73,10 +80,21 @@ func TestApplyTheme(t *testing.T) {
 	if tview.Styles.TitleColor != tcell.ColorOrange {
 		t.Errorf("applyTheme() TitleColor = %v, want orange", tview.Styles.TitleColor)
 	}
+	if theme.background != "white" || tview.Styles.PrimitiveBackgroundColor != tcell.ColorWhite {
+		t.Errorf("applyTheme() background = %q style %v, want white", theme.background, tview.Styles.PrimitiveBackgroundColor)
+	}
 
 	applyTheme(providers.Theme{Labels: "not-a-color"})
-	if theme.labels != "aqua" {
-		t.Errorf("applyTheme() invalid labels = %q, want aqua fallback", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() invalid labels = %q, want the default yellow fallback", theme.labels)
+	}
+	if theme.background != "black" {
+		t.Errorf("applyTheme() background = %q, want the pack's own default black, not the previous pack's white", theme.background)
+	}
+
+	applyTheme(providers.Theme{Background: "not-a-color"})
+	if theme.background != "black" {
+		t.Errorf("applyTheme() invalid background = %q, want the default black fallback", theme.background)
 	}
 
 	applyTheme(providers.Theme{Labels: "#ff9900", Borders: "#00aa55"})
@@ -97,38 +115,40 @@ func TestApplyTheme(t *testing.T) {
 	if theme.focus != "orange" {
 		t.Errorf("applyTheme() focus = %q, want shortcut labels fallback", theme.focus)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	// Empty slots resolve inside the incoming pack: labels falls to the
+	// default yellow, never to the #ff9900 the previous call painted.
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow, not the previous pack's %q leaked", theme.labels, "#ff9900")
 	}
 	if theme.statusLabels != "yellow" {
-		t.Errorf("applyTheme() status labels = %q, want yellow kept", theme.statusLabels)
+		t.Errorf("applyTheme() status labels = %q, want default yellow", theme.statusLabels)
 	}
 
 	applyTheme(providers.Theme{StatusLabels: "aqua", StatusText: "silver"})
 	if theme.statusLabels != "aqua" || theme.statusText != "silver" {
 		t.Errorf("applyTheme() status colors = %q %q, want aqua silver", theme.statusLabels, theme.statusText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
-	if theme.shortcutLabels != "#ff9900" {
-		t.Errorf("applyTheme() shortcut labels = %q, want labels fallback", theme.shortcutLabels)
+	if theme.shortcutLabels != "yellow" {
+		t.Errorf("applyTheme() shortcut labels = %q, want the pack default yellow, not the previous pack's shortcut color leaked", theme.shortcutLabels)
 	}
 
 	applyTheme(providers.Theme{SummaryLabels: "orange", SummaryText: "silver"})
 	if theme.summaryLabels != "orange" || theme.summaryText != "silver" {
 		t.Errorf("applyTheme() summary colors = %q %q, want orange silver", theme.summaryLabels, theme.summaryText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{DetailLabels: "orange", DetailText: "silver"})
 	if theme.detailLabels != "orange" || theme.detailText != "silver" {
 		t.Errorf("applyTheme() detail colors = %q %q, want orange silver", theme.detailLabels, theme.detailText)
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{ActiveRowText: "orange", ActiveRowBackground: "silver"})
@@ -138,16 +158,16 @@ func TestApplyTheme(t *testing.T) {
 	if theme.activeRowTextColor() != tcell.GetColor("orange") || theme.activeRowBackgroundColor() != tcell.GetColor("silver") {
 		t.Errorf("applyTheme() active row colors resolve wrong: %v %v", theme.activeRowTextColor(), theme.activeRowBackgroundColor())
 	}
-	if theme.labels != "#ff9900" {
-		t.Errorf("applyTheme() labels = %q, want #ff9900 kept", theme.labels)
+	if theme.labels != "yellow" {
+		t.Errorf("applyTheme() labels = %q, want the pack default yellow", theme.labels)
 	}
 
 	applyTheme(providers.Theme{Focus: "orange"})
 	if theme.focus != "orange" {
 		t.Errorf("applyTheme() focus = %q, want orange", theme.focus)
 	}
-	if theme.shortcutLabels != "#ff9900" {
-		t.Errorf("applyTheme() shortcut labels = %q, want #ff9900 kept", theme.shortcutLabels)
+	if theme.shortcutLabels != "yellow" {
+		t.Errorf("applyTheme() shortcut labels = %q, want the pack default yellow, not the previous pack's orange leaked", theme.shortcutLabels)
 	}
 }
 
@@ -208,23 +228,61 @@ func TestShortcutPanelColors(t *testing.T) {
 	theme = themeColors{labels: "yellow", text: "white", borders: "white", title: "white", shortcutLabels: "orange", shortcutText: "silver"}
 
 	appState.ViewKind = viewProjects
-	panel := newShortcutsPanel()
-	key, _, _ := panel.GetCell(0, 0).Style.Decompose()
-	if key != tcell.GetColor("orange") {
-		t.Errorf("shortcuts panel key color = %v, want orange", key)
+	text := helpText()
+	// The key column and section headers carry the shortcut label color,
+	// the descriptions the shortcut text color. The simulation screen
+	// flattens styles, so assert on the tags the TextView will parse.
+	header := "[orange]THIS VIEW[-]"
+	if !strings.Contains(text, header) {
+		t.Errorf("help text is missing section header tag %q", header)
 	}
-	desc, _, _ := panel.GetCell(0, 1).Style.Decompose()
-	if desc != tcell.GetColor("silver") {
-		t.Errorf("shortcuts panel desc color = %v, want silver", desc)
+	entry := "[orange]" + helpKeyColumn("u") + "[-][silver]update cache[-]"
+	if !strings.Contains(text, entry) {
+		t.Errorf("help text is missing key/desc tag %q", entry)
 	}
 
 	summary := newShortcutsSummaryPanel()
-	key, _, _ = summary.GetCell(0, 0).Style.Decompose()
-	if key != tcell.GetColor("orange") {
-		t.Errorf("shortcuts summary key color = %v, want orange", key)
+	sumKey, _, _ := summary.GetCell(0, 0).Style.Decompose()
+	if sumKey != tcell.GetColor("orange") {
+		t.Errorf("shortcuts summary key color = %v, want orange", sumKey)
 	}
-	desc, _, _ = summary.GetCell(0, 1).Style.Decompose()
-	if desc != tcell.GetColor("silver") {
-		t.Errorf("shortcuts summary desc color = %v, want silver", desc)
+	sumDesc, _, _ := summary.GetCell(0, 1).Style.Decompose()
+	if sumDesc != tcell.GetColor("silver") {
+		t.Errorf("shortcuts summary desc color = %v, want silver", sumDesc)
+	}
+}
+
+// TestApplyThemeHonorsDefault pins the follow-terminal contract at the
+// style level: a palette whose slots are "default" pushes ColorDefault
+// into the tview styles unconditionally, so the terminal's own colors show
+// through and no stale style from a previous pack survives the switch.
+func TestApplyThemeHonorsDefault(t *testing.T) {
+	secondary, primary, border, primitive := tview.Styles.SecondaryTextColor, tview.Styles.PrimaryTextColor, tview.Styles.BorderColor, tview.Styles.PrimitiveBackgroundColor
+	original := theme
+	t.Cleanup(func() {
+		tview.Styles.SecondaryTextColor = secondary
+		tview.Styles.PrimaryTextColor = primary
+		tview.Styles.BorderColor = border
+		tview.Styles.PrimitiveBackgroundColor = primitive
+		theme = original
+	})
+
+	applyTheme(providers.Theme{Background: "black", Labels: "yellow", Text: "white"})
+	if tview.Styles.PrimitiveBackgroundColor != tcell.ColorBlack {
+		t.Fatalf("precondition failed: background style = %v, want black", tview.Styles.PrimitiveBackgroundColor)
+	}
+
+	applyTheme(providers.FollowTerminalTheme())
+	if tview.Styles.PrimitiveBackgroundColor != tcell.ColorDefault {
+		t.Errorf("background style = %v, want ColorDefault so the terminal paints it", tview.Styles.PrimitiveBackgroundColor)
+	}
+	if tview.Styles.PrimaryTextColor != tcell.ColorDefault {
+		t.Errorf("text style = %v, want ColorDefault so the terminal paints it", tview.Styles.PrimaryTextColor)
+	}
+	if tview.Styles.SecondaryTextColor != tcell.GetColor("yellow") {
+		t.Errorf("labels style = %v, want the named palette yellow", tview.Styles.SecondaryTextColor)
+	}
+	if theme.background != "default" || theme.labels != "yellow" {
+		t.Errorf("theme slots = %q/%q, want default/yellow", theme.background, theme.labels)
 	}
 }

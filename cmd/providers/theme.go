@@ -6,6 +6,7 @@ import (
 )
 
 type Theme struct {
+	Background          string `json:"background" yaml:"background"`
 	Labels              string `json:"labels" yaml:"labels"`
 	Text                string `json:"text" yaml:"text"`
 	Borders             string `json:"borders" yaml:"borders"`
@@ -19,10 +20,44 @@ type Theme struct {
 	SummaryText         string `json:"summaryText" yaml:"summaryText"`
 	DetailLabels        string `json:"detailLabels" yaml:"detailLabels"`
 	DetailText          string `json:"detailText" yaml:"detailText"`
+	SettingsLabels      string `json:"settingsLabels" yaml:"settingsLabels"`
+	SettingsText        string `json:"settingsText" yaml:"settingsText"`
 	ActiveRowText       string `json:"activeRowText" yaml:"activeRowText"`
 	ActiveRowBackground string `json:"activeRowBackground" yaml:"activeRowBackground"`
 }
 
+// FollowTerminalTheme is the palette used when followTerminal hides the
+// theme and color rows: every value is a tcell palette name or "default",
+// so the terminal resolves each color from its own user-configured palette
+// the way lazygit and htop defer to the terminal. "default" leaves the
+// slot to the terminal's default foreground/background, so the app sits on
+// whatever base colors the terminal ships. Named accents (yellow, cyan,
+// green) read well over both dark and light default backgrounds.
+func FollowTerminalTheme() Theme {
+	return Theme{
+		Background:          "default",
+		Labels:              "yellow",
+		Text:                "default",
+		Borders:             "default",
+		Title:               "cyan",
+		ShortcutLabels:      "yellow",
+		ShortcutText:        "default",
+		Focus:               "green",
+		StatusLabels:        "yellow",
+		StatusText:          "default",
+		SummaryLabels:       "yellow",
+		SummaryText:         "default",
+		DetailLabels:        "cyan",
+		DetailText:          "default",
+		SettingsLabels:      "yellow",
+		SettingsText:        "default",
+		ActiveRowText:       "black",
+		ActiveRowBackground: "cyan",
+	}
+}
+
+// themePath is the pre-config-file theme.json location; LoadConfig still
+// imports it on a fresh config.yaml so an old install keeps its palette.
 func themePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -31,7 +66,14 @@ func themePath() (string, error) {
 	return filepath.Join(home, ".config", "lazycloud", "theme.json"), nil
 }
 
-func mergeTheme(theme, defaults Theme) Theme {
+// MergeTheme fills the empty keys of theme from defaults. Deriving roles
+// with real fallback chains (shortcutLabels falls back to labels) rather
+// than the same defaults table keeps a partially-specified pack coherent.
+// MergeTheme returns theme with every empty key filled from defaults.
+func MergeTheme(theme, defaults Theme) Theme {
+	if theme.Background == "" {
+		theme.Background = defaults.Background
+	}
 	if theme.Labels == "" {
 		theme.Labels = defaults.Labels
 	}
@@ -70,6 +112,12 @@ func mergeTheme(theme, defaults Theme) Theme {
 	}
 	if theme.DetailText == "" {
 		theme.DetailText = theme.Text
+	}
+	if theme.SettingsLabels == "" {
+		theme.SettingsLabels = defaults.SettingsLabels
+	}
+	if theme.SettingsText == "" {
+		theme.SettingsText = theme.Text
 	}
 	if theme.ActiveRowText == "" {
 		theme.ActiveRowText = defaults.ActiveRowText

@@ -66,7 +66,7 @@ All lazycloud files live under `~/.config/lazycloud/` (created on first run):
 |---|---|
 | `cache.db` | SQLite cache of all fetched GCP resources |
 | `shortcuts.json` | Numeric shortcut (`1`–`0`) to view mapping; created with defaults on first run |
-| `theme.json` | Layout colors — `labels` (yellow accents: info headers), `text` (regular text), `borders` (info panel and overlay borders), `title` (border titles), `shortcutLabels` (shortcut keys; falls back to `labels`), `shortcutText` (shortcut descriptions; falls back to `text`), `statusLabels` (status bar info messages; standard yellow), `statusText` (status bar plain text; falls back to `text`), `summaryLabels` (summary prefixes; falls back to `labels`), `summaryText` (summary values; falls back to `text`), `detailLabels` (details overlay field names; standard yellow), `detailText` (details overlay values; falls back to `text`), `activeRowText` (active row text; standard black), `activeRowBackground` (active row background; falls back to `text`); status errors/successes and summary errors stay red/green. Created with the standard layout on first run, missing keys added in place on load (shortcut/summary selectors, `statusText`, `detailText` and `activeRowBackground` inherit `labels`/`text`). Any tcell color name (e.g. `aqua`, `orange`) or `#rrggbb` hex |
+| `config.yaml` | TUI configuration. `themeName` selects one of the named packs under `themes:`; missing or unknown names fall back to `lazycloud_dark`. `followTerminal: true` hides the theme and color rows and paints the UI with the terminal's own colors (tcell palette names and `default`, so the user's terminal palette governs every color; lazygit and htop defer the same way). Lazycloud ships bundled packs: `lazycloud_dark`, `lazycloud_light`, `monokai`, `dracula`, `nord`, `gruvbox`, `solarized`, `tokyo-night` and `one-dark` (seeded once per bundle generation into `themes:`, hand edits win, deleting one keeps it deleted; drop `bundledThemeSet:` to re-seed). Each pack is a single palette with the 18 color keys: `background`, `labels`, `text`, `borders`, `title`, `shortcutLabels` (falls back to `labels`), `shortcutText` (falls back to `text`), `focus` (falls back to `shortcutLabels`), `statusLabels`, `statusText` (falls back to `text`), `summaryLabels` (falls back to `labels`), `summaryText` (falls back to `text`), `detailLabels`, `detailText` (falls back to `text`), `settingsLabels`, `settingsText` (falls back to `text`), `activeRowText`, `activeRowBackground` (falls back to `text`); status errors/successes and summary errors stay red/green. `default` as a value defers that slot to the terminal's own color. The top-level `theme:` section mirrors the selected pack for hand edits; files older than the pack format migrate on load: two-section packs collapse to the palette their `mode` used (`mode: light` keeps the light section, anything else keeps dark), `theme.mode: system` becomes `followTerminal: true`, and the old `default` pack folds into `lazycloud_dark`. Any tcell color name (e.g. `aqua`, `orange`) or `#rrggbb` hex. Also `shortcuts`, `autoupdate` and `infobar` sections for the numeric shortcuts, stale-cache refresh and the shortcut bar |
 | `last_project.json` | Last selected project, restored on startup |
 | `lazycloud.log` | Usage / fetch error log |
 
@@ -81,13 +81,16 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `q` / `Ctrl-C` | Quit |
 | `:` | Command mode (e.g. `:vms`, `:sort asc name`, or type an IP address to jump to it) |
 | `/` | Filter the current list (see [Filtering](#filtering)) |
-| `S` / `:search` | Search side panel across every view and project (see [Search](#search)) |
+| `Ctrl-/` / `:search` | Search side panel across every view and project (see [Search](#search)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
 | `U` | Refresh every view of the current project, one after another (the status bar shows the view being fetched) |
 | `y` | Copy focused row (JSON) to clipboard |
 | `v` | Show focused row details |
 | `g` | Open focused resource in GCP Console |
 | `a` | Toggle all-projects view |
+| `space` | Projects view with the filter ready to type |
+| `b` | Back to the previous view (any view you navigated from) |
+| `F1` | Open the settings panel: follow terminal (hides every theme and color row and paints with the terminal's own palette), theme selection (cycles the named packs, `Save theme as` copies the pack under a typed name, the delete button drops custom packs), shortcut bar, auto update, the config file path, and the 18 colors of the active palette as live swatches. Up/down arrows cycle the color list, hex and tcell names type directly, changes preview live and save on close. The focused row carries a `▸` marker and the accent `focus` color, and the terminal caret turns into a steady accent block while the panel is open |
 | `?` | Toggle help overlay |
 | `Esc` | Dismiss overlay / leave filter or command mode |
 
@@ -154,9 +157,15 @@ Anything with arguments or not matching a view name is treated as a command; unk
 | `r` | Restore last deleted project | projects view |
 | `x` | Delete project from cache | projects view |
 
+### Shortcut bar
+
+A one-line bar above the status bar shows the keys available in the current view: panel-specific keys first, then the global ones (`u U y v g ? q : / a space b F1`), fitted to the terminal width. When the terminal is too narrow to show everything it ends with `+N more in ?`, and the full list always lives in the `?` help overlay.
+
+Two ways to tune it: `F1` in the settings panel toggles it (`Shortcut bar`), or set `infobar.show_shortcuts: false` in `config.yaml`. `infobar.sort_order` picks the order: `current` (panel keys first, then globals, the default) or `alphabetical` (every key by name).
+
 ## Search
 
-Press `S` (not in the VMs view) or run `:search` to open a search side panel that searches every indexed view across every project. `/` stays the per-view filter.
+Press `Ctrl-/` or run `:search` to open a search side panel that searches every indexed view across every project. `/` stays the per-view filter.
 
 The index is built over the local cache in the background, most-used views first (VMs, IPs, VPCs, buckets, ...), so results appear progressively while the rest indexes. Views with nothing cached are pulled from the GCP API in the background while the search is open, and results keep updating as the data arrives.
 

@@ -117,6 +117,7 @@ var infobarShortDesc = map[string]string{
 	"open log file in editor":                       "log file",
 	"show dns records for zone":                     "dns records",
 	"open config file in editor":                    "config",
+	"open settings":                                 "settings",
 	"back to previous view":                         "back",
 	"update cache":                                  "update",
 	"update cache for all views":                    "update all",

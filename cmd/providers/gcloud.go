@@ -2163,7 +2163,7 @@ func ListProjectCustomRoles(projectID string) ([]CustomRole, error) {
 	}
 
 	var roles []CustomRole
-	err = svc.Projects.Roles.List("projects/" + projectID).View("FULL").Pages(ctx, func(page *iam.ListRolesResponse) error {
+	err = svc.Projects.Roles.List("projects/"+projectID).View("FULL").Pages(ctx, func(page *iam.ListRolesResponse) error {
 		for _, r := range page.Roles {
 			roles = append(roles, CustomRole{
 				ProjectID:   projectID,

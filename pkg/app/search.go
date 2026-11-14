@@ -325,7 +325,7 @@ func (a *app) buildSearchPanel() {
 	input := tview.NewInputField().SetLabel(" / ").SetFieldWidth(0)
 	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	input.SetBorder(true)
-	results := tview.NewTable().SetBorders(false).SetSelectable(true, false)
+	results := tview.NewTable().SetBorders(false).SetSelectable(true, false).SetSeparator('│')
 	results.SetBorder(true)
 	a.searchInput = input
 	a.searchResults = results

@@ -32,9 +32,10 @@ type app struct {
 	cache                *providers.Cache
 	logger               *providers.Logger
 	shortcuts            *tview.Table
+	shortcutsSummary     *tview.Table
+	helpText             *tview.TextView
 	helpRow              *tview.Flex
 	helpColumn           *tview.Flex
-	shortcutsSummary     *tview.Table
 	screen               tcell.Screen
 	uiRunning            atomic.Bool
 	infobarRenderedWidth int
@@ -63,6 +64,36 @@ type app struct {
 	searchOpen        atomic.Bool
 	cmdFocused        bool
 	statusShowing     bool
+
+	settingsForm   *tview.Form
+	settingsRow    *tview.Flex
+	settingsColumn *tview.Flex
+	// settingsPanel is the shadow-wrapped panel body the settings row
+	// centers, kept for the small-screen height clamp.
+	settingsPanel tview.Primitive
+	settingsOpen  atomic.Bool
+	// settingsHint is the key summary under the settings form; kept on the
+	// app so applyThemeChrome can restyle it when the pack changes.
+	settingsHint *tview.TextView
+	// settingsSaveAs is the theme-name input on the settings form; the name
+	// typed there is the pack the panel saves to on close (a bundled seed
+	// forks into its suggested fork name on the first color edit).
+	settingsSaveAs *tview.InputField
+	// settingsSaveAsSuggestion tracks the suggested value of the save-as
+	// field so renames can follow it without clobbering a user-typed name.
+	settingsSaveAsSuggestion string
+	// settingsTypedName keeps a user-typed save-as name alive while
+	// follow-terminal mode hides the field, so toggling it off restores
+	// the typed name instead of silently resetting to the suggestion.
+	settingsTypedName string
+	// settingsDeletedPacks records the pack names deleted in this panel
+	// session, so saving does not resurrect them from the config file
+	// that still carries them.
+	settingsDeletedPacks map[string]bool
+	// sessionForks records the packs an auto-fork created this panel
+	// session, so a typed save-as name can absorb the intermediate copy
+	// instead of leaving two near-identical packs behind.
+	sessionForks map[string]bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -102,6 +133,7 @@ func newInfoPanel() *tview.Table {
 	return tview.NewTable().
 		SetBorders(false).
 		SetSelectable(true, false).
+		SetSeparator('│').
 		SetSelectedStyle(tcell.StyleDefault.
 			Foreground(theme.activeRowTextColor()).
 			Background(theme.activeRowBackgroundColor()))
@@ -244,11 +276,19 @@ func splitFilterQuery(query string) ([]string, []string) {
 }
 
 func (a *app) refreshShortcuts() {
-	count := populateShortcutsPanel(a.shortcuts)
-	a.helpRow.ResizeItem(a.shortcuts, count+2, 1)
+	a.helpText.SetText(helpText())
 }
 
 func (a *app) applyThemeToWidgets() {
+	if a.cmd == nil || a.info == nil {
+		// Widget-less apps appear in tests that exercise settings logic
+		// without a full UI; there is nothing to restyle.
+		return
+	}
+	if a.helpText != nil {
+		a.helpText.SetBorderColor(theme.borderColor())
+		a.helpText.SetTitleColor(theme.titleColor())
+	}
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetBorderColor(theme.borderColor())
 	a.info.SetSelectedStyle(tcell.StyleDefault.
@@ -256,8 +296,6 @@ func (a *app) applyThemeToWidgets() {
 		Background(theme.activeRowBackgroundColor()))
 	a.info.SetBorderColor(theme.borderColor())
 	a.info.SetTitleColor(theme.titleColor())
-	a.shortcuts.SetBorderColor(theme.borderColor())
-	a.shortcuts.SetTitleColor(theme.titleColor())
 	if a.searchInput != nil {
 		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 		a.searchResults.SetTitleColor(theme.titleColor())

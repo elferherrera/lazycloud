@@ -76,7 +76,7 @@ func bootApp() (*app, func(), error) {
 		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
-	applyTheme(config.Theme)
+	setConfiguredThemes(config)
 	applyAutoUpdateConfig(config.AutoUpdate)
 	infobarEnabled = config.Infobar.ShowShortcuts
 	infobarSortOrder = config.Infobar.SortOrder
@@ -110,9 +110,9 @@ func bootApp() (*app, func(), error) {
 
 	a.info.SetBorder(true)
 
-	shortcutsTable := newShortcutsPanel()
-	helpOverlay, helpRow := newHelpOverlay(shortcutsTable)
-	a.shortcuts = shortcutsTable
+	helpTextView := newHelpTextView()
+	helpOverlay, helpRow := newHelpOverlay(helpTextView)
+	a.helpText = helpTextView
 	a.helpRow = helpRow
 	a.helpColumn = helpOverlay
 
@@ -159,6 +159,14 @@ func (a *app) runUI() error {
 		}
 		return false
 	})
+	// The first draw is the earliest point where the real terminal size is
+	// known; the infobar renders with a placeholder width before that, so
+	// refit it once the actual width exists.
+	a.tapp.SetAfterDrawFunc(func(screen tcell.Screen) {
+		a.refreshInfobar()
+		a.tapp.SetAfterDrawFunc(nil)
+	})
+
 	a.uiRunning.Store(true)
 	err := a.tapp.Run()
 	// Back to inline mode once the loop is gone, so a late queued callback
