@@ -188,7 +188,6 @@ func (a *app) selectThemeOption(name string) {
 	if name == followTerminalThemeName {
 		if !configuredFollowTerminal {
 			setConfiguredFollowTerminal(true)
-			a.statusProgress("following the terminal palette; cycle the Theme row to pick a pack")
 			a.previewThemeColors()
 			a.rebuildSettingsForm()
 		}
@@ -272,6 +271,66 @@ func (a *app) buildSettingsPage() {
 	// terminal, so the form stays one line per item like the rest of the
 	// overlays and still scrolls to the focused field on short screens.
 	form.SetItemPadding(0)
+	// The rows are read-only fields, so letters are free for vim
+	// navigation: j/k step to the next/previous row (wrapping, buttons
+	// included), gg/G jump to the first/last row, and the up/down arrows
+	// do the same for keyboard layouts without vim habits. The capture
+	// sits on the form, ahead of the per-item captures, so it works from
+	// every row.
+	ggPending := false
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		total := form.GetFormItemCount() + form.GetButtonCount()
+		if total == 0 {
+			return event
+		}
+		item, button := form.GetFocusedItemIndex()
+		current := item
+		if button >= 0 {
+			current = form.GetFormItemCount() + button
+		}
+		if current < 0 {
+			current = 0
+		}
+		move := func(to int) {
+			to = ((to % total) + total) % total
+			form.SetFocus(to)
+		}
+		switch event.Key() {
+		case tcell.KeyDown:
+			ggPending = false
+			move(current + 1)
+			return nil
+		case tcell.KeyUp:
+			ggPending = false
+			move(current - 1)
+			return nil
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'j':
+				ggPending = false
+				move(current + 1)
+				return nil
+			case 'k':
+				ggPending = false
+				move(current - 1)
+				return nil
+			case 'G':
+				ggPending = false
+				move(total - 1)
+				return nil
+			case 'g':
+				if ggPending {
+					ggPending = false
+					move(0)
+					return nil
+				}
+				ggPending = true
+				return nil
+			}
+		}
+		ggPending = false
+		return event
+	})
 	a.settingsForm = form
 	a.rebuildSettingsForm()
 
@@ -296,19 +355,6 @@ func (a *app) buildSettingsPage() {
 // shows in the row's field (space cycles it), so the label stays constant
 // while the value changes.
 const themeRowLabel = "Theme"
-
-// settingsStatusHint is the key summary the status bar shows while the
-// settings panel is open. Every key named here is one the panel actually
-// handles: tab moves between rows, and space is the only key that changes
-// a value — toggling a checkbox, cycling the theme selection, or stepping
-// a color through the curated list. Closing via esc persists the edits.
-const settingsStatusHint = "tab moves · space toggles or cycles a value · esc saves and closes"
-
-// settingsStatusHintFollow is the follow-terminal variant: the color rows
-// are hidden there, so the hint names only the keys that still do
-// something — space toggles a checkbox or cycles the theme row back to a
-// pack.
-const settingsStatusHintFollow = "tab moves · space toggles or cycles the theme · enter runs a button · esc saves and closes"
 
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
@@ -569,13 +615,13 @@ func (c *focusCheckbox) SetFormAttributes(labelWidth int, labelColor, bgColor, f
 
 // themeSelectionField is the Theme row's cycle control: a read-only field
 // whose text is the current selection (config pack, custom, or follow
-// terminal), with space walking the option list — the only key that
-// changes a settings value. Every other key is swallowed in the capture —
-// the acceptance func cannot stop Backspace or Delete, which tview's text
-// area would happily honour — except tab, backtab and enter, which drive
-// the form's own focus movement. It carries the same focus marker and
-// accent styles as the checkboxes, and re-applies them in
-// SetFormAttributes because Form.Draw restyles every item on each draw.
+// terminal), with space and enter walking the option list. Every other
+// key is swallowed in the capture — the acceptance func cannot stop
+// Backspace or Delete, which tview's text area would happily honour —
+// except tab and backtab, which drive the form's own focus movement. It
+// carries the same focus marker and accent styles as the checkboxes, and
+// re-applies them in SetFormAttributes because Form.Draw restyles every
+// item on each draw.
 type themeSelectionField struct {
 	*tview.InputField
 	baseLabel string
@@ -591,10 +637,10 @@ func newThemeSelectionField(a *app) *themeSelectionField {
 	f.SetBlurFunc(func() { f.update(false) })
 	f.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
-		case tcell.KeyTab, tcell.KeyBacktab, tcell.KeyEnter:
+		case tcell.KeyTab, tcell.KeyBacktab:
 			return event
-		case tcell.KeyRune:
-			if event.Rune() == ' ' {
+		case tcell.KeyEnter, tcell.KeyRune:
+			if event.Key() == tcell.KeyEnter || event.Rune() == ' ' {
 				a.cycleThemeName(1)
 			}
 		}
@@ -650,6 +696,14 @@ func (f *themeSelectionField) SetFormAttributes(labelWidth int, labelColor, bgCo
 	f.InputField.SetFormAttributes(labelWidth, labelColor, bgColor, fieldTextColor, fieldBgColor)
 	f.update(f.HasFocus())
 	return f
+}
+
+// Draw paints the field and then hides the cursor: the embedded text area
+// calls ShowCursor whenever the field holds focus, printing a terminal
+// cursor on the read-only value.
+func (f *themeSelectionField) Draw(screen tcell.Screen) {
+	f.InputField.Draw(screen)
+	screen.HideCursor()
 }
 
 // cycleThemeColor moves the section value for one key through the curated
@@ -744,6 +798,14 @@ func (f *colorPreviewField) SetFormAttributes(labelWidth int, labelColor, bgColo
 	return f
 }
 
+// Draw paints the swatch and then hides the cursor: the embedded text area
+// calls ShowCursor whenever the field holds focus, printing a terminal
+// cursor on the read-only value.
+func (f *colorPreviewField) Draw(screen tcell.Screen) {
+	f.InputField.Draw(screen)
+	screen.HideCursor()
+}
+
 // applyPreview paints the field background with the current value and picks
 // black or white text so the value stays legible on any color.
 func (f *colorPreviewField) applyPreview() {
@@ -827,11 +889,6 @@ func (a *app) openSettings() {
 	a.pages.ShowPage("settings")
 	a.tapp.SetFocus(a.settingsForm)
 	a.updateSettingsCursorStyle()
-	if configuredFollowTerminal {
-		a.statusProgress(settingsStatusHintFollow)
-	} else {
-		a.statusProgress(settingsStatusHint)
-	}
 }
 
 func (a *app) closeSettings() {

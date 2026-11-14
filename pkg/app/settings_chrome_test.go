@@ -67,10 +67,10 @@ func TestCycleThemeNameRestylesOverlayChrome(t *testing.T) {
 	}
 }
 
-// TestOpenSettingsShowsUsageHintInStatus pins the relocated key summary:
-// the overlay no longer carries a hint text view, and the status bar shows
-// it while the panel is open, following the follow-terminal mode.
-func TestOpenSettingsShowsUsageHintInStatus(t *testing.T) {
+// TestOpenSettingsLeavesStatusBarAlone pins that opening the panel writes
+// no key summary: the status bar keeps whatever it showed before, so the
+// panel opens silently.
+func TestOpenSettingsLeavesStatusBarAlone(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
@@ -80,39 +80,16 @@ func TestOpenSettingsShowsUsageHintInStatus(t *testing.T) {
 	a.buildSettingsPage()
 
 	a.openSettings()
-	got := a.status.GetText(false)
-	for _, want := range []string{"tab moves", "space toggles or cycles a value", "esc saves and closes"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("status = %q, want the %q key summary", got, want)
-		}
+	if got := a.status.GetText(false); strings.Contains(got, "tab") {
+		t.Errorf("status = %q, want no key summary on open", got)
 	}
-	if !a.statusShowing {
-		t.Error("openSettings() left the status row collapsed, the hint would be invisible")
+	if a.statusShowing {
+		t.Error("openSettings() pinned the status row, want it left as it was")
 	}
 
 	configuredFollowTerminal = true
 	a.openSettings()
-	if got := a.status.GetText(false); !strings.Contains(got, settingsStatusHintFollow) {
-		t.Errorf("follow-terminal status = %q, want %q", got, settingsStatusHintFollow)
-	}
-	if !a.statusShowing {
-		t.Error("openSettings() in follow-terminal mode left the status row collapsed")
-	}
-}
-
-// TestSettingsUsageHintNamesRealKeys guards the key summary the status bar
-// shows: every key named in the hint must be a key the panel actually
-// handles, because a wrong hint is worse than none, and a one-row status
-// bar needs a single-line hint.
-func TestSettingsUsageHintNamesRealKeys(t *testing.T) {
-	for _, hint := range []string{settingsStatusHint, settingsStatusHintFollow} {
-		if strings.Contains(hint, "\n") {
-			t.Errorf("usage hint %q spans several lines, want one status row", hint)
-		}
-		for _, key := range []string{"tab", "space", "esc"} {
-			if !strings.Contains(hint, key) {
-				t.Errorf("usage hint %q is missing the %q key", hint, key)
-			}
-		}
+	if got := a.status.GetText(false); strings.Contains(got, "tab") {
+		t.Errorf("follow-terminal status = %q, want no key summary on open", got)
 	}
 }

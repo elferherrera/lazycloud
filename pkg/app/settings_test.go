@@ -422,8 +422,8 @@ func themeFormItem(t *testing.T, a *app) *themeSelectionField {
 
 // TestThemeSelectionFieldShowsNameAndCyclesOnKeys pins the Theme row's
 // contract: the field text is the current selection (the checkbox mark is
-// gone), typing and the non-space keys are rejected, and space advances
-// the cycle — the only key that changes a value.
+// gone), typing and the deletion keys are rejected, and space and enter
+// advance the cycle.
 func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 	originalPacks := configuredThemePacks
 	originalName := configuredThemeName
@@ -454,7 +454,6 @@ func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 		tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
@@ -471,6 +470,11 @@ func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 	}
 	if got := themeFormItem(t, a).GetText(); got != "beta" {
 		t.Fatalf("theme selection = %q, want the field to follow the cycle", got)
+	}
+
+	item.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
+	if configuredThemeName != customThemeName {
+		t.Fatalf("enter cycled to %q, want custom after beta", configuredThemeName)
 	}
 }
 
@@ -521,5 +525,104 @@ func TestColorFieldSpaceCyclesAndTypingRejected(t *testing.T) {
 	}
 	if configuredTheme.Labels != "blue" {
 		t.Fatalf("palette labels = %q, want blue after the space cycle", configuredTheme.Labels)
+	}
+}
+
+// TestSettingsVimNavigation pins the vim keys: j/k step between rows with
+// wraparound (buttons included), gg/G jump to the first/last row, and the
+// up/down arrows behave the same.
+func TestSettingsVimNavigation(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+	form := a.settingsForm
+	items := form.GetFormItemCount()
+	total := items + form.GetButtonCount()
+
+	form.SetFocus(1)
+	form.SetFocus(0)
+	sendKey := func(key tcell.Key, r rune) {
+		form.InputHandler()(tcell.NewEventKey(key, r, tcell.ModNone), nil)
+	}
+	focused := func() int {
+		item, button := form.GetFocusedItemIndex()
+		if item >= 0 {
+			return item
+		}
+		return items + button
+	}
+
+	sendKey(tcell.KeyRune, 'j')
+	if got := focused(); got != 1 {
+		t.Fatalf("after j focused = %d, want 1", got)
+	}
+	sendKey(tcell.KeyRune, 'k')
+	if got := focused(); got != 0 {
+		t.Fatalf("after k focused = %d, want 0", got)
+	}
+	sendKey(tcell.KeyRune, 'k')
+	if got := focused(); got != total-1 {
+		t.Fatalf("after wrap k focused = %d, want the last element", got)
+	}
+	sendKey(tcell.KeyRune, 'j')
+	if got := focused(); got != 0 {
+		t.Fatalf("after wrap j focused = %d, want the first element", got)
+	}
+	sendKey(tcell.KeyRune, 'G')
+	if got := focused(); got != total-1 {
+		t.Fatalf("after G focused = %d, want the last element", got)
+	}
+	sendKey(tcell.KeyRune, 'g')
+	sendKey(tcell.KeyRune, 'g')
+	if got := focused(); got != 0 {
+		t.Fatalf("after gg focused = %d, want the first element", got)
+	}
+	sendKey(tcell.KeyDown, 0)
+	if got := focused(); got != 1 {
+		t.Fatalf("after down focused = %d, want 1", got)
+	}
+	sendKey(tcell.KeyUp, 0)
+	if got := focused(); got != 0 {
+		t.Fatalf("after up focused = %d, want 0", got)
+	}
+}
+
+// TestSettingsFieldsHideCursor pins that the read-only fields never print
+// a terminal cursor: the embedded text area calls ShowCursor whenever its
+// field holds focus, which would draw a cursor over the value while
+// navigating with j/k.
+func TestSettingsFieldsHideCursor(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+	form := a.settingsForm
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	screen.SetSize(90, 45)
+
+	for i := 0; i < form.GetFormItemCount(); i++ {
+		switch form.GetFormItem(i).(type) {
+		case *themeSelectionField, *colorPreviewField:
+		default:
+			continue
+		}
+		form.SetFocus(i)
+		a.settingsColumn.SetRect(0, 0, 90, 45)
+		a.settingsColumn.Draw(screen)
+		screen.Show()
+		if _, _, visible := screen.GetCursor(); visible {
+			t.Errorf("cursor visible while form item %d holds focus, want it hidden on the read-only value", i)
+		}
 	}
 }
