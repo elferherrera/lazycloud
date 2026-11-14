@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // settingsGlobalsSnapshot captures every package-level variable the

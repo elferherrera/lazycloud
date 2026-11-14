@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 	"github.com/rivo/tview"
 )
 

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // oneShotWriter accepts the first write and fails every later one, so

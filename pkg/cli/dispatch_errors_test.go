@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 // errWriter fails every write, standing in for a closed pipe.

@@ -4,7 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/cloud"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 )
 
 func TestResourceNames(t *testing.T) {
@@ -34,8 +35,12 @@ func TestResolveAlias(t *testing.T) {
 	}
 }
 
-func TestDefaultFetchersWired(t *testing.T) {
-	f := DefaultFetchers()
+func TestGCPFetchersWired(t *testing.T) {
+	p, err := cloud.Get(cloud.GCP)
+	if err != nil {
+		t.Fatalf("cloud.Get(gcp): %v", err)
+	}
+	f := p.Fetchers
 	fields := reflect.ValueOf(f)
 	for i := 0; i < fields.NumField(); i++ {
 		if fields.Field(i).IsNil() {
@@ -196,7 +201,10 @@ func TestRegistryBadSelectors(t *testing.T) {
 	}{
 		{"projects", []string{"a", "b"}},
 		{"vms", []string{"a"}},
-		{"disks", []string{"a", "b"}},
+		// vms/disks accept project/name and project/zone/name now, so
+		// the bad shapes are 1-part and 4-part.
+		{"disks", []string{"a"}},
+		{"disks", []string{"a", "b", "c", "d"}},
 		{"clusters", []string{"a"}},
 		{"networks", []string{"a"}},
 		{"buckets", []string{"a"}},

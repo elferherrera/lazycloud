@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/elferherrera/lazycloud/pkg/providers"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )

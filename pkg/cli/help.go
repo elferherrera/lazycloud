@@ -40,7 +40,7 @@ Resources: `)
 	b.WriteString(`
 Aliases: the singular of every noun, plus sa for serviceaccounts.
 
-Selectors: project (projects), project/zone/name (vms, disks),
+Selectors: project (projects), project/name or project/zone/name (vms, disks),
 project/name or project/region/name (networks: VPCs, subnets),
 project/name (clusters, buckets), project/email (serviceaccounts),
 project/member/role (iam; the role keeps its slashes).
