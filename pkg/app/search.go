@@ -467,7 +467,7 @@ const searchPanelWidth = 46
 // column so the main view shrinks.
 func (a *app) buildSearchPanel() {
 	input := tview.NewInputField().SetLabel(" / ").SetFieldWidth(0)
-	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor).Background(tview.Styles.PrimitiveBackgroundColor))
 	input.SetBorder(true)
 	results := tview.NewTable().SetBorders(false).SetSelectable(true, false).SetSeparator('│')
 	results.SetBorder(true)

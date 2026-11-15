@@ -284,7 +284,7 @@ func (a *app) applyThemeToWidgets() {
 		a.helpText.SetBorderColor(theme.borderColor())
 		a.helpText.SetTitleColor(theme.titleColor())
 	}
-	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor).Background(tview.Styles.PrimitiveBackgroundColor))
 	a.cmd.SetBorderColor(theme.borderColor())
 	a.info.SetSelectedStyle(tcell.StyleDefault.
 		Foreground(theme.activeRowTextColor()).
@@ -292,7 +292,7 @@ func (a *app) applyThemeToWidgets() {
 	a.info.SetBorderColor(theme.borderColor())
 	a.info.SetTitleColor(theme.titleColor())
 	if a.searchInput != nil {
-		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+		a.searchInput.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor).Background(tview.Styles.PrimitiveBackgroundColor))
 		a.searchResults.SetTitleColor(theme.titleColor())
 		a.searchResults.SetSeparator('│')
 		a.updateFocusStyles()

@@ -147,7 +147,7 @@ func bootApp() (*app, func(), error) {
 
 	a.cmd.SetDoneFunc(a.done)
 	a.cmd.SetChangedFunc(a.changed)
-	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor).Background(tview.Styles.PrimitiveBackgroundColor))
 	a.cmd.SetFocusFunc(func() {
 		a.cmdFocused = true
 		a.mainView.ResizeItem(a.cmd, 3, 1)
