@@ -2172,6 +2172,16 @@ func (c *Cache) ListClusterWorkloads(projectID, cluster string) ([]Workload, err
 	return scanWorkloads(rows)
 }
 
+func (c *Cache) ListAllWorkloads() ([]Workload, error) {
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+		FROM workloads ORDER BY project_id, cluster, namespace, kind, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanWorkloads(rows)
+}
+
 func (c *Cache) GetWorkload(projectID, cluster, kind, namespace, name string) (*Workload, error) {
 	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
 		FROM workloads WHERE project_id = ? AND cluster = ? AND kind = ? AND namespace = ? AND name = ?`,
@@ -2346,6 +2356,15 @@ func scanDNSRecords(rows *sql.Rows) ([]DNSRecord, error) {
 func (c *Cache) ListZoneDNSRecords(projectID, zone string) ([]DNSRecord, error) {
 	rows, err := c.db.Query(`SELECT project_id, zone, name, type, ttl, data, updated_at
 		FROM dns_records WHERE project_id = ? AND zone = ? ORDER BY name, type`, projectID, zone)
+	if err != nil {
+		return nil, err
+	}
+	return scanDNSRecords(rows)
+}
+
+func (c *Cache) ListAllDNSRecords() ([]DNSRecord, error) {
+	rows, err := c.db.Query(`SELECT project_id, zone, name, type, ttl, data, updated_at
+		FROM dns_records ORDER BY project_id, zone, name, type`)
 	if err != nil {
 		return nil, err
 	}
@@ -3035,6 +3054,16 @@ func (c *Cache) ListBucketIAMBindings(projectID, bucket string) ([]BucketIAMBind
 	if err != nil {
 		return nil, err
 	}
+	return scanBucketIAMBindings(rows)
+}
+
+func (c *Cache) ListAllBucketIAMBindings() ([]BucketIAMBinding, error) {
+	rows, err := c.db.Query(`SELECT project_id, bucket, member, role, condition, updated_at
+		FROM bucket_iam_bindings ORDER BY project_id, bucket, member, role`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 	return scanBucketIAMBindings(rows)
 }
 
