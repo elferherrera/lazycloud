@@ -145,9 +145,6 @@ func shortcutKeyLabel(key rune) string {
 
 func (s shortcut) label() string {
 	if s.specialKey != 0 {
-		if s.specialKey == tcell.KeyCtrlUnderscore {
-			return "Ctrl-/"
-		}
 		return tcell.KeyNames[s.specialKey]
 	}
 	return shortcutKeyLabel(s.key)

@@ -505,17 +505,17 @@ func TestSearchShortcutOpensPanel(t *testing.T) {
 	wireSearchApp(a)
 	resetAppState()
 
-	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyCtrlUnderscore, 0, tcell.ModNone)); got != nil {
-		t.Fatal("Ctrl-/ should be consumed")
+	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyCtrlF, 0, tcell.ModNone)); got != nil {
+		t.Fatal("Ctrl-F should be consumed")
 	}
 	if !a.searchOpen.Load() {
-		t.Fatal("Ctrl-/ did not open the search panel")
+		t.Fatal("Ctrl-F did not open the search panel")
 	}
 	a.closeSearch()
 
 	for _, s := range shortcuts {
-		if s.specialKey == tcell.KeyCtrlUnderscore && s.label() != "Ctrl-/" {
-			t.Fatalf("search shortcut label = %q, want Ctrl-/", s.label())
+		if s.specialKey == tcell.KeyCtrlF && s.label() != "Ctrl-F" {
+			t.Fatalf("search shortcut label = %q, want Ctrl-F", s.label())
 		}
 	}
 }

@@ -109,7 +109,7 @@ func init() {
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{
-			specialKey: tcell.KeyCtrlUnderscore,
+			specialKey: tcell.KeyCtrlF,
 			desc:       "search side panel (Tab toggle, Esc close)",
 			run:        (*app).openSearch,
 		},
