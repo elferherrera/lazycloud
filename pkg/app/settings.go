@@ -447,8 +447,8 @@ func (a *app) rebuildSettingsForm() {
 	form.Clear(true)
 	form.SetLabelColor(theme.settingsLabelColor())
 	form.SetFieldTextColor(theme.settingsTextColor())
-	form.SetFieldBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetFieldBackgroundColor(tcell.GetColor(theme.background))
+	form.SetButtonBackgroundColor(tcell.GetColor(theme.background))
 	form.SetButtonTextColor(theme.settingsTextColor())
 	// Focused buttons paint their whole box with the activated style, so
 	// the theme accent makes the focused button readable at a glance.
@@ -617,7 +617,9 @@ func (c *focusCheckbox) SetFormAttributes(labelWidth int, labelColor, bgColor, f
 
 // themeSelectionField is the Theme row's cycle control: a read-only field
 // whose text is the current selection (config pack, custom, or follow
-// terminal), with space and enter walking the option list. Every other
+// terminal), with space and enter walking the option list forward and
+// h/left walking it back, l/right walking it forward (the vim keys match
+// the panel's j/k row navigation). Every other
 // key is swallowed in the capture — the acceptance func cannot stop
 // Backspace or Delete, which tview's text area would happily honour —
 // except tab and backtab, which drive the form's own focus movement. It
@@ -641,8 +643,19 @@ func newThemeSelectionField(a *app) *themeSelectionField {
 		switch event.Key() {
 		case tcell.KeyTab, tcell.KeyBacktab:
 			return event
-		case tcell.KeyEnter, tcell.KeyRune:
-			if event.Key() == tcell.KeyEnter || event.Rune() == ' ' {
+		case tcell.KeyEnter:
+			a.cycleThemeName(1)
+		case tcell.KeyLeft:
+			a.cycleThemeName(-1)
+		case tcell.KeyRight:
+			a.cycleThemeName(1)
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case ' ':
+				a.cycleThemeName(1)
+			case 'h':
+				a.cycleThemeName(-1)
+			case 'l':
 				a.cycleThemeName(1)
 			}
 		}

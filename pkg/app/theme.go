@@ -282,6 +282,8 @@ func (a *app) applyThemeChrome() {
 		a.settingsForm.SetLabelColor(theme.settingsLabelColor())
 		a.settingsForm.SetFieldTextColor(theme.settingsTextColor())
 		a.settingsForm.SetButtonTextColor(theme.settingsTextColor())
+		a.settingsForm.SetFieldBackgroundColor(tcell.GetColor(theme.background))
+		a.settingsForm.SetButtonBackgroundColor(tcell.GetColor(theme.background))
 	}
 }
 

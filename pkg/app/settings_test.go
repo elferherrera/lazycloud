@@ -422,8 +422,9 @@ func themeFormItem(t *testing.T, a *app) *themeSelectionField {
 
 // TestThemeSelectionFieldShowsNameAndCyclesOnKeys pins the Theme row's
 // contract: the field text is the current selection (the checkbox mark is
-// gone), typing and the deletion keys are rejected, and space and enter
-// advance the cycle.
+// gone), typing and the deletion keys are rejected, space and enter
+// advance the cycle, and h/left walk it back while l/right walk it
+// forward with wraparound.
 func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 	originalPacks := configuredThemePacks
 	originalName := configuredThemeName
@@ -452,8 +453,6 @@ func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 
 	for _, ev := range []*tcell.EventKey{
 		tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone),
-		tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
 		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
@@ -475,6 +474,27 @@ func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
 	item.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
 	if configuredThemeName != customThemeName {
 		t.Fatalf("enter cycled to %q, want custom after beta", configuredThemeName)
+	}
+
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("left cycled to %q, want beta back after custom", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone), nil)
+	if configuredThemeName != "alpha" {
+		t.Fatalf("h cycled to %q, want alpha back after beta", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone), nil)
+	if got := themeFormItem(t, a).GetText(); got != followTerminalThemeName {
+		t.Fatalf("left cycled to %q, want the follow-terminal wrap after alpha", got)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone), nil)
+	if configuredThemeName != "alpha" {
+		t.Fatalf("right cycled to %q, want alpha after the follow-terminal wrap", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("l cycled to %q, want beta after alpha", configuredThemeName)
 	}
 }
 
