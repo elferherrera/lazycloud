@@ -479,3 +479,126 @@ func equalStringSlices(a, b []string) bool {
 	}
 	return true
 }
+
+// writeSearchTestApp wires a search app with a seeded index and the search panel
+// open on the given query, the state write's global-search mode exports.
+func writeSearchTestApp(t *testing.T, query string) *app {
+	t.Helper()
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+	wireSearchApp(a)
+	resetAppState()
+	a.openSearch()
+	a.searchInput.SetText(query)
+	return a
+}
+
+func TestRunWriteCommandSearchYAML(t *testing.T) {
+	a := writeSearchTestApp(t, "alpha")
+	path := filepath.Join(t.TempDir(), "results.yaml")
+
+	runWriteCommand(a, []string{path})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var payload map[string]map[string][]map[string]any
+	if err := yaml.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("Unmarshal() error = %v, file: %s", err, data)
+	}
+	if len(payload) != 2 {
+		t.Fatalf("views = %d, want VMs and Buckets: %s", len(payload), data)
+	}
+	vms, ok := payload["VMs"]["p1"]
+	if !ok || len(vms) != 1 {
+		t.Fatalf("VMs/p1 = %#v, want the alpha-web VM", payload)
+	}
+	if vms[0]["Name"] != "alpha-web" {
+		t.Errorf("vm name = %v, want alpha-web", vms[0]["Name"])
+	}
+	cols, ok := vms[0]["Columns"].(map[string]any)
+	if !ok || cols["Name"] != "alpha-web" {
+		t.Errorf("vm Columns = %#v, want the rendered cells", vms[0]["Columns"])
+	}
+	buckets, ok := payload["Buckets"]["p1"]
+	if !ok || len(buckets) != 1 || buckets[0]["Name"] != "alpha-bucket" {
+		t.Errorf("Buckets/p1 = %#v, want the alpha-bucket component", payload["Buckets"])
+	}
+	if got := a.status.GetText(false); !strings.Contains(got, "[green]") {
+		t.Errorf("status = %q, want a success message", got)
+	}
+}
+
+func TestRunWriteCommandSearchJSON(t *testing.T) {
+	a := writeSearchTestApp(t, "beta")
+	path := filepath.Join(t.TempDir(), "results.json")
+
+	runWriteCommand(a, []string{path})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var payload map[string]map[string][]map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("Unmarshal() error = %v, file: %s", err, data)
+	}
+	vms, ok := payload["VMs"]["p2"]
+	if !ok || len(vms) != 1 || vms[0]["Name"] != "beta-db" {
+		t.Errorf("VMs/p2 = %#v, want the beta-db component", payload)
+	}
+	if _, ok := payload["Buckets"]["p1"]; ok {
+		t.Errorf("Buckets/p1 present, want only the query's matches: %#v", payload)
+	}
+}
+
+func TestRunWriteCommandSearchCSVRejected(t *testing.T) {
+	a := writeSearchTestApp(t, "alpha")
+	path := filepath.Join(t.TempDir(), "results.csv")
+
+	runWriteCommand(a, []string{path})
+
+	if got := a.status.GetText(false); !strings.Contains(got, "csv is not supported for global search results") {
+		t.Errorf("status = %q, want the csv rejection", got)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("csv file created despite rejection: %v", err)
+	}
+}
+
+func TestRunWriteCommandSearchErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		query   string
+		args    []string
+		wantMsg string
+	}{
+		{"empty query", "", []string{"r.yaml"}, "type a query"},
+		{"no matches", "nothing-matches-this", []string{"r.yaml"}, "no matches"},
+		{"unsupported extension", "alpha", []string{"result.txt"}, `write: unsupported extension ".txt"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := writeSearchTestApp(t, tc.query)
+			runWriteCommand(a, tc.args)
+			if got := a.status.GetText(false); !strings.Contains(got, tc.wantMsg) {
+				t.Errorf("status = %q, want it to contain %q", got, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestRunWriteCommandSearchClosedKeepsViewMode(t *testing.T) {
+	a := writeSearchTestApp(t, "alpha")
+	a.closeSearch()
+	appState.ViewKind = viewProjects
+	path := filepath.Join(t.TempDir(), "results.csv")
+
+	runWriteCommand(a, []string{path})
+
+	if got := a.status.GetText(false); strings.Contains(got, "csv is not supported") {
+		t.Errorf("status = %q, want the view mode, not the search gate", got)
+	}
+}

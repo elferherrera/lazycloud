@@ -62,7 +62,7 @@ var helpCommands = []struct {
 	desc    string
 }{
 	{"sort", "asc|desc <column>", "sort rows by a column"},
-	{"write", "<file.csv|json|yaml>", "write the view to a file"},
+	{"write", "<file.csv|json|yaml>", "write the records to a file"},
 	{"search", "", "open the search panel"},
 }
 

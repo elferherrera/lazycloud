@@ -427,6 +427,18 @@ func searchEntryMatches(text string, includes, excludes []string) bool {
 // still building simply has no entries yet. Results are capped just above the
 // display limit so the title can say "more than N".
 func (idx *searchIndex) match(query string) []searchEntry {
+	return idx.matchLimit(query, maxSearchHits+1)
+}
+
+// matchAll returns every hit for query with no cap, so write's global-search
+// mode exports all occurrences of the match, not just the first page of results.
+func (idx *searchIndex) matchAll(query string) []searchEntry {
+	return idx.matchLimit(query, 0)
+}
+
+// matchLimit collects the hits of every warm kind for query, stopping once
+// limit entries have been collected; a zero limit collects everything.
+func (idx *searchIndex) matchLimit(query string, limit int) []searchEntry {
 	includes, excludes := parseSearchTerms(query)
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -437,12 +449,62 @@ func (idx *searchIndex) match(query string) []searchEntry {
 				continue
 			}
 			hits = append(hits, e)
-			if len(hits) > maxSearchHits {
+			if limit > 0 && len(hits) >= limit {
 				return hits
 			}
 		}
 	}
 	return hits
+}
+
+// searchHitsPayload groups the query's hits the way the results panel does,
+// nested one level deeper: the view title first, then the project, then the
+// list of matching components. Every component is resolved to its full
+// details: the cached resource, wrapped like the y copy payload (resource
+// fields plus the Columns map of the rendered row cells).
+func (a *app) searchHitsPayload(hits []searchEntry) (map[string]map[string][]any, error) {
+	payload := map[string]map[string][]any{}
+	for _, hit := range hits {
+		details, err := a.searchEntryDetails(hit)
+		if err != nil {
+			return nil, err
+		}
+		view := views[hit.kind].title
+		projects, ok := payload[view]
+		if !ok {
+			projects = map[string][]any{}
+			payload[view] = projects
+		}
+		projects[hit.project] = append(projects[hit.project], details)
+	}
+	return payload, nil
+}
+
+// searchEntryDetails resolves one search hit to its cached resource. The All
+// views' resource hooks read the project from the row itself; the scoped
+// kinds' hooks read the focused appState instead, so they are resolved
+// directly with the hit's project and scope.
+func (a *app) searchEntryDetails(hit searchEntry) (any, error) {
+	var res any
+	var err error
+	switch hit.kind {
+	case viewWorkloads:
+		res, err = workloadResource(a, hit.project, hit.scope, hit.row[1], hit.row[0], hit.row[2])
+	case viewDNSRecords:
+		res, err = dnsRecordResource(a, hit.project, hit.scope, hit.row[0], hit.row[1])
+	case viewBucketIAM:
+		res, err = bucketIAMResource(a, hit.project, hit.scope, hit.row[0], hit.row[2])
+	default:
+		def := views[hit.kind]
+		if def.resource == nil {
+			return rowCellsMap(def.headers, hit.row), nil
+		}
+		res, err = def.resource(a, hit.row)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rowCopyPayload(views[hit.kind].headers, hit.row, res)
 }
 
 func (idx *searchIndex) warmCount() int {
