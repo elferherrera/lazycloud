@@ -158,10 +158,15 @@ func TestHelpPanelCommandsSorted(t *testing.T) {
 	prev := ""
 	seen := 0
 	for _, line := range strings.Split(text, "\n") {
-		// Lines carry color tags before the key column, so look for the
-		// command token anywhere in the line's fields.
+		// Lines carry color tags before the key column, so strip them
+		// and look for the command token in the plain text. The sort
+		// check covers the Views section only.
+		plain := stripColorTags(line)
+		if strings.TrimSpace(plain) == "COMMANDS" {
+			break
+		}
 		var cmd string
-		for _, field := range strings.Fields(line) {
+		for _, field := range strings.Fields(plain) {
 			if strings.HasPrefix(field, ":") && len(field) > 1 {
 				cmd = field
 				break

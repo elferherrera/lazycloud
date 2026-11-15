@@ -51,13 +51,21 @@ func TestHelpTextRenders(t *testing.T) {
 		if s.visible != nil && !s.visible() {
 			continue
 		}
-		if !strings.Contains(text, s.desc) {
+		if len(s.commands) == 0 && !strings.Contains(text, s.desc) {
 			t.Errorf("help text is missing description %q", s.desc)
 		}
 		for _, c := range s.commands {
 			if !strings.Contains(text, c.cmd) {
 				t.Errorf("help text is missing command %q", c.cmd)
 			}
+		}
+	}
+	if strings.Contains(text, "focus command") {
+		t.Error("help text still shows the : parent row in the Views section")
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "  ") {
+			t.Errorf("help text line %q is indented instead of left-aligned", line)
 		}
 	}
 }
@@ -88,6 +96,9 @@ func TestHelpTextHidesProjectActionsOutsideProjectsView(t *testing.T) {
 	text := helpText()
 	for _, s := range shortcuts {
 		contains := strings.Contains(text, s.desc)
+		if len(s.commands) > 0 {
+			continue
+		}
 		if s.visible != nil && !s.visible() {
 			if contains {
 				t.Errorf("help text shows hidden description %q", s.desc)
@@ -122,7 +133,7 @@ func TestHelpOverlayRenders(t *testing.T) {
 		if s.visible != nil && !s.visible() {
 			continue
 		}
-		if !strings.Contains(rendered, s.desc) {
+		if len(s.commands) == 0 && !strings.Contains(rendered, s.desc) {
 			t.Errorf("help overlay is missing description %q", s.desc)
 		}
 		for _, c := range s.commands {
@@ -154,5 +165,43 @@ func TestHelpOverlayScrollsInsteadOfClippingTop(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "THIS VIEW") {
 		t.Error("short terminal clips the first section instead of scrolling")
+	}
+}
+
+// TestHelpCommandsSectionListsEveryCommand guards the Commands section: it
+// renders after Views, and its entries stay in sync with the commands
+// table — every listed invocation names a real command, and every command
+// is listed.
+func TestHelpCommandsSectionListsEveryCommand(t *testing.T) {
+	appState.ViewKind = viewProjects
+	text := helpText()
+	for _, c := range helpCommands {
+		desc := c.desc
+		if c.options != "" {
+			desc += " (" + c.options + ")"
+		}
+		if !strings.Contains(text, ":"+c.cmd) || !strings.Contains(text, desc) {
+			t.Errorf("help text is missing the %q command row", c.cmd)
+		}
+		if _, ok := commands[c.cmd]; !ok {
+			t.Errorf("helpCommands entry %q does not name a command in the commands table", c.cmd)
+		}
+	}
+	for name := range commands {
+		covered := false
+		for _, c := range helpCommands {
+			if c.cmd == name {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("commands table entry %q has no helpCommands row", name)
+		}
+	}
+	viewsIdx := strings.Index(text, "VIEWS")
+	commandsIdx := strings.Index(text, "COMMANDS")
+	if viewsIdx == -1 || commandsIdx == -1 || commandsIdx < viewsIdx {
+		t.Errorf("COMMANDS section renders at %d, VIEWS at %d, want COMMANDS after VIEWS", commandsIdx, viewsIdx)
 	}
 }
