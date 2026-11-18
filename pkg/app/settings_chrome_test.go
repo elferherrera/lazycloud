@@ -65,18 +65,12 @@ func TestCycleThemeNameRestylesOverlayChrome(t *testing.T) {
 	if got := a.info.GetBorderColor(); got != tcell.GetColor("aqua") {
 		t.Errorf("main table border = %v, want the ocean pack's aqua", got)
 	}
-	if a.settingsHint == nil {
-		t.Fatal("settings overlay must carry the usage hint text view")
-	}
-	if got := a.settingsHint.GetBackgroundColor(); got != tcell.GetColor("navy") {
-		t.Errorf("usage hint background = %v, want the ocean pack's navy", got)
-	}
 }
 
-// TestSettingsOverlayDrawsUsageHint renders the whole settings overlay
-// (column flex, not just the form) and pins that the key summary paints
-// below the form, so the flex wiring cannot silently drop it.
-func TestSettingsOverlayDrawsUsageHint(t *testing.T) {
+// TestOpenSettingsLeavesStatusBarAlone pins that opening the panel writes
+// no key summary: the status bar keeps whatever it showed before, so the
+// panel opens silently.
+func TestOpenSettingsLeavesStatusBarAlone(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	a := settingsTestApp(t)
@@ -85,47 +79,17 @@ func TestSettingsOverlayDrawsUsageHint(t *testing.T) {
 	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 
-	screen := tcell.NewSimulationScreen("UTF-8")
-	if err := screen.Init(); err != nil {
-		t.Fatal(err)
+	a.openSettings()
+	if got := a.status.GetText(false); strings.Contains(got, "tab") {
+		t.Errorf("status = %q, want no key summary on open", got)
 	}
-	defer screen.Fini()
-	screen.SetSize(80, 40)
-	a.settingsColumn.SetRect(0, 0, 80, 40)
-	a.settingsColumn.Draw(screen)
-	screen.Show()
-	cells, cw, _ := screen.GetContents()
-	var joined strings.Builder
-	for y := 0; y < 40; y++ {
-		for x := 0; x < cw; x++ {
-			joined.WriteRune(cells[y*cw+x].Runes[0])
-		}
-		joined.WriteByte('\n')
+	if a.statusShowing {
+		t.Error("openSettings() pinned the status row, want it left as it was")
 	}
-	rendered := joined.String()
-	for _, want := range []string{"tab moves", "space toggles", "esc saves and closes"} {
-		if !strings.Contains(rendered, want) {
-			t.Errorf("settings overlay render is missing %q; drawn:\n%s", want, rendered)
-		}
-	}
-}
 
-// TestSettingsUsageHintNamesRealKeys guards the key summary the overlay
-// shows: every key named in the hint must be a key the panel actually
-// handles, because a wrong hint is worse than none.
-func TestSettingsUsageHintNamesRealKeys(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	for _, key := range []string{"tab", "space", "arrows", "esc"} {
-		if !strings.Contains(settingsUsageHint, key) {
-			t.Errorf("usage hint is missing the %q key", key)
-		}
-	}
-	// The hint must also fit the overlay width so it never wraps.
-	if width := len(strings.Split(settingsUsageHint, "\n")[0]); width > 54 {
-		t.Errorf("usage hint line 1 is %d columns, want at most 54 to fit the 56-column overlay", width)
-	}
-	if width := len(strings.Split(settingsUsageHint, "\n")[1]); width > 54 {
-		t.Errorf("usage hint line 2 is %d columns, want at most 54 to fit the 56-column overlay", width)
+	configuredFollowTerminal = true
+	a.openSettings()
+	if got := a.status.GetText(false); strings.Contains(got, "tab") {
+		t.Errorf("follow-terminal status = %q, want no key summary on open", got)
 	}
 }

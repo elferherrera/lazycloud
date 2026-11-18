@@ -224,15 +224,15 @@ func TestSearchKindSummaryCountsShownSliceOnly(t *testing.T) {
 	a.searchInput.SetText("")
 	a.runSearch()
 
-	count, projects, projectCounts := searchKindSummary(a.searchHits, viewVMsAll)
+	count, keys, keyCounts := searchKindSummary(a.searchHits, viewVMsAll)
 	if count != 2 {
 		t.Fatalf("searchKindSummary(vms) count = %d, want 2", count)
 	}
-	if len(projects) != 2 || projects[0] != "p1" || projects[1] != "p2" {
-		t.Fatalf("searchKindSummary(vms) projects = %v, want [p1 p2]", projects)
+	if len(keys) != 2 || keys[0] != "p1" || keys[1] != "p2" {
+		t.Fatalf("searchKindSummary(vms) keys = %v, want [p1 p2]", keys)
 	}
-	if len(projectCounts) != 2 || projectCounts[0] != 1 || projectCounts[1] != 1 {
-		t.Fatalf("searchKindSummary(vms) projectCounts = %v, want [1 1]", projectCounts)
+	if len(keyCounts) != 2 || keyCounts[0] != 1 || keyCounts[1] != 1 {
+		t.Fatalf("searchKindSummary(vms) keyCounts = %v, want [1 1]", keyCounts)
 	}
 	// A truncated slice counts only what it still holds.
 	truncated := a.searchHits[:1]
@@ -257,7 +257,7 @@ func TestSearchGroupRowLabelMatchesCountAndProjects(t *testing.T) {
 	row := 0
 	for i := range a.searchGroupRows {
 		group := a.searchGroupRows[i]
-		wantCount, wantProjects, wantProjectCounts := searchKindSummary(a.searchHits, group.kind)
+		wantCount, wantKeys, wantKeyCounts := searchKindSummary(a.searchHits, group.kind)
 		if wantCount == 0 || wantCount != group.count {
 			t.Fatalf("group %d count = %d, want %d", i, group.count, wantCount)
 		}
@@ -267,12 +267,12 @@ func TestSearchGroupRowLabelMatchesCountAndProjects(t *testing.T) {
 			t.Fatalf("group %d header = %q, want %q", i, header.Text, wantHeader)
 		}
 		row++
-		if len(group.projects) != len(wantProjects) {
-			t.Fatalf("group %d projects = %v, want %v", i, group.projects, wantProjects)
+		if len(group.keys) != len(wantKeys) {
+			t.Fatalf("group %d keys = %v, want %v", i, group.keys, wantKeys)
 		}
-		for j, project := range group.projects {
+		for j, key := range group.keys {
 			sub := a.searchResults.GetCell(row, 0)
-			wantSub := tview.Escape(fmt.Sprintf("%s%s (%d)", searchGroupIndent, project, wantProjectCounts[j]))
+			wantSub := tview.Escape(fmt.Sprintf("%s%s (%d)", searchGroupIndent, key, wantKeyCounts[j]))
 			if sub.Text != wantSub {
 				t.Fatalf("group %d subrow = %q, want %q", i, sub.Text, wantSub)
 			}
@@ -505,17 +505,17 @@ func TestSearchShortcutOpensPanel(t *testing.T) {
 	wireSearchApp(a)
 	resetAppState()
 
-	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyCtrlUnderscore, 0, tcell.ModNone)); got != nil {
-		t.Fatal("Ctrl-/ should be consumed")
+	if got := a.inputCapture(tcell.NewEventKey(tcell.KeyCtrlF, 0, tcell.ModNone)); got != nil {
+		t.Fatal("Ctrl-F should be consumed")
 	}
 	if !a.searchOpen.Load() {
-		t.Fatal("Ctrl-/ did not open the search panel")
+		t.Fatal("Ctrl-F did not open the search panel")
 	}
 	a.closeSearch()
 
 	for _, s := range shortcuts {
-		if s.specialKey == tcell.KeyCtrlUnderscore && s.label() != "Ctrl-/" {
-			t.Fatalf("search shortcut label = %q, want Ctrl-/", s.label())
+		if s.specialKey == tcell.KeyCtrlF && s.label() != "Ctrl-F" {
+			t.Fatalf("search shortcut label = %q, want Ctrl-F", s.label())
 		}
 	}
 }

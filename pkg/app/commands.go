@@ -86,6 +86,13 @@ func runWriteCommand(a *app, args []string) {
 		return
 	}
 	name := args[0]
+	// While global search is open write exports the search results instead
+	// of the current view; csv is not supported for those (see
+	// writeSearchResults).
+	if a.searchOpen.Load() {
+		a.writeSearchResults(name)
+		return
+	}
 	var data []byte
 	var err error
 	switch strings.ToLower(filepath.Ext(name)) {
@@ -161,6 +168,62 @@ func (a *app) viewResources() ([]any, error) {
 		resources = append(resources, payload)
 	}
 	return resources, nil
+}
+
+// writeSearchResults is write's global-search mode: while the search panel is
+// open it exports every occurrence of the current match to a json or yaml
+// file — the view title at the top level, the project under it, then the full
+// details of each matching component. csv is not supported here: the row
+// cells alone do not carry the component details.
+func (a *app) writeSearchResults(name string) {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".json", ".yaml", ".yml":
+	default:
+		if ext == ".csv" {
+			a.statusText("[red]write: csv is not supported for global search results (Ctrl-F open), want .json or .yaml[-]")
+		} else {
+			a.statusText(fmt.Sprintf("[red]write: unsupported extension %q, want .json or .yaml for global search results[-]", ext))
+		}
+		return
+	}
+	query := strings.TrimSpace(a.searchInput.GetText())
+	if query == "" {
+		a.statusText("[red]write: type a query in the search panel first[-]")
+		return
+	}
+	hits := a.searchIndex.matchAll(query)
+	if len(hits) == 0 {
+		a.statusText(fmt.Sprintf("[red]write: no matches for %q[-]", query))
+		return
+	}
+	payload, err := a.searchHitsPayload(hits)
+	if err != nil {
+		a.statusText("[red]write: [-]" + err.Error())
+		return
+	}
+	var data []byte
+	if ext == ".json" {
+		data, err = json.MarshalIndent(payload, "", "  ")
+	} else {
+		data, err = yaml.Marshal(payload)
+	}
+	if err != nil {
+		a.statusText("[red]write: [-]" + err.Error())
+		return
+	}
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		data = append(data, '\n')
+	}
+	if err := os.WriteFile(name, data, 0o644); err != nil {
+		a.statusText("[red]write: [-]" + err.Error())
+		return
+	}
+	groups := 0
+	for _, projects := range payload {
+		groups += len(projects)
+	}
+	a.statusText(fmt.Sprintf("[green]Wrote %d components across %d groups to %s[-]", len(hits), groups, name))
 }
 
 func (a *app) sortRows(desc bool, col int) {

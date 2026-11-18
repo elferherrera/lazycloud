@@ -194,7 +194,7 @@ type commandSuggestion struct {
 // never made it into the : entry's command rows.
 var infobarCommandDescs = map[string]string{
 	"sort":                    "sort rows by a column",
-	"write":                   "write the view to a file",
+	"write":                   "write the view or search results to a file",
 	"search":                  "open the search panel",
 	"peerings":                "show VPC peerings",
 	"peering":                 "show VPC peerings",

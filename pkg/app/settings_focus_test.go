@@ -18,6 +18,8 @@ func focusFormRows(t *testing.T, width, focusIndex int) (*app, []string) {
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black"}
 	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
 	t.Cleanup(func() { configuredFollowTerminal = false })
 	a.buildSettingsPage()
 	form := a.settingsForm
@@ -52,9 +54,9 @@ func focusFormRows(t *testing.T, width, focusIndex int) (*app, []string) {
 // checkbox row carries the ▸ prefix and an accent-colored label, while
 // unfocused rows keep their plain labels so the column stays aligned.
 func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 0) // Follow terminal, first toggleable row
+	_, rows := focusFormRows(t, 80, 0) // Auto update cache, first toggleable row
 	joined := strings.Join(rows, "\n")
-	if !strings.Contains(joined, focusMarker+"Follow terminal") {
+	if !strings.Contains(joined, focusMarker+"Auto update cache") {
 		t.Errorf("focused checkbox row is missing the %q marker; form:\n%s", focusMarker, joined)
 	}
 	if !strings.Contains(joined, noFocusMarker+"Shortcut bar") {
@@ -65,12 +67,12 @@ func TestFocusedCheckboxRowShowsMarker(t *testing.T) {
 // TestFocusedColorFieldRowShowsMarker pins the same affordance on the color
 // swatch rows, whose labels live on the embedded InputField.
 func TestFocusedColorFieldRowShowsMarker(t *testing.T) {
-	_, rows := focusFormRows(t, 80, 5) // first color field (Background)
+	_, rows := focusFormRows(t, 80, 4) // first color field (Background)
 	joined := strings.Join(rows, "\n")
-	if !strings.Contains(joined, focusMarker+"Background") {
+	if !strings.Contains(joined, focusMarker+" Background") {
 		t.Errorf("focused color row is missing the %q marker; form:\n%s", focusMarker, joined)
 	}
-	if !strings.Contains(joined, noFocusMarker+"Labels") {
+	if !strings.Contains(joined, noFocusMarker+" Labels") {
 		t.Errorf("unfocused color row lost its padding prefix; form:\n%s", joined)
 	}
 }

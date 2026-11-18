@@ -109,7 +109,7 @@ func init() {
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{
-			specialKey: tcell.KeyCtrlUnderscore,
+			specialKey: tcell.KeyCtrlF,
 			desc:       "search side panel (Tab toggle, Esc close)",
 			run:        (*app).openSearch,
 		},
@@ -1142,7 +1142,7 @@ func (a *app) openConfigFile() {
 }
 
 func (a *app) reloadConfig() {
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		a.statusText("[red]Failed to reload config: [-]" + err.Error())
 		return
@@ -1153,6 +1153,7 @@ func (a *app) reloadConfig() {
 	a.staleAutoRefresh = config.AutoUpdate.Enabled
 	infobarSortOrder = config.Infobar.SortOrder
 	a.setInfobarEnabled(config.Infobar.ShowShortcuts)
+	a.setInfoColumnBorders(config.Info.ColumnBorders)
 	a.applyThemeToWidgets()
 	a.applyThemeChrome()
 	a.statusText("[green]Config reloaded[-]")

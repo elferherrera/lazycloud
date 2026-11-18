@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
@@ -31,64 +32,99 @@ func TestSettingsRowsCoverPanelToggles(t *testing.T) {
 			t.Errorf("settings row %q has nil accessors", row.label)
 		}
 	}
-	for _, want := range []string{"Follow terminal", "Shortcut bar", "Auto update cache"} {
+	for _, want := range []string{"Shortcut bar", "Column borders", "Auto update cache"} {
 		if !labels[want] {
 			t.Errorf("settings panel is missing row %q", want)
 		}
 	}
 	sawTheme := false
 	for label := range labels {
-		if strings.HasPrefix(label, "Theme: ") {
+		if label == themeRowLabel {
 			sawTheme = true
 		}
 	}
 	if !sawTheme {
 		t.Error("settings panel is missing the Theme pack row")
 	}
-	for _, gone := range []string{"Light theme", "Dark theme", "Theme follows terminal"} {
+	for _, gone := range []string{"Light theme", "Dark theme", "Theme follows terminal", "Follow terminal"} {
 		if labels[gone] {
 			t.Errorf("settings panel still carries removed row %q", gone)
 		}
 	}
 }
 
-// TestFollowTerminalToggleDrivesPalette pins the toggle: on paints with the
-// terminal palette, off returns to the selected pack.
-func TestFollowTerminalToggleDrivesPalette(t *testing.T) {
+// TestThemeCycleCoversCustomAndFollowTerminal pins the theme cycle: the
+// row loops through the config packs, then the custom palette (color rows
+// shown), then follow terminal (terminal palette paints), then wraps back
+// to the packs; custom is seeded from the palette that painted before it.
+func TestThemeCycleCoversCustomAndFollowTerminal(t *testing.T) {
 	originalTheme := theme
+	originalPacks := configuredThemePacks
+	originalName := configuredThemeName
+	originalPalette := configuredTheme
 	originalFollow := configuredFollowTerminal
 	t.Cleanup(func() {
 		theme = originalTheme
+		configuredThemePacks = originalPacks
+		configuredThemeName = originalName
+		configuredTheme = originalPalette
 		configuredFollowTerminal = originalFollow
 	})
-	configuredTheme = providers.Theme{Background: "#272822", Labels: "#a6e22e"}
+	configuredThemePacks = map[string]providers.Theme{
+		"lazycloud_dark": {Background: "black", Labels: "yellow"},
+	}
+	configuredThemeName = "lazycloud_dark"
+	configuredTheme = configuredThemePacks["lazycloud_dark"]
 	configuredFollowTerminal = false
 
-	rows := settingsTestApp(t).settingsRows()
-	var followRow settingsRow
-	for _, row := range rows {
-		if row.label == "Follow terminal" {
-			followRow = row
+	a := settingsTestApp(t)
+	var themeRow settingsRow
+	for _, row := range a.settingsRows() {
+		if row.label == themeRowLabel {
+			themeRow = row
 		}
 	}
-	if followRow.set == nil {
-		t.Fatal("Follow terminal row missing")
+	if themeRow.set == nil {
+		t.Fatal("Theme row missing")
 	}
 
-	followRow.set(true)
+	themeRow.set(true)
+	if configuredThemeName != customThemeName {
+		t.Fatalf("first cycle selected %q, want %q", configuredThemeName, customThemeName)
+	}
+	if configuredFollowTerminal {
+		t.Error("custom selection must not turn follow terminal on")
+	}
+	if !themeColorsEditable() {
+		t.Error("custom selection must show the color rows")
+	}
+	if got := configuredThemePacks[customThemeName]; got.Background != "black" || got.Labels != "yellow" {
+		t.Errorf("custom pack seeded from %+v, want the previously painted palette", got)
+	}
+
+	themeRow.set(true)
 	if !configuredFollowTerminal {
-		t.Error("toggle did not store follow-terminal mode")
+		t.Fatal("second cycle did not select follow terminal")
+	}
+	if themeColorsEditable() {
+		t.Error("follow terminal must hide the color rows")
 	}
 	if theme.background != "default" || theme.labels != "yellow" {
-		t.Errorf("toggle-on palette = %q/%q, want the terminal-follow palette (default/yellow)", theme.background, theme.labels)
+		t.Errorf("follow palette = %q/%q, want the terminal-follow palette (default/yellow)", theme.background, theme.labels)
 	}
 
-	followRow.set(false)
+	themeRow.set(true)
 	if configuredFollowTerminal {
-		t.Error("toggle did not clear follow-terminal mode")
+		t.Error("third cycle did not leave follow terminal")
 	}
-	if theme.background != "#272822" || theme.labels != "#a6e22e" {
-		t.Errorf("toggle-off palette = %q/%q, want the selected pack back", theme.background, theme.labels)
+	if configuredThemeName != "lazycloud_dark" {
+		t.Fatalf("third cycle selected %q, want the wrap back to lazycloud_dark", configuredThemeName)
+	}
+	if themeColorsEditable() {
+		t.Error("a config pack must keep the color rows hidden")
+	}
+	if theme.labels != "yellow" {
+		t.Errorf("pack palette labels = %q, want the lazycloud_dark yellow", theme.labels)
 	}
 }
 
@@ -99,12 +135,7 @@ func TestFollowTerminalToggleDrivesPalette(t *testing.T) {
 func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	originalTheme := theme
-	originalFollow := configuredFollowTerminal
-	t.Cleanup(func() {
-		theme = originalTheme
-		configuredFollowTerminal = originalFollow
-	})
+	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black", Labels: "yellow"}
 	configuredFollowTerminal = false
@@ -125,10 +156,30 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 		t.Fatalf("preview labels = %q, want the ocean pack painted live", theme.labels)
 	}
 
-	// Wrapping past the end returns to the first pack.
+	// Past the packs the cycle reaches custom, seeded from the palette
+	// that painted before it, and then follow terminal.
 	a.cycleThemeName(1)
+	if configuredThemeName != customThemeName {
+		t.Fatalf("second cycle selected %q, want custom", configuredThemeName)
+	}
+	if !themeColorsEditable() {
+		t.Error("custom selection must show the color rows")
+	}
+	if got := configuredThemePacks[customThemeName]; got.Labels != "aqua" {
+		t.Fatalf("custom pack = %+v, want seeded from the ocean palette", got)
+	}
+	a.cycleThemeName(1)
+	if !configuredFollowTerminal {
+		t.Fatal("third cycle did not select follow terminal")
+	}
+
+	// Past follow terminal the cycle wraps back to the first pack.
+	a.cycleThemeName(1)
+	if configuredFollowTerminal {
+		t.Fatal("the wrap did not leave follow terminal")
+	}
 	if configuredThemeName != "lazycloud_dark" {
-		t.Fatalf("cycleThemeName(1) wrap selected %q, want lazycloud_dark", configuredThemeName)
+		t.Fatalf("wrap selected %q, want lazycloud_dark", configuredThemeName)
 	}
 
 	// Edits made to the lazycloud_dark pack before switching away survive
@@ -136,15 +187,12 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 	configuredTheme.Labels = "teal"
 	a.cycleThemeName(1) // lazycloud_dark -> ocean
 	a.applySettings()
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if config.ThemeName != "ocean" {
 		t.Fatalf("saved themeName = %q, want ocean", config.ThemeName)
-	}
-	if config.Theme.Labels != "aqua" {
-		t.Fatalf("saved mirror labels = %q, want the ocean pack mirrored", config.Theme.Labels)
 	}
 	if got := config.Themes["lazycloud_dark"].Labels; got != "teal" {
 		t.Fatalf("saved lazycloud_dark labels = %q, want the parked teal edit", got)
@@ -157,19 +205,21 @@ func TestCycleThemeNameSwitchesAndSavesPacks(t *testing.T) {
 func TestRebuildSettingsFormReflectsLiveValues(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black", Labels: "orange"}
 	configuredFollowTerminal = false
-	t.Cleanup(func() { configuredFollowTerminal = false })
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
 	a.buildSettingsPage()
 	if a.settingsForm == nil {
 		t.Fatal("buildSettingsPage did not create the form")
 	}
 	infobarEnabled = false
 	a.rebuildSettingsForm()
-	want := len(a.settingsRows()) + len(themeColorKeys) + 2
+	want := len(a.settingsRows()) + len(themeColorKeys)
 	if got := a.settingsForm.GetFormItemCount(); got != want {
-		t.Errorf("form has %d items, want %d (toggles + save-as + color fields + config path)", got, want)
+		t.Errorf("form has %d items, want %d (toggles + color fields)", got, want)
 	}
 	path, err := providers.ConfigFilePath()
 	if err != nil {
@@ -177,6 +227,67 @@ func TestRebuildSettingsFormReflectsLiveValues(t *testing.T) {
 	}
 	if !strings.HasPrefix(path, filepath.Join(home, ".config", "lazycloud")) {
 		t.Errorf("config path %q not under test home", path)
+	}
+}
+
+// TestShortcutBarToggleResizesInfobar pins the panel wiring, not just the
+// flag: the Shortcut bar checkbox must run setInfobarEnabled so the status
+// row resizes live — assigning the var alone leaves the layout untouched,
+// and the later applySettings save becomes a no-op because the flag is
+// already equal.
+func TestShortcutBarToggleResizesInfobar(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	originalInfobar := infobarEnabled
+	t.Cleanup(func() { infobarEnabled = originalInfobar })
+	a := settingsTestApp(t)
+	a.cmd = tview.NewInputField()
+	originalMode := appState.CmdMode
+	appState.CmdMode = modeCmd
+	t.Cleanup(func() { appState.CmdMode = originalMode })
+	a.infobar = tview.NewTextView()
+	a.rootView = tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(tview.NewBox(), 9, 0, false).
+		AddItem(a.infobar, 1, 0, false)
+	infobarEnabled = true
+
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	screen.SetSize(80, 10)
+	a.rootView.SetRect(0, 0, 80, 10)
+	drawInfobar := func() int {
+		a.rootView.Draw(screen)
+		_, _, _, height := a.infobar.GetRect()
+		return height
+	}
+
+	var shortcutBar settingsRow
+	for _, row := range a.settingsRows() {
+		if row.label == "Shortcut bar" {
+			shortcutBar = row
+		}
+	}
+	if shortcutBar.set == nil {
+		t.Fatal("settings panel is missing the Shortcut bar row")
+	}
+
+	shortcutBar.set(false)
+	if infobarEnabled {
+		t.Error("toggle did not clear infobarEnabled")
+	}
+	if height := drawInfobar(); height != 0 {
+		t.Errorf("infobar height after disabling = %d, want 0", height)
+	}
+
+	shortcutBar.set(true)
+	if !infobarEnabled {
+		t.Error("toggle did not set infobarEnabled")
+	}
+	if height := drawInfobar(); height != 1 {
+		t.Errorf("infobar height after enabling = %d, want 1", height)
 	}
 }
 
@@ -197,7 +308,7 @@ func TestApplySettingsPersistsToggles(t *testing.T) {
 	configuredFollowTerminal = true
 	configuredTheme = providers.Theme{Background: "black"}
 	a.applySettings()
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,15 +328,11 @@ func TestSettingsColorFieldsEditPackPalette(t *testing.T) {
 	t.Setenv("HOME", home)
 	// applySettings repaints the global palette; restore it so later
 	// theme tests see the palette they expect.
-	originalTheme := theme
-	originalFollow := configuredFollowTerminal
-	t.Cleanup(func() {
-		theme = originalTheme
-		configuredFollowTerminal = originalFollow
-	})
+	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black"}
 	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
 	configuredThemePacks = map[string]providers.Theme{
 		configuredThemeName: configuredTheme,
 	}
@@ -251,7 +358,7 @@ func TestSettingsColorFieldsEditPackPalette(t *testing.T) {
 
 	// Saving persists the edited palette into the pack.
 	a.applySettings()
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,22 +368,18 @@ func TestSettingsColorFieldsEditPackPalette(t *testing.T) {
 }
 
 // TestCloseSettingsPersistsColorEdits pins the Close path: color edits live
-// in memory while the panel is open, so closing it (Close button or Esc) must
+// in memory while the panel is open, so closing it (Esc) must
 // persist them like a checkbox toggle does.
 func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	// closeSettings repaints the global palette; restore it so later
 	// theme tests see the palette they expect.
-	originalTheme := theme
-	originalFollow := configuredFollowTerminal
-	t.Cleanup(func() {
-		theme = originalTheme
-		configuredFollowTerminal = originalFollow
-	})
+	snapshotSettingsGlobals(t)
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black"}
 	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
 	configuredThemePacks = map[string]providers.Theme{
 		configuredThemeName: configuredTheme,
 	}
@@ -296,11 +399,255 @@ func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 	field.SetText("teal")
 
 	a.closeSettings()
-	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
+	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig(), defaultInfoConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := config.Themes[config.ThemeName].Labels; got != "teal" {
 		t.Errorf("saved pack labels = %q, want teal after closing the panel", got)
+	}
+}
+
+// themeFormItem returns the Theme row's field from the built form.
+func themeFormItem(t *testing.T, a *app) *themeSelectionField {
+	t.Helper()
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		if item, ok := a.settingsForm.GetFormItem(i).(*themeSelectionField); ok {
+			return item
+		}
+	}
+	t.Fatal("settings form is missing the Theme cycle row")
+	return nil
+}
+
+// TestThemeSelectionFieldShowsNameAndCyclesOnKeys pins the Theme row's
+// contract: the field text is the current selection (the checkbox mark is
+// gone), typing and the deletion keys are rejected, space and enter
+// advance the cycle, and h/left walk it back while l/right walk it
+// forward with wraparound.
+func TestThemeSelectionFieldShowsNameAndCyclesOnKeys(t *testing.T) {
+	originalPacks := configuredThemePacks
+	originalName := configuredThemeName
+	originalPalette := configuredTheme
+	originalFollow := configuredFollowTerminal
+	t.Cleanup(func() {
+		configuredThemePacks = originalPacks
+		configuredThemeName = originalName
+		configuredTheme = originalPalette
+		configuredFollowTerminal = originalFollow
+	})
+	configuredThemePacks = map[string]providers.Theme{
+		"alpha": {Background: "black", Labels: "yellow"},
+		"beta":  {Background: "black", Labels: "teal"},
+	}
+	configuredThemeName = "alpha"
+	configuredTheme = configuredThemePacks["alpha"]
+	configuredFollowTerminal = false
+
+	a := settingsTestApp(t)
+	a.buildSettingsPage()
+	item := themeFormItem(t, a)
+	if got := item.GetText(); got != "alpha" {
+		t.Fatalf("theme selection = %q, want the selected pack name alpha", got)
+	}
+
+	for _, ev := range []*tcell.EventKey{
+		tcell.NewEventKey(tcell.KeyRune, 'x', tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone),
+		tcell.NewEventKey(tcell.KeyDelete, 0, tcell.ModNone),
+	} {
+		item.InputHandler()(ev, nil)
+		if got := themeFormItem(t, a).GetText(); got != "alpha" {
+			t.Fatalf("key %v changed the selection to %q, want the read-only field to keep alpha", ev, got)
+		}
+	}
+
+	item.InputHandler()(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("space cycled to %q, want beta", configuredThemeName)
+	}
+	if got := themeFormItem(t, a).GetText(); got != "beta" {
+		t.Fatalf("theme selection = %q, want the field to follow the cycle", got)
+	}
+
+	item.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
+	if configuredThemeName != customThemeName {
+		t.Fatalf("enter cycled to %q, want custom after beta", configuredThemeName)
+	}
+
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("left cycled to %q, want beta back after custom", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone), nil)
+	if configuredThemeName != "alpha" {
+		t.Fatalf("h cycled to %q, want alpha back after beta", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone), nil)
+	if got := themeFormItem(t, a).GetText(); got != followTerminalThemeName {
+		t.Fatalf("left cycled to %q, want the follow-terminal wrap after alpha", got)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone), nil)
+	if configuredThemeName != "alpha" {
+		t.Fatalf("right cycled to %q, want alpha after the follow-terminal wrap", configuredThemeName)
+	}
+	themeFormItem(t, a).InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'l', tcell.ModNone), nil)
+	if configuredThemeName != "beta" {
+		t.Fatalf("l cycled to %q, want beta after alpha", configuredThemeName)
+	}
+}
+
+// TestColorFieldTypedEditsAndSpaceCycles pins the color rows' key contract:
+// typed runes (including the vim letters j/k/g/G) edit the value instead of
+// navigating, backspace deletes, and space steps the curated list with the
+// preview following.
+func TestColorFieldTypedEditsAndSpaceCycles(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black", Labels: "yellow"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+
+	var field *colorPreviewField
+	for i := 0; i < a.settingsForm.GetFormItemCount(); i++ {
+		if pf, ok := a.settingsForm.GetFormItem(i).(*colorPreviewField); ok && pf.baseLabel == "Labels" {
+			field = pf
+			break
+		}
+	}
+	if field == nil {
+		t.Fatal("settings form has no Labels color field")
+	}
+
+	for _, r := range "orange" {
+		field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, r, tcell.ModNone), nil)
+	}
+	if got := field.GetText(); got != "yelloworange" {
+		t.Fatalf("typed value = %q, want yelloworange", got)
+	}
+	if configuredTheme.Labels != "yelloworange" {
+		t.Fatalf("palette labels = %q, want the typed value", configuredTheme.Labels)
+	}
+	for range "orange" {
+		field.InputHandler()(tcell.NewEventKey(tcell.KeyBackspace2, 0, tcell.ModNone), nil)
+	}
+	if got := field.GetText(); got != "yellow" {
+		t.Fatalf("after backspaces value = %q, want yellow back", got)
+	}
+
+	field.InputHandler()(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), nil)
+	if field.GetText() != "blue" {
+		t.Fatalf("space cycled the color to %q, want blue after yellow", field.GetText())
+	}
+	if configuredTheme.Labels != "blue" {
+		t.Fatalf("palette labels = %q, want blue after the space cycle", configuredTheme.Labels)
+	}
+}
+
+// TestSettingsVimNavigation pins the vim keys: j/k step between rows with
+// wraparound (buttons included), gg/G jump to the first/last row, and the
+// up/down arrows behave the same.
+func TestSettingsVimNavigation(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+	form := a.settingsForm
+	items := form.GetFormItemCount()
+	total := items + form.GetButtonCount()
+
+	form.SetFocus(1)
+	form.SetFocus(0)
+	sendKey := func(key tcell.Key, r rune) {
+		form.InputHandler()(tcell.NewEventKey(key, r, tcell.ModNone), nil)
+	}
+	focused := func() int {
+		item, button := form.GetFocusedItemIndex()
+		if item >= 0 {
+			return item
+		}
+		return items + button
+	}
+
+	sendKey(tcell.KeyRune, 'j')
+	if got := focused(); got != 1 {
+		t.Fatalf("after j focused = %d, want 1", got)
+	}
+	sendKey(tcell.KeyRune, 'k')
+	if got := focused(); got != 0 {
+		t.Fatalf("after k focused = %d, want 0", got)
+	}
+	sendKey(tcell.KeyRune, 'k')
+	if got := focused(); got != total-1 {
+		t.Fatalf("after wrap k focused = %d, want the last element", got)
+	}
+	sendKey(tcell.KeyRune, 'j')
+	if got := focused(); got != 0 {
+		t.Fatalf("after wrap j focused = %d, want the first element", got)
+	}
+	sendKey(tcell.KeyRune, 'G')
+	if got := focused(); got != total-1 {
+		t.Fatalf("after G focused = %d, want the last element", got)
+	}
+	sendKey(tcell.KeyRune, 'g')
+	sendKey(tcell.KeyRune, 'g')
+	if got := focused(); got != 0 {
+		t.Fatalf("after gg focused = %d, want the first element", got)
+	}
+	sendKey(tcell.KeyDown, 0)
+	if got := focused(); got != 1 {
+		t.Fatalf("after down focused = %d, want 1", got)
+	}
+	sendKey(tcell.KeyUp, 0)
+	if got := focused(); got != 0 {
+		t.Fatalf("after up focused = %d, want 0", got)
+	}
+}
+
+// TestSettingsFieldsHideCursor pins the cursor behaviour of the form's two
+// field kinds: the read-only Theme row never prints a terminal cursor (the
+// embedded text area calls ShowCursor on focus, which would draw a cursor
+// over the value while navigating with j/k), while the color fields are
+// real text inputs and keep theirs.
+func TestSettingsFieldsHideCursor(t *testing.T) {
+	snapshotSettingsGlobals(t)
+	a := settingsTestApp(t)
+	configuredTheme = providers.Theme{Background: "black"}
+	configuredFollowTerminal = false
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
+	a.buildSettingsPage()
+	form := a.settingsForm
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	screen.SetSize(90, 45)
+
+	for i := 0; i < form.GetFormItemCount(); i++ {
+		var wantCursor bool
+		switch form.GetFormItem(i).(type) {
+		case *themeSelectionField:
+			wantCursor = false
+		case *colorPreviewField:
+			wantCursor = true
+		default:
+			continue
+		}
+		form.SetFocus(i)
+		a.settingsColumn.SetRect(0, 0, 90, 45)
+		a.settingsColumn.Draw(screen)
+		screen.Show()
+		_, _, visible := screen.GetCursor()
+		if visible != wantCursor {
+			t.Errorf("form item %d cursor visible = %v, want %v", i, visible, wantCursor)
+		}
 	}
 }

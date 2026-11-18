@@ -158,10 +158,15 @@ func TestHelpPanelCommandsSorted(t *testing.T) {
 	prev := ""
 	seen := 0
 	for _, line := range strings.Split(text, "\n") {
-		// Lines carry color tags before the key column, so look for the
-		// command token anywhere in the line's fields.
+		// Lines carry color tags before the key column, so strip them
+		// and look for the command token in the plain text. The sort
+		// check covers the Views section only.
+		plain := stripColorTags(line)
+		if strings.TrimSpace(plain) == "COMMANDS" {
+			break
+		}
 		var cmd string
-		for _, field := range strings.Fields(line) {
+		for _, field := range strings.Fields(plain) {
 			if strings.HasPrefix(field, ":") && len(field) > 1 {
 				cmd = field
 				break
@@ -319,6 +324,45 @@ func TestReloadConfigAppliesInfobarSetting(t *testing.T) {
 	}
 	if got := a.status.GetText(false); !strings.Contains(got, "Config reloaded") {
 		t.Errorf("reloadConfig() status = %q, want Config reloaded", got)
+	}
+}
+
+func TestReloadConfigAppliesInfoSetting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "lazycloud")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("creating config dir: %v", err)
+	}
+	configYaml := "theme:\n  labels: orange\ninfo:\n  column_borders: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("writing config file: %v", err)
+	}
+
+	originalInfoBorders := infoColumnBorders
+	originalTheme := theme
+	originalShortcuts := shortcuts
+	t.Cleanup(func() {
+		infoColumnBorders = originalInfoBorders
+		theme = originalTheme
+		shortcuts = originalShortcuts
+	})
+
+	appState.ViewKind = viewProjects
+	a := newFilterTestApp(t)
+	infoColumnBorders = true
+	a.reloadConfig()
+	if infoColumnBorders {
+		t.Fatal("reloadConfig() with column_borders: false left the column borders on")
+	}
+
+	configYaml = "theme:\n  labels: orange\ninfo:\n  column_borders: true\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(configYaml), 0o644); err != nil {
+		t.Fatalf("rewriting config file: %v", err)
+	}
+	a.reloadConfig()
+	if !infoColumnBorders {
+		t.Fatal("reloadConfig() with column_borders: true left the column borders off")
 	}
 }
 

@@ -250,9 +250,6 @@ func (a *app) applyThemeChrome() {
 	if a.settingsForm != nil {
 		boxes = append(boxes, a.settingsForm.Box)
 	}
-	if a.settingsHint != nil {
-		boxes = append(boxes, a.settingsHint.Box)
-	}
 	if a.settingsRow != nil {
 		boxes = append(boxes, a.settingsRow.Box)
 	}
@@ -285,9 +282,8 @@ func (a *app) applyThemeChrome() {
 		a.settingsForm.SetLabelColor(theme.settingsLabelColor())
 		a.settingsForm.SetFieldTextColor(theme.settingsTextColor())
 		a.settingsForm.SetButtonTextColor(theme.settingsTextColor())
-	}
-	if a.settingsHint != nil {
-		a.settingsHint.SetTextColor(theme.settingsLabelColor())
+		a.settingsForm.SetFieldBackgroundColor(tcell.GetColor(theme.background))
+		a.settingsForm.SetButtonBackgroundColor(tcell.GetColor(theme.background))
 	}
 }
 

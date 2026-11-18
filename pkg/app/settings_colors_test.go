@@ -50,9 +50,13 @@ func settingsColorsTestState(t *testing.T) {
 	t.Helper()
 	originalTheme := theme
 	originalFollow := configuredFollowTerminal
+	originalPacks := configuredThemePacks
+	originalName := configuredThemeName
 	t.Cleanup(func() {
 		theme = originalTheme
 		configuredFollowTerminal = originalFollow
+		configuredThemePacks = originalPacks
+		configuredThemeName = originalName
 	})
 	configuredFollowTerminal = false
 }
@@ -88,16 +92,16 @@ func TestSettingsPanelPaintsWithSettingsKeys(t *testing.T) {
 			t.Errorf("label %q painted with %v, want orange (settingsLabels)", string("Shortcut bar"[i]), fg)
 		}
 	}
-	// Field value color comes from settingsText: the config path row's
-	// value text is painted with it.
-	valueStyles, found := overlayCellStyles(a, "config.yaml")
+	// Field value color comes from settingsText: the checkbox check
+	// mark is painted with the form's field text color.
+	valueStyles, found := overlayCellStyles(a, "X")
 	if !found {
-		t.Fatal("settings overlay render is missing the config path value")
+		t.Fatal("settings overlay render is missing a checkbox mark")
 	}
 	wantValue := tcell.GetColor("aqua")
-	for i, s := range valueStyles {
-		if fg, _, _ := s.Decompose(); fg != wantValue && "config.yaml"[i] != ' ' {
-			t.Errorf("value %q painted with %v, want aqua (settingsText)", string("config.yaml"[i]), fg)
+	for _, s := range valueStyles {
+		if fg, _, _ := s.Decompose(); fg != wantValue {
+			t.Errorf("checkbox mark painted with %v, want aqua (settingsText)", fg)
 		}
 	}
 }
@@ -112,6 +116,8 @@ func TestSettingsPanelLiveEditRestylesItself(t *testing.T) {
 
 	a := settingsTestApp(t)
 	configuredTheme = providers.Theme{Background: "black"}
+	configuredThemeName = customThemeName
+	configuredThemePacks = map[string]providers.Theme{customThemeName: configuredTheme}
 	a.buildSettingsPage()
 	a.openSettings()
 

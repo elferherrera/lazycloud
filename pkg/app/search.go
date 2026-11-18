@@ -9,13 +9,15 @@ import (
 	"github.com/rivo/tview"
 )
 
-// searchEntry is one indexed resource row: the All view it came from, the row
-// as rendered by that view, the project the row belongs to, and the row text
-// pre-lowered for matching.
+// searchEntry is one indexed resource row: the view it came from, the row
+// as rendered by that view, the project the row belongs to, the scope for
+// the cluster/zone/bucket-scoped views (empty for project rows), and the
+// row text pre-lowered for matching.
 type searchEntry struct {
 	kind    viewKind
 	row     []string
 	project string
+	scope   string
 	text    string
 }
 
@@ -44,9 +46,11 @@ func newSearchIndex() *searchIndex {
 	}
 }
 
-// searchKinds lists the All views the index covers, in build order. The most
+// searchKinds lists the views the index covers, in build order. The most
 // commonly searched resources come first so progressive results are useful
-// early.
+// early. The last three are the cluster/zone/bucket-scoped views: they have
+// no All variant, so their entries carry the scope and their subrows land
+// the scoped view with the scope preset.
 var searchKinds = []viewKind{
 	viewVMsAll,
 	viewIPsAll,
@@ -69,15 +73,33 @@ var searchKinds = []viewKind{
 	viewPSCAll,
 	viewReservationsAll,
 	viewIAMAll,
+	viewWorkloads,
+	viewDNSRecords,
+	viewBucketIAM,
 }
 
-// searchIndexedKind maps any view kind to the All view whose cache it feeds.
+// searchScopedKind reports whether a kind is one of the scoped views the
+// index covers: entries carry a scope (cluster, zone or bucket name) and
+// landing one applies that scope to the view instead of the All-projects
+// toggle.
+func searchScopedKind(kind viewKind) bool {
+	switch kind {
+	case viewWorkloads, viewDNSRecords, viewBucketIAM:
+		return true
+	}
+	return false
+}
+
+// searchIndexedKind maps any view kind to the indexed kind its cache feeds.
 // Per-project kinds share the cache tables of their All twin, so indexing
-// the All views covers both. Kinds with no All variant are not indexed.
+// the All views covers both. The scoped views are indexed under their own
+// kind. Kinds that are neither indexed nor cache-fed by an indexed view
+// are not indexed.
 func searchIndexedKind(kind viewKind) viewKind {
 	switch kind {
-	case viewProjects, viewPublicImages, viewWorkloads, viewNodePools,
-		viewDNSRecords, viewBucketIAM:
+	case viewWorkloads, viewDNSRecords, viewBucketIAM:
+		return kind
+	case viewProjects, viewPublicImages, viewNodePools:
 		return ""
 	}
 	if strings.HasSuffix(string(kind), "-all") {
@@ -177,6 +199,10 @@ func (a *app) buildSearchIndex() {
 // outside idx.mu because network calls are slow; markViewUpdated re-arms the
 // builder when the saves land.
 func (a *app) pullSearchKind(kind viewKind) {
+	if searchScopedKind(kind) {
+		a.pullScopedSearchKind(kind)
+		return
+	}
 	projects, err := a.cache.ListProjects()
 	if err != nil || len(projects) == 0 {
 		return
@@ -190,6 +216,68 @@ func (a *app) pullSearchKind(kind viewKind) {
 	for _, proj := range projects {
 		if _, _, err := def.fetch(a, proj.ProjectID); err != nil {
 			a.reportError(string(perKind), proj.ProjectID, "Search pull failed for "+label, err)
+		}
+	}
+}
+
+// pullScopedSearchKind fetches one scoped kind across every cached scope:
+// workloads per cached cluster (gcloud/kubectl shell-out), DNS records per
+// cached zone, bucket IAM per cached bucket. The saves land through
+// markViewUpdated, which invalidates the kind's index entries and re-arms
+// the builder, so hits keep arriving while search is open. Failures are
+// logged per scope, not fatal.
+func (a *app) pullScopedSearchKind(kind viewKind) {
+	switch kind {
+	case viewWorkloads:
+		clusters, err := a.cache.ListAllClusters()
+		if err != nil {
+			return
+		}
+		for _, cl := range clusters {
+			workloads, err := listClusterWorkloads(cl.ProjectID, cl.Location, cl.Name)
+			if err != nil {
+				a.reportError(string(kind), cl.ProjectID+"/"+cl.Name, "Search pull failed for Workloads", err)
+				continue
+			}
+			if err := a.cache.SaveWorkloads(cl.ProjectID, cl.Name, workloads); err != nil {
+				a.reportError(string(kind), cl.ProjectID+"/"+cl.Name, "Search pull failed for Workloads", err)
+				continue
+			}
+			a.markViewUpdated(viewWorkloads, cl.ProjectID)
+		}
+	case viewDNSRecords:
+		zones, err := a.cache.ListAllDNSZones()
+		if err != nil {
+			return
+		}
+		for _, z := range zones {
+			records, err := listZoneDNSRecords(z.ProjectID, z.Name)
+			if err != nil {
+				a.reportError(string(kind), z.ProjectID+"/"+z.Name, "Search pull failed for DNS Records", err)
+				continue
+			}
+			if err := a.cache.SaveDNSRecords(z.ProjectID, z.Name, records); err != nil {
+				a.reportError(string(kind), z.ProjectID+"/"+z.Name, "Search pull failed for DNS Records", err)
+				continue
+			}
+			a.markViewUpdated(viewDNSRecords, z.ProjectID)
+		}
+	case viewBucketIAM:
+		buckets, err := a.cache.ListAllBuckets()
+		if err != nil {
+			return
+		}
+		for _, b := range buckets {
+			bindings, err := listBucketIAMPolicy(b.ProjectID, b.Name)
+			if err != nil {
+				a.reportError(string(kind), b.ProjectID+"/"+b.Name, "Search pull failed for Bucket IAM policy", err)
+				continue
+			}
+			if err := a.cache.SaveBucketIAMBindings(b.ProjectID, b.Name, bindings); err != nil {
+				a.reportError(string(kind), b.ProjectID+"/"+b.Name, "Search pull failed for Bucket IAM policy", err)
+				continue
+			}
+			a.markViewUpdated(viewBucketIAM, b.ProjectID)
 		}
 	}
 }
@@ -225,9 +313,13 @@ func (a *app) ensureSearchProjects() {
 	})
 }
 
-// loadSearchEntries reads one All view through its cache-only load. The last
-// column of every All view is the project the row belongs to.
+// loadSearchEntries reads one view through its cache-only load. The last
+// column of every All view is the project the row belongs to; the scoped
+// views read their whole cache table and carry the scope instead.
 func (a *app) loadSearchEntries(kind viewKind) ([]searchEntry, error) {
+	if searchScopedKind(kind) {
+		return a.loadScopedSearchEntries(kind)
+	}
 	def := views[kind]
 	rows, err := def.load(a)
 	if err != nil {
@@ -246,6 +338,58 @@ func (a *app) loadSearchEntries(kind viewKind) ([]searchEntry, error) {
 			project: project,
 			text:    strings.ToLower(strings.Join(row, " ")),
 		})
+	}
+	return entries, nil
+}
+
+// loadScopedSearchEntries indexes one scoped view across every cached scope:
+// workloads across clusters, DNS records across zones, bucket IAM across
+// buckets. The scope lands in the entry so a subrow can reopen the view at
+// the right cluster/zone/bucket.
+func (a *app) loadScopedSearchEntries(kind viewKind) ([]searchEntry, error) {
+	var entries []searchEntry
+	add := func(rows [][]string, project, scope string) {
+		if entries == nil {
+			entries = make([]searchEntry, 0, len(rows))
+		}
+		for _, row := range rows {
+			entries = append(entries, searchEntry{
+				kind:    kind,
+				row:     row,
+				project: project,
+				scope:   scope,
+				text:    strings.ToLower(strings.Join(row, " ")),
+			})
+		}
+	}
+	switch kind {
+	case viewWorkloads:
+		workloads, err := a.cache.ListAllWorkloads()
+		if err != nil {
+			return nil, err
+		}
+		rows := workloadRows(workloads)
+		for i := range rows {
+			add(rows[i:i+1], workloads[i].ProjectID, workloads[i].Cluster)
+		}
+	case viewDNSRecords:
+		records, err := a.cache.ListAllDNSRecords()
+		if err != nil {
+			return nil, err
+		}
+		rows := dnsRecordRows(records)
+		for i := range rows {
+			add(rows[i:i+1], records[i].ProjectID, records[i].Zone)
+		}
+	case viewBucketIAM:
+		bindings, err := a.cache.ListAllBucketIAMBindings()
+		if err != nil {
+			return nil, err
+		}
+		rows := bucketIAMRows(bindings)
+		for i := range rows {
+			add(rows[i:i+1], bindings[i].ProjectID, bindings[i].Bucket)
+		}
 	}
 	return entries, nil
 }
@@ -283,6 +427,18 @@ func searchEntryMatches(text string, includes, excludes []string) bool {
 // still building simply has no entries yet. Results are capped just above the
 // display limit so the title can say "more than N".
 func (idx *searchIndex) match(query string) []searchEntry {
+	return idx.matchLimit(query, maxSearchHits+1)
+}
+
+// matchAll returns every hit for query with no cap, so write's global-search
+// mode exports all occurrences of the match, not just the first page of results.
+func (idx *searchIndex) matchAll(query string) []searchEntry {
+	return idx.matchLimit(query, 0)
+}
+
+// matchLimit collects the hits of every warm kind for query, stopping once
+// limit entries have been collected; a zero limit collects everything.
+func (idx *searchIndex) matchLimit(query string, limit int) []searchEntry {
 	includes, excludes := parseSearchTerms(query)
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -293,12 +449,62 @@ func (idx *searchIndex) match(query string) []searchEntry {
 				continue
 			}
 			hits = append(hits, e)
-			if len(hits) > maxSearchHits {
+			if limit > 0 && len(hits) >= limit {
 				return hits
 			}
 		}
 	}
 	return hits
+}
+
+// searchHitsPayload groups the query's hits the way the results panel does,
+// nested one level deeper: the view title first, then the project, then the
+// list of matching components. Every component is resolved to its full
+// details: the cached resource, wrapped like the y copy payload (resource
+// fields plus the Columns map of the rendered row cells).
+func (a *app) searchHitsPayload(hits []searchEntry) (map[string]map[string][]any, error) {
+	payload := map[string]map[string][]any{}
+	for _, hit := range hits {
+		details, err := a.searchEntryDetails(hit)
+		if err != nil {
+			return nil, err
+		}
+		view := views[hit.kind].title
+		projects, ok := payload[view]
+		if !ok {
+			projects = map[string][]any{}
+			payload[view] = projects
+		}
+		projects[hit.project] = append(projects[hit.project], details)
+	}
+	return payload, nil
+}
+
+// searchEntryDetails resolves one search hit to its cached resource. The All
+// views' resource hooks read the project from the row itself; the scoped
+// kinds' hooks read the focused appState instead, so they are resolved
+// directly with the hit's project and scope.
+func (a *app) searchEntryDetails(hit searchEntry) (any, error) {
+	var res any
+	var err error
+	switch hit.kind {
+	case viewWorkloads:
+		res, err = workloadResource(a, hit.project, hit.scope, hit.row[1], hit.row[0], hit.row[2])
+	case viewDNSRecords:
+		res, err = dnsRecordResource(a, hit.project, hit.scope, hit.row[0], hit.row[1])
+	case viewBucketIAM:
+		res, err = bucketIAMResource(a, hit.project, hit.scope, hit.row[0], hit.row[2])
+	default:
+		def := views[hit.kind]
+		if def.resource == nil {
+			return rowCellsMap(def.headers, hit.row), nil
+		}
+		res, err = def.resource(a, hit.row)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rowCopyPayload(views[hit.kind].headers, hit.row, res)
 }
 
 func (idx *searchIndex) warmCount() int {
@@ -323,7 +529,7 @@ const searchPanelWidth = 46
 // column so the main view shrinks.
 func (a *app) buildSearchPanel() {
 	input := tview.NewInputField().SetLabel(" / ").SetFieldWidth(0)
-	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
+	input.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor).Background(tview.Styles.PrimitiveBackgroundColor))
 	input.SetBorder(true)
 	results := tview.NewTable().SetBorders(false).SetSelectable(true, false).SetSeparator('│')
 	results.SetBorder(true)
@@ -511,15 +717,16 @@ func (a *app) runSearch() {
 }
 
 // searchGroupRow is one results row: a resource kind, the query it matched,
-// how many of its rows matched, and the distinct projects the matches span.
-// The query rides along so a later refresh with new text cannot make an old
-// row preset a stale filter.
+// how many of its rows matched, and the distinct subrow keys the matches span
+// (a project for All views, "project/scope" for the scoped kinds). The query
+// rides along so a later refresh with new text cannot make an old row preset
+// a stale filter.
 type searchGroupRow struct {
-	kind          viewKind
-	query         string
-	count         int
-	projects      []string
-	projectCounts []int
+	kind       viewKind
+	query      string
+	count      int
+	keys       []string
+	keyCounts  []int
 }
 
 // searchGroupIndent prefixes every project subrow. Terminal tables do not
@@ -552,13 +759,13 @@ func (a *app) refreshSearchResults() {
 		if len(a.searchGroupRows) > 0 && a.searchGroupRows[len(a.searchGroupRows)-1].kind == kind {
 			continue
 		}
-		count, projects, projectCounts := searchKindSummary(shown, kind)
+		count, keys, keyCounts := searchKindSummary(shown, kind)
 		a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{
-			kind:          kind,
-			query:         query,
-			count:         count,
-			projects:      projects,
-			projectCounts: projectCounts,
+			kind:      kind,
+			query:     query,
+			count:     count,
+			keys:      keys,
+			keyCounts: keyCounts,
 		})
 	}
 
@@ -573,14 +780,14 @@ func (a *app) refreshSearchResults() {
 			SetExpansion(1))
 		a.searchRowGroups = append(a.searchRowGroups, i)
 		a.searchRowProjects = append(a.searchRowProjects, "")
-		for j, project := range group.projects {
-			label := fmt.Sprintf("%s%s (%d)", searchGroupIndent, project, group.projectCounts[j])
+		for j, key := range group.keys {
+			label := fmt.Sprintf("%s%s (%d)", searchGroupIndent, key, group.keyCounts[j])
 			table.SetCell(len(a.searchRowGroups), 0, tview.NewTableCell(tview.Escape(label)).
 				SetTextColor(theme.shortcutTextColor()).
 				SetSelectable(true).
 				SetExpansion(1))
 			a.searchRowGroups = append(a.searchRowGroups, i)
-			a.searchRowProjects = append(a.searchRowProjects, project)
+			a.searchRowProjects = append(a.searchRowProjects, key)
 		}
 	}
 	if len(a.searchRowGroups) > 0 {
@@ -601,10 +808,21 @@ func (a *app) refreshSearchResults() {
 	table.SetTitle(title)
 }
 
-// searchKindSummary counts one kind's hits and lists its distinct projects in
-// first-seen order with a per-project hit count, from the shown slice only so
-// a group never claims more rows than the hit cap left visible.
-func searchKindSummary(shown []searchEntry, kind viewKind) (count int, projects []string, projectCounts []int) {
+// searchEntryGroupKey is the per-subrow grouping key of an entry: the
+// project for All-view rows, "project/scope" for the scoped kinds (cluster,
+// zone or bucket name — none of which may contain a slash, so the split is
+// unambiguous).
+func searchEntryGroupKey(e searchEntry) string {
+	if e.scope != "" {
+		return e.project + "/" + e.scope
+	}
+	return e.project
+}
+
+// searchKindSummary counts one kind's hits and lists its distinct subrow
+// keys in first-seen order with a per-key hit count, from the shown slice
+// only so a group never claims more rows than the hit cap left visible.
+func searchKindSummary(shown []searchEntry, kind viewKind) (count int, keys []string, keyCounts []int) {
 	seen := map[string]bool{}
 	counts := map[string]int{}
 	for i := range shown {
@@ -612,25 +830,26 @@ func searchKindSummary(shown []searchEntry, kind viewKind) (count int, projects 
 			continue
 		}
 		count++
-		if shown[i].project != "" {
-			counts[shown[i].project]++
-			if !seen[shown[i].project] {
-				seen[shown[i].project] = true
-				projects = append(projects, shown[i].project)
+		if key := searchEntryGroupKey(shown[i]); key != "" {
+			counts[key]++
+			if !seen[key] {
+				seen[key] = true
+				keys = append(keys, key)
 			}
 		}
 	}
-	for _, p := range projects {
-		projectCounts = append(projectCounts, counts[p])
+	for _, k := range keys {
+		keyCounts = append(keyCounts, counts[k])
 	}
-	return count, projects, projectCounts
+	return count, keys, keyCounts
 }
 
-// searchSelect acts on one results row: header or project subrow both resolve
-// to their group and open its All view with the filter preset to the query —
-// a project subrow additionally keeps its project term, so the main view
-// lands on exactly the rows the selection counted. The panel stays open as
-// the sidebar: S returns to it, Esc closes it.
+// searchSelect acts on one results row: header or subrow both resolve to
+// their group and open its view with the filter preset to the query — a
+// project subrow additionally keeps its project term, and a scoped kind's
+// subrow applies its cluster/zone/bucket scope, so the main view lands on
+// exactly the rows the selection counted. The panel stays open as the
+// sidebar: S returns to it, Esc closes it.
 func (a *app) searchSelect(row int) {
 	if row < 0 || row >= len(a.searchRowGroups) {
 		return
@@ -639,9 +858,7 @@ func (a *app) searchSelect(row int) {
 	if _, ok := views[group.kind]; !ok {
 		return
 	}
-	appState.AllProjects = true
-	renderSummary(a.summary)
-	a.setView(group.kind)
+	a.searchLandView(group, row)
 
 	appState.CmdMode = modeFilter
 	a.cmd.SetBorder(true)
@@ -654,22 +871,61 @@ func (a *app) searchSelect(row int) {
 	a.statusInfo(fmt.Sprintf("%s: %s (Esc closes panel or clears filter)", views[group.kind].title, a.searchRowQuery(row)))
 }
 
+// searchLandView switches the main view to what a results row points at:
+// All views keep the All-projects toggle on, scoped kinds instead apply the
+// subrow's scope (cluster, zone or bucket) and its project — a kind header
+// falls back to the group's first key, so landing a header still shows one
+// matching scope instead of an unscoped empty view.
+func (a *app) searchLandView(group searchGroupRow, row int) {
+	key := a.searchRowProjects[row]
+	if searchScopedKind(group.kind) {
+		if key == "" && len(group.keys) > 0 {
+			key = group.keys[0]
+		}
+		applySearchScope(group.kind, key)
+		appState.AllProjects = false
+	} else {
+		appState.AllProjects = true
+	}
+	renderSummary(a.summary)
+	a.setView(group.kind)
+}
+
+// applySearchScope sets the focused scope of one scoped view from its subrow
+// key, so the landed view loads the matching cluster, zone or bucket.
+func applySearchScope(kind viewKind, key string) {
+	project, scope, _ := strings.Cut(key, "/")
+	switch kind {
+	case viewWorkloads:
+		appState.ClusterProject, appState.Cluster = project, scope
+	case viewDNSRecords:
+		appState.ZoneProject, appState.Zone = project, scope
+	case viewBucketIAM:
+		appState.BucketProject, appState.Bucket = project, scope
+	}
+}
+
 // searchRowQuery composes the filter one results row lands: the group's query
-// alone for a kind header, plus the project term for a project subrow.
+// alone for a kind header, plus the project term for a project subrow of an
+// All view — scoped kinds take no extra term because their rows carry no
+// project column, and the scope itself is applied through the view state.
 func (a *app) searchRowQuery(row int) string {
-	query := a.searchGroupRows[a.searchRowGroups[row]].query
-	if project := a.searchRowProjects[row]; project != "" {
-		query = strings.TrimSpace(query + " + " + project)
+	group := a.searchGroupRows[a.searchRowGroups[row]]
+	query := group.query
+	if !searchScopedKind(group.kind) {
+		if project := a.searchRowProjects[row]; project != "" {
+			query = strings.TrimSpace(query + " + " + project)
+		}
 	}
 	return query
 }
 
 // searchPreview mirrors the main view onto the results selection as it moves:
-// every row opens its group's All view with the filter preset to the query,
-// and a project subrow additionally appends its project to the filter, so
-// the main panel shows exactly what the selector points at. It only drives
-// the preview while the panel holds focus, so Enter still lands the same
-// selection through searchSelect.
+// every row opens its group's view with the filter preset to the query, a
+// project subrow additionally appends its project to the filter, and a
+// scoped kind's subrow applies its scope, so the main panel shows exactly
+// what the selector points at. It only drives the preview while the panel
+// holds focus, so Enter still lands the same selection through searchSelect.
 func (a *app) searchPreview(row int) {
 	if !a.searchOpen.Load() || !a.searchPanelFocus {
 		return
@@ -681,9 +937,7 @@ func (a *app) searchPreview(row int) {
 	if _, ok := views[group.kind]; !ok {
 		return
 	}
-	appState.AllProjects = true
-	renderSummary(a.summary)
-	a.setView(group.kind)
+	a.searchLandView(group, row)
 	appState.CmdMode = modeFilter
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")

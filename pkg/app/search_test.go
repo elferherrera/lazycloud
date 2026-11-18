@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,8 +87,9 @@ func TestSearchIndexedKindMapping(t *testing.T) {
 		{viewVMs, viewVMsAll},
 		{viewVMsAll, viewVMsAll},
 		{viewProjects, ""},
-		{viewDNSRecords, ""},
-		{viewBucketIAM, ""},
+		{viewDNSRecords, viewDNSRecords},
+		{viewBucketIAM, viewBucketIAM},
+		{viewWorkloads, viewWorkloads},
 	}
 	for _, tc := range cases {
 		if got := searchIndexedKind(tc.kind); got != tc.want {
@@ -190,7 +192,7 @@ func TestSearchPanelGroupsResultsByKind(t *testing.T) {
 	// Two headers plus one subrow each: vms(1) with p1, buckets(1) with p1.
 	wantRows := 0
 	for _, group := range a.searchGroupRows {
-		wantRows += 1 + len(group.projects)
+		wantRows += 1 + len(group.keys)
 	}
 	if got := a.searchResults.GetRowCount(); got != wantRows {
 		t.Fatalf("table rows = %d, want %d (headers + subrows)", got, wantRows)
@@ -568,4 +570,86 @@ func TestStatusBarShowsOnlyErrorsAndUpdates(t *testing.T) {
 	if a.status.GetText(true) != "" {
 		t.Fatalf("switching views keeps status text %q", a.status.GetText(true))
 	}
+}
+
+// TestSearchScopedKindsLandScope pins the scoped views in the search index:
+// workloads, DNS records and bucket IAM are indexed across every cached
+// scope, the results subrow carries "project/scope", and landing a subrow
+// applies the scope so the view loads exactly that cluster, zone or bucket.
+func TestSearchScopedKindsLandScope(t *testing.T) {
+	a := newSearchTestApp(t)
+	if err := a.cache.SaveProjects([]providers.Project{
+		{ProjectID: "p1", ProjectNumber: "111"},
+	}); err != nil {
+		t.Fatalf("SaveProjects() error = %v", err)
+	}
+	if err := a.cache.SaveWorkloads("p1", "prod-cluster", []providers.Workload{
+		{ProjectID: "p1", Cluster: "prod-cluster", Namespace: "default", Kind: "Deployment", Name: "alpha-web", Replicas: "1/1"},
+	}); err != nil {
+		t.Fatalf("SaveWorkloads() error = %v", err)
+	}
+	if err := a.cache.SaveDNSRecords("p1", "zone-one", []providers.DNSRecord{
+		{ProjectID: "p1", Zone: "zone-one", Name: "alpha.internal", Type: "A", TTL: 60, Data: []string{"10.0.0.1"}},
+	}); err != nil {
+		t.Fatalf("SaveDNSRecords() error = %v", err)
+	}
+	if err := a.cache.SaveBucketIAMBindings("p1", "alpha-bucket", []providers.BucketIAMBinding{
+		{ProjectID: "p1", Bucket: "alpha-bucket", Member: "user:alpha@x.com", Role: "roles/storage.objectViewer"},
+	}); err != nil {
+		t.Fatalf("SaveBucketIAMBindings() error = %v", err)
+	}
+	buildSearchIndexSync(t, a)
+	resetAppState()
+
+	a.openSearch()
+	a.searchInput.SetText("alpha")
+	a.runSearch()
+
+	var kinds []viewKind
+	for i := range a.searchGroupRows {
+		kinds = append(kinds, a.searchGroupRows[i].kind)
+	}
+	for _, kind := range []viewKind{viewWorkloads, viewDNSRecords, viewBucketIAM} {
+		if !slices.Contains(kinds, kind) {
+			t.Errorf("search groups = %v, want %s among them", kinds, kind)
+		}
+	}
+
+	// Each scoped group's subrow key is "project/scope"; selecting it lands
+	// the scoped view with that scope applied.
+	for row := range a.searchRowGroups {
+		group := a.searchGroupRows[a.searchRowGroups[row]]
+		if !searchScopedKind(group.kind) {
+			continue
+		}
+		key := a.searchRowProjects[row]
+		if key == "" {
+			continue
+		}
+		if want := "p1/"; !strings.HasPrefix(key, want) {
+			t.Errorf("subrow key = %q, want the %q prefix", key, want)
+		}
+		a.searchSelect(row)
+		switch group.kind {
+		case viewWorkloads:
+			if appState.ClusterProject != "p1" || appState.Cluster != "prod-cluster" {
+				t.Errorf("after select appState = %s/%s, want p1/prod-cluster", appState.ClusterProject, appState.Cluster)
+			}
+		case viewDNSRecords:
+			if appState.ZoneProject != "p1" || appState.Zone != "zone-one" {
+				t.Errorf("after select appState = %s/%s, want p1/zone-one", appState.ZoneProject, appState.Zone)
+			}
+		case viewBucketIAM:
+			if appState.BucketProject != "p1" || appState.Bucket != "alpha-bucket" {
+				t.Errorf("after select appState = %s/%s, want p1/alpha-bucket", appState.BucketProject, appState.Bucket)
+			}
+		}
+		if appState.AllProjects {
+			t.Errorf("after selecting %s AllProjects = true, want the scoped view without the toggle", group.kind)
+		}
+		if query := a.cmd.GetText(); strings.Contains(query, "+ p1") {
+			t.Errorf("landed filter = %q, want no project term on a scoped view", query)
+		}
+	}
+	a.closeSearch()
 }

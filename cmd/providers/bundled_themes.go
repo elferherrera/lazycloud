@@ -1,33 +1,5 @@
 package providers
 
-import "strconv"
-
-// IsBundledThemeName reports whether a pack name belongs to the seeded
-// bundle set. Color edits fork these packs into a custom name instead of
-// overwriting the seed, so a bundled palette can always be picked again in
-// its original form.
-func IsBundledThemeName(name string) bool {
-	_, ok := BundledThemes()[name]
-	return ok
-}
-
-// CustomThemeForkName returns the name a bundled pack takes when the user
-// edits its colors: the seed name plus -custom, with a numeric suffix when
-// that name is already taken (monokai-custom, monokai-custom-2, ...). The
-// suffix never collides with an existing pack, including other forks.
-func CustomThemeForkName(seed string, existing map[string]bool) string {
-	base := seed + "-custom"
-	if !existing[base] {
-		return base
-	}
-	for n := 2; ; n++ {
-		candidate := base + "-" + strconv.Itoa(n)
-		if !existing[candidate] {
-			return candidate
-		}
-	}
-}
-
 // BundledThemes returns the palette packs shipped with lazycloud, keyed by
 // the name the settings panel cycles. lazycloud_dark and lazycloud_light
 // are the house palettes; monokai, dracula, nord, gruvbox, solarized,
@@ -226,12 +198,11 @@ func lazycloudDarkPalette() Theme {
 	return BundledThemes()["lazycloud_dark"]
 }
 
-// seedBundledThemes copies the bundled packs into config's themes map and
-// records the seeding in the bundledThemes flag. A pack already present
-// under the same name keeps its keys: a user-edited or hand-written pack
-// always wins over the bundle. The flag is set even when every bundle was
-// already there, so the seeding runs once per config and a deleted bundle
-// stays deleted. Returns true when config changed.
+// seedBundledThemes copies the bundled packs into config's themes map,
+// filling only missing names: a user-edited or hand-written pack under a
+// bundle name always wins over the bundle, and a bundle missing from the
+// file (fresh config, removed line) is added back. Returns true when
+// config changed.
 func seedBundledThemes(config *Config, defaults Theme) bool {
 	changed := false
 	for name, pack := range BundledThemes() {
@@ -245,6 +216,5 @@ func seedBundledThemes(config *Config, defaults Theme) bool {
 		config.Themes[name] = pack
 		changed = true
 	}
-	config.BundledThemes = true
 	return changed
 }

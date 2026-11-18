@@ -11,8 +11,9 @@ import (
 // helpSections names the groups shown in the help overlay and their order.
 // Panel-specific keys (drill-downs like workloads, project actions like
 // restore/delete) come first so the top of the overlay answers "what can I
-// do here", then the always-on keys, then the colon commands.
-var helpSections = []string{"This view", "General", "Commands"}
+// do here", then the always-on keys, then the view commands, then the
+// argument-taking commands.
+var helpSections = []string{"This view", "General", "Views", "Commands"}
 
 // sectionFor sorts a visible shortcut into a help section by what it does,
 // not by which key it binds: panel-specific entries depend on appState,
@@ -22,7 +23,7 @@ func sectionFor(s shortcut) string {
 		return "This view"
 	}
 	if len(s.commands) > 0 {
-		return "Commands"
+		return "Views"
 	}
 	return "General"
 }
@@ -51,6 +52,20 @@ func helpKeyColumn(key string) string {
 	return key + strings.Repeat(" ", helpKeyWidth-len(key))
 }
 
+// helpCommands lists the argument-taking commands the Commands section
+// shows: the bare command name in the key column, its invocation options
+// and description next to it. Guarded by a test so entries never drift
+// from the commands table.
+var helpCommands = []struct {
+	cmd     string
+	options string
+	desc    string
+}{
+	{"sort", "asc|desc <column>", "sort rows by a column"},
+	{"write", "<file.csv|json|yaml>", "write the records to a file"},
+	{"search", "", "open the search panel"},
+}
+
 // helpText renders the help overlay content as colored lines grouped by
 // section. A TextView (not a table) keeps the whole list scrollable, so a
 // small terminal never clips the first sections away.
@@ -59,6 +74,21 @@ func helpText() string {
 	grouped := sectionedShortcuts()
 	first := true
 	for _, section := range helpSections {
+		if section == "Commands" {
+			if !first {
+				sb.WriteString("\n")
+			}
+			first = false
+			sb.WriteString("[" + theme.shortcutLabels + "]" + strings.ToUpper(section[:1]) + strings.ToUpper(section[1:]) + "[-]\n")
+			for _, c := range helpCommands {
+				desc := c.desc
+				if c.options != "" {
+					desc += " (" + c.options + ")"
+				}
+				sb.WriteString("[" + theme.shortcutLabels + "]" + helpKeyColumn(":"+c.cmd) + "[-][" + theme.shortcutText + "]" + desc + "[-]\n")
+			}
+			continue
+		}
 		entries := grouped[section]
 		if len(entries) == 0 {
 			continue
@@ -69,13 +99,16 @@ func helpText() string {
 		first = false
 		sb.WriteString("[" + theme.shortcutLabels + "]" + strings.ToUpper(section[:1]) + strings.ToUpper(section[1:]) + "[-]\n")
 		for _, s := range entries {
-			sb.WriteString("[" + theme.shortcutLabels + "]" + helpKeyColumn(s.label()) + "[-][" + theme.shortcutText + "]" + s.desc + "[-]\n")
+			if len(s.commands) == 0 {
+				sb.WriteString("[" + theme.shortcutLabels + "]" + helpKeyColumn(s.label()) + "[-][" + theme.shortcutText + "]" + s.desc + "[-]\n")
+				continue
+			}
 			for _, c := range sortedCommands(s.commands) {
 				desc := c.desc
 				if c.view != "" {
 					desc += " (" + string(c.view) + ")"
 				}
-				sb.WriteString("[" + theme.shortcutLabels + "]" + helpKeyColumn("  "+c.cmd) + "[-][" + theme.shortcutText + "]" + desc + "[-]\n")
+				sb.WriteString("[" + theme.shortcutLabels + "]" + helpKeyColumn(c.cmd) + "[-][" + theme.shortcutText + "]" + desc + "[-]\n")
 			}
 		}
 	}
@@ -112,9 +145,6 @@ func shortcutKeyLabel(key rune) string {
 
 func (s shortcut) label() string {
 	if s.specialKey != 0 {
-		if s.specialKey == tcell.KeyCtrlUnderscore {
-			return "Ctrl-/"
-		}
 		return tcell.KeyNames[s.specialKey]
 	}
 	return shortcutKeyLabel(s.key)
