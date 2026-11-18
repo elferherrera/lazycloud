@@ -64,6 +64,7 @@ type app struct {
 	searchOpen        atomic.Bool
 	cmdFocused        bool
 	statusShowing     bool
+	loading           *panelLoading
 
 	settingsForm   *tview.Form
 	settingsRow    *tview.Flex
@@ -151,6 +152,9 @@ func populateInfoPanel(table *tview.Table, headers []string, rows [][]string) {
 }
 
 func (a *app) statusText(text string) {
+	// Any terminal status (error, success, or the empty reset) means the
+	// fetch it belonged to is over, so the panel's clock stops too.
+	a.stopLoading()
 	a.status.SetText(text)
 	a.statusShowing = strings.HasPrefix(text, "[red]") || strings.HasPrefix(text, "[green]")
 	a.updateStatusHeight()
@@ -167,6 +171,7 @@ func (a *app) statusProgress(text string) {
 	a.statusInfo(text)
 	a.statusShowing = true
 	a.updateStatusHeight()
+	a.startLoading(loadingMessage(text))
 }
 
 // updateStatusHeight keeps the status row collapsed except while the current

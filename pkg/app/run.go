@@ -134,6 +134,7 @@ func bootApp() (*app, func(), error) {
 	}
 
 	a.info.SetBorder(true)
+	a.installLoadingDraw()
 
 	helpTextView := newHelpTextView()
 	helpOverlay, helpRow := newHelpOverlay(helpTextView)
