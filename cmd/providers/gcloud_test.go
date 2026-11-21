@@ -203,3 +203,59 @@ func TestParseClusterNodesMapsStatusAndAddresses(t *testing.T) {
 		t.Fatalf("not-ready node = %+v", nodes[1])
 	}
 }
+
+func TestParseWorkloadItems(t *testing.T) {
+	raw := `{
+		"items": [
+			{"kind": "Deployment", "metadata": {"namespace": "teamcity", "name": "web"},
+				"spec": {"replicas": 2, "template": {"spec": {"containers": [{"image": "teamcity:1"}]}}},
+				"status": {"readyReplicas": 2}},
+			{"kind": "StatefulSet", "metadata": {"namespace": "db", "name": "postgres"},
+				"spec": {"replicas": 1}, "status": {"readyReplicas": 1}},
+			{"kind": "DaemonSet", "metadata": {"namespace": "kube-system", "name": "fluentbit"},
+				"spec": {"template": {"spec": {"containers": [{"image": "fluent:2"}]}}},
+				"status": {"desiredNumberScheduled": 3, "numberReady": 2}},
+			{"kind": "ReplicaSet", "metadata": {"namespace": "teamcity", "name": "web-abc",
+				"ownerReferences": [{"kind": "Deployment", "name": "web"}]}},
+			{"kind": "Pod", "metadata": {"namespace": "teamcity", "name": "web-abc-11111",
+				"ownerReferences": [{"kind": "ReplicaSet", "name": "web-abc"}]}},
+			{"kind": "Pod", "metadata": {"namespace": "teamcity", "name": "web-abc-22222",
+				"ownerReferences": [{"kind": "ReplicaSet", "name": "web-abc"}]}},
+			{"kind": "Pod", "metadata": {"namespace": "db", "name": "postgres-0",
+				"ownerReferences": [{"kind": "StatefulSet", "name": "postgres"}]}},
+			{"kind": "Pod", "metadata": {"namespace": "kube-system", "name": "fluentbit-node1",
+				"ownerReferences": [{"kind": "DaemonSet", "name": "fluentbit"}]}},
+			{"kind": "Pod", "metadata": {"namespace": "default", "name": "orphan",
+				"ownerReferences": [{"kind": "Job", "name": "migrate"}]}},
+			{"kind": "ReplicaSet", "metadata": {"namespace": "teamcity", "name": "web-abc"},
+				"status": {}}
+		]
+	}`
+	var list k8sWorkloadList
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		t.Fatalf("unmarshal() error = %v", err)
+	}
+	workloads := parseWorkloadItems("p1", "cluster-a", list.Items)
+	if len(workloads) != 3 {
+		t.Fatalf("parseWorkloadItems() = %d workloads, want 3: %+v", len(workloads), workloads)
+	}
+	byName := map[string]Workload{}
+	for _, w := range workloads {
+		byName[w.Name] = w
+	}
+	web := byName["web"]
+	if web.Kind != "Deployment" || web.Replicas != "2/2" || len(web.Images) != 1 || web.Images[0] != "teamcity:1" {
+		t.Fatalf("deployment = %+v", web)
+	}
+	if len(web.Pods) != 2 || web.Pods[0] != "web-abc-11111" || web.Pods[1] != "web-abc-22222" {
+		t.Fatalf("deployment pods = %+v", web.Pods)
+	}
+	pg := byName["postgres"]
+	if pg.Replicas != "1/1" || len(pg.Pods) != 1 || pg.Pods[0] != "postgres-0" {
+		t.Fatalf("statefulset = %+v", pg)
+	}
+	ds := byName["fluentbit"]
+	if ds.Replicas != "2/3" || len(ds.Pods) != 1 || ds.Pods[0] != "fluentbit-node1" {
+		t.Fatalf("daemonset = %+v", ds)
+	}
+}

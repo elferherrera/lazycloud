@@ -24,6 +24,22 @@ func TestGCPWorkloadLogsURL(t *testing.T) {
 	}
 }
 
+func TestGCPWorkloadPodLogsURL(t *testing.T) {
+	got := GCPWorkloadPodLogsURL("revolut-labs", "europe-west2", "integration", "teamcity", "teamcity-web-1")
+	want := "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.project_id%3D%22revolut-labs%22%0Aresource.labels.location%3D%22europe-west2%22%0Aresource.labels.cluster_name%3D%22integration%22%0Aresource.labels.namespace_name%3D%22teamcity%22%0Aresource.labels.pod_name%3D%22teamcity-web-1%22%0Aseverity%3E%3DDEFAULT;storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPWorkloadPodLogsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestGCPWorkloadPodEventsURL(t *testing.T) {
+	got := GCPWorkloadPodEventsURL("revolut-labs", "europe-west2", "integration", "teamcity", "dev-apps-py3-1874840")
+	want := "https://console.cloud.google.com/logs/query;query=log_id%28%22events%22%29%0Aresource.type%3D%22k8s_pod%22%0Aresource.labels.cluster_name%3D%22integration%22%0Aresource.labels.location%3D%22europe-west2%22%0Aresource.labels.project_id%3D%22revolut-labs%22%0Aresource.labels.namespace_name%3D%22teamcity%22%0Aresource.labels.pod_name%3D%22dev-apps-py3-1874840%22;storageScope=project;cursorTimestamp=;duration=PT30M?project=revolut-labs"
+	if got != want {
+		t.Fatalf("GCPWorkloadPodEventsURL() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 func TestGCPWorkloadDetailsURL(t *testing.T) {
 	got := GCPWorkloadDetailsURL("revolut-labs", "europe-west2", "integration", "teamcity", "StatefulSet", "teamcity-web")
 	want := "https://console.cloud.google.com/kubernetes/statefulset/europe-west2/integration/teamcity/teamcity-web/details?project=revolut-labs"

@@ -340,9 +340,14 @@ func NewCacheAt(path string) (*Cache, error) {
 		name TEXT NOT NULL,
 		replicas TEXT NOT NULL DEFAULT '',
 		images TEXT NOT NULL DEFAULT '',
+		pods TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (project_id, cluster, kind, namespace, name)
 	)`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "workloads", "pods", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -2137,9 +2142,9 @@ func (c *Cache) SaveWorkloads(projectID, cluster string, workloads []Workload) e
 	}
 	for _, w := range workloads {
 		if _, err := tx.Exec(`INSERT INTO workloads
-			(project_id, cluster, kind, namespace, name, replicas, images, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			projectID, cluster, w.Kind, w.Namespace, w.Name, w.Replicas, strings.Join(w.Images, ","), updatedAt); err != nil {
+			(project_id, cluster, kind, namespace, name, replicas, images, pods, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			projectID, cluster, w.Kind, w.Namespace, w.Name, w.Replicas, strings.Join(w.Images, ","), strings.Join(w.Pods, ","), updatedAt); err != nil {
 			return err
 		}
 	}
@@ -2150,12 +2155,15 @@ func scanWorkloads(rows *sql.Rows) ([]Workload, error) {
 	var workloads []Workload
 	for rows.Next() {
 		var w Workload
-		var images string
-		if err := rows.Scan(&w.ProjectID, &w.Cluster, &w.Kind, &w.Namespace, &w.Name, &w.Replicas, &images, &w.UpdatedAt); err != nil {
+		var images, pods string
+		if err := rows.Scan(&w.ProjectID, &w.Cluster, &w.Kind, &w.Namespace, &w.Name, &w.Replicas, &images, &pods, &w.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if images != "" {
 			w.Images = strings.Split(images, ",")
+		}
+		if pods != "" {
+			w.Pods = strings.Split(pods, ",")
 		}
 		workloads = append(workloads, w)
 	}
@@ -2163,7 +2171,7 @@ func scanWorkloads(rows *sql.Rows) ([]Workload, error) {
 }
 
 func (c *Cache) ListClusterWorkloads(projectID, cluster string) ([]Workload, error) {
-	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, pods, updated_at
 		FROM workloads WHERE project_id = ? AND cluster = ? ORDER BY namespace, kind, name`, projectID, cluster)
 	if err != nil {
 		return nil, err
@@ -2173,7 +2181,7 @@ func (c *Cache) ListClusterWorkloads(projectID, cluster string) ([]Workload, err
 }
 
 func (c *Cache) ListAllWorkloads() ([]Workload, error) {
-	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, pods, updated_at
 		FROM workloads ORDER BY project_id, cluster, namespace, kind, name`)
 	if err != nil {
 		return nil, err
@@ -2183,7 +2191,7 @@ func (c *Cache) ListAllWorkloads() ([]Workload, error) {
 }
 
 func (c *Cache) GetWorkload(projectID, cluster, kind, namespace, name string) (*Workload, error) {
-	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, updated_at
+	rows, err := c.db.Query(`SELECT project_id, cluster, kind, namespace, name, replicas, images, pods, updated_at
 		FROM workloads WHERE project_id = ? AND cluster = ? AND kind = ? AND namespace = ? AND name = ?`,
 		projectID, cluster, kind, namespace, name)
 	if err != nil {

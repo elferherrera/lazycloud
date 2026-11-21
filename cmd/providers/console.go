@@ -88,6 +88,20 @@ func GCPWorkloadLogsURL(projectID, location, clusterName, namespace, name string
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
 }
 
+func GCPWorkloadPodLogsURL(projectID, location, clusterName, namespace, podName string) string {
+	var sb strings.Builder
+	sb.WriteString("resource.type=\"k8s_container\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.namespace_name=\"%s\"\n", namespace))
+	sb.WriteString(fmt.Sprintf("resource.labels.pod_name=\"%s\"\n", podName))
+	sb.WriteString("severity>=DEFAULT")
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
 func GCPWorkloadDetailsURL(projectID, location, clusterName, namespace, kind, workloadName string) string {
 	return "https://console.cloud.google.com/kubernetes/" + strings.ToLower(kind) + "/" +
 		location + "/" + clusterName + "/" + namespace + "/" + workloadName +
@@ -102,6 +116,20 @@ func GCPWorkloadEventsURL(projectID, location, clusterName, workloadName string)
 	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
 	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
 	sb.WriteString(fmt.Sprintf("%q", workloadName))
+	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
+	return "https://console.cloud.google.com/logs/query;query=" + encoded +
+		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
+}
+
+func GCPWorkloadPodEventsURL(projectID, location, clusterName, namespace, podName string) string {
+	var sb strings.Builder
+	sb.WriteString("log_id(\"events\")\n")
+	sb.WriteString("resource.type=\"k8s_pod\"\n")
+	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
+	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
+	sb.WriteString(fmt.Sprintf("resource.labels.project_id=\"%s\"\n", projectID))
+	sb.WriteString(fmt.Sprintf("resource.labels.namespace_name=\"%s\"\n", namespace))
+	sb.WriteString(fmt.Sprintf("resource.labels.pod_name=\"%s\"", podName))
 	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
 	return "https://console.cloud.google.com/logs/query;query=" + encoded +
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)

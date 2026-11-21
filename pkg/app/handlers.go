@@ -342,6 +342,12 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 	if page, _ := a.pages.GetFrontPage(); page == "settings" && a.settingsForm != nil {
 		return event
 	}
+	// The pod picker list owns its keys while focused: arrows move the
+	// selection and Enter opens the logs, instead of firing the matching
+	// global shortcuts.
+	if page, _ := a.pages.GetFrontPage(); page == "pods" {
+		return event
+	}
 	if a.tapp.GetFocus() == a.cmd {
 		return event
 	}
@@ -1190,7 +1196,7 @@ func (a *app) escapePressed() {
 		a.closeSettings()
 		return
 	}
-	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {
+	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" || name == "pods" {
 		a.pages.RemovePage(name)
 		a.tapp.SetFocus(a.info)
 		return

@@ -6,6 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
 )
@@ -90,22 +94,45 @@ var workloadsView = viewDef{
 	},
 }
 
-func (a *app) openWorkloadLogs() {
+func (a *app) focusedWorkload() (cl *providers.Cluster, namespace, name string, w *providers.Workload, ok bool) {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {
-		return
+		return nil, "", "", nil, false
 	}
 	cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
 	if err != nil {
 		a.statusText("[red]Failed to load cluster: [-]" + err.Error())
-		return
+		return nil, "", "", nil, false
 	}
 	if cl == nil {
 		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+		return nil, "", "", nil, false
+	}
+	namespace = a.info.GetCell(row, 0).Text
+	kind := a.info.GetCell(row, 1).Text
+	name = a.info.GetCell(row, 2).Text
+	w, err = a.cache.GetWorkload(appState.ClusterProject, appState.Cluster, kind, namespace, name)
+	if err != nil {
+		a.statusText("[red]Failed to load workload: [-]" + err.Error())
+		return nil, "", "", nil, false
+	}
+	return cl, namespace, name, w, true
+}
+
+func (a *app) openWorkloadLogs() {
+	cl, namespace, name, w, ok := a.focusedWorkload()
+	if !ok {
 		return
 	}
-	logsURL := providers.GCPWorkloadLogsURL(appState.ClusterProject, cl.Location, appState.Cluster,
-		a.info.GetCell(row, 0).Text, a.info.GetCell(row, 2).Text)
+	if w != nil && len(w.Pods) > 1 {
+		a.showPodPicker(w.Pods, func(pod string) { a.openPodLogs(cl.Location, namespace, pod) })
+		return
+	}
+	if w != nil && len(w.Pods) == 1 {
+		a.openPodLogs(cl.Location, namespace, w.Pods[0])
+		return
+	}
+	logsURL := providers.GCPWorkloadLogsURL(appState.ClusterProject, cl.Location, appState.Cluster, namespace, name)
 	if err := openBrowser(logsURL); err != nil {
 		a.statusText("[red]Failed to open browser: [-]" + err.Error())
 		return
@@ -113,27 +140,76 @@ func (a *app) openWorkloadLogs() {
 	a.statusText("[green]Opened workload logs in browser[-]")
 }
 
+func (a *app) openPodLogs(location, namespace, pod string) {
+	logsURL := providers.GCPWorkloadPodLogsURL(appState.ClusterProject, location, appState.Cluster, namespace, pod)
+	if err := openBrowser(logsURL); err != nil {
+		a.statusText("[red]Failed to open browser: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened logs for %s in browser[-]", pod))
+}
+
+func (a *app) showPodPicker(pods []string, open func(pod string)) {
+	list := tview.NewList().ShowSecondaryText(false)
+	list.SetBorder(true).SetTitle(" Pods ")
+	for _, pod := range pods {
+		list.AddItem(pod, "", 0, nil)
+	}
+	list.SetSelectedFunc(func(_ int, pod, _ string, _ rune) {
+		a.pages.RemovePage("pods")
+		a.tapp.SetFocus(a.info)
+		open(pod)
+	})
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune {
+			switch event.Rune() {
+			case 'j':
+				return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+			case 'k':
+				return tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
+			}
+		}
+		return event
+	})
+	width := 0
+	for _, pod := range pods {
+		if n := utf8.RuneCountInString(pod) + 4; n > width {
+			width = n
+		}
+	}
+	a.pages.RemovePage("pods")
+	a.pages.AddPage("pods", a.centeredOverlay(list, len(pods)+2, width), true, true)
+	a.tapp.SetFocus(list)
+}
+
 func (a *app) openWorkloadEvents() {
-	row, _ := a.info.GetSelection()
-	if row <= 0 || row >= a.info.GetRowCount() {
+	cl, namespace, name, w, ok := a.focusedWorkload()
+	if !ok {
 		return
 	}
-	cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
-	if err != nil {
-		a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+	if w != nil && len(w.Pods) > 1 {
+		a.showPodPicker(w.Pods, func(pod string) { a.openPodEvents(cl.Location, namespace, pod) })
 		return
 	}
-	if cl == nil {
-		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+	if w != nil && len(w.Pods) == 1 {
+		a.openPodEvents(cl.Location, namespace, w.Pods[0])
 		return
 	}
-	workloadName := a.info.GetCell(row, 2).Text
-	eventsURL := providers.GCPWorkloadEventsURL(appState.ClusterProject, cl.Location, appState.Cluster, workloadName)
+	eventsURL := providers.GCPWorkloadEventsURL(appState.ClusterProject, cl.Location, appState.Cluster, name)
 	if err := openBrowser(eventsURL); err != nil {
 		a.statusText("[red]Failed to open browser: [-]" + err.Error())
 		return
 	}
-	a.statusText(fmt.Sprintf("[green]Opened events for %s in browser[-]", workloadName))
+	a.statusText(fmt.Sprintf("[green]Opened events for %s in browser[-]", name))
+}
+
+func (a *app) openPodEvents(location, namespace, pod string) {
+	eventsURL := providers.GCPWorkloadPodEventsURL(appState.ClusterProject, location, appState.Cluster, namespace, pod)
+	if err := openBrowser(eventsURL); err != nil {
+		a.statusText("[red]Failed to open browser: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened events for %s in browser[-]", pod))
 }
 
 func shellPath() string {

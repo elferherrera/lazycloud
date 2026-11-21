@@ -983,7 +983,7 @@ func TestSaveAndListClusters(t *testing.T) {
 func TestSaveAndListWorkloads(t *testing.T) {
 	cache := newTestCache(t)
 	web := []Workload{
-		{ProjectID: "p1", Cluster: "cluster-a", Kind: "Deployment", Namespace: "default", Name: "web", Replicas: "3/3", Images: []string{"nginx:1.27"}},
+		{ProjectID: "p1", Cluster: "cluster-a", Kind: "Deployment", Namespace: "default", Name: "web", Replicas: "3/3", Images: []string{"nginx:1.27"}, Pods: []string{"web-abc", "web-def"}},
 		{ProjectID: "p1", Cluster: "cluster-a", Kind: "DaemonSet", Namespace: "kube-system", Name: "fluentbit", Replicas: "2/2"},
 		{ProjectID: "p1", Cluster: "cluster-b", Kind: "StatefulSet", Namespace: "db", Name: "postgres", Replicas: "1/2", Images: []string{"postgres:16"}},
 	}
@@ -1009,6 +1009,12 @@ func TestSaveAndListWorkloads(t *testing.T) {
 	}
 	if got[0].Kind != "Deployment" || got[0].Replicas != "3/3" || len(got[0].Images) != 1 || got[0].Images[0] != "nginx:1.27" || got[0].UpdatedAt == "" {
 		t.Fatalf("ListClusterWorkloads()[0] = %+v", got[0])
+	}
+	if len(got[0].Pods) != 2 || got[0].Pods[0] != "web-abc" || got[0].Pods[1] != "web-def" {
+		t.Fatalf("ListClusterWorkloads()[0].Pods = %+v", got[0].Pods)
+	}
+	if len(got[1].Pods) != 0 {
+		t.Fatalf("ListClusterWorkloads()[1].Pods = %+v, want empty", got[1].Pods)
 	}
 	if len(got[1].Images) != 0 {
 		t.Fatalf("ListClusterWorkloads()[1].Images = %+v, want empty", got[1].Images)

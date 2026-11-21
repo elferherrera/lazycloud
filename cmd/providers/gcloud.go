@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -1119,14 +1120,21 @@ type Workload struct {
 	Name      string
 	Replicas  string
 	Images    []string
+	Pods      []string
 	UpdatedAt string
+}
+
+type k8sOwnerReference struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 type k8sWorkload struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
+		Namespace       string             `json:"namespace"`
+		Name            string             `json:"name"`
+		OwnerReferences []k8sOwnerReference `json:"ownerReferences"`
 	} `json:"metadata"`
 	Spec struct {
 		Replicas *int32 `json:"replicas"`
@@ -1168,7 +1176,7 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 		return nil, fmt.Errorf("gcloud get-credentials: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	get := exec.Command("kubectl", "get", "deployments,statefulsets,daemonsets", "--all-namespaces", "--output", "json")
+	get := exec.Command("kubectl", "get", "deployments,statefulsets,daemonsets,replicasets,pods", "--all-namespaces", "--output", "json")
 	get.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
 	out, err := get.Output()
 	if err != nil {
@@ -1185,32 +1193,87 @@ func ListClusterWorkloads(projectID, location, name string) ([]Workload, error) 
 		return nil, err
 	}
 
+	return parseWorkloadItems(projectID, name, list.Items), nil
+}
+
+func parseWorkloadItems(projectID, cluster string, items []k8sWorkload) []Workload {
 	var workloads []Workload
-	for _, item := range list.Items {
-		w := Workload{
-			ProjectID: projectID,
-			Cluster:   name,
-			Kind:      item.Kind,
-			Namespace: item.Metadata.Namespace,
-			Name:      item.Metadata.Name,
-		}
-		for _, c := range item.Spec.Template.Spec.Containers {
-			if c.Image != "" {
-				w.Images = append(w.Images, c.Image)
-			}
-		}
-		if item.Kind == "DaemonSet" {
-			w.Replicas = fmt.Sprintf("%d/%d", item.Status.NumberReady, item.Status.DesiredNumberScheduled)
-		} else {
-			total := int32(0)
-			if item.Spec.Replicas != nil {
-				total = *item.Spec.Replicas
-			}
-			w.Replicas = fmt.Sprintf("%d/%d", item.Status.ReadyReplicas, total)
-		}
-		workloads = append(workloads, w)
+	byKey := map[string]int{}
+	replicaSets := map[string]string{}
+	type podRef struct {
+		namespace string
+		ownerKind string
+		ownerName string
+		name      string
 	}
-	return workloads, nil
+	var pods []podRef
+	for _, item := range items {
+		switch item.Kind {
+		case "Deployment", "StatefulSet", "DaemonSet":
+			w := Workload{
+				ProjectID: projectID,
+				Cluster:   cluster,
+				Kind:      item.Kind,
+				Namespace: item.Metadata.Namespace,
+				Name:      item.Metadata.Name,
+			}
+			for _, c := range item.Spec.Template.Spec.Containers {
+				if c.Image != "" {
+					w.Images = append(w.Images, c.Image)
+				}
+			}
+			if item.Kind == "DaemonSet" {
+				w.Replicas = fmt.Sprintf("%d/%d", item.Status.NumberReady, item.Status.DesiredNumberScheduled)
+			} else {
+				total := int32(0)
+				if item.Spec.Replicas != nil {
+					total = *item.Spec.Replicas
+				}
+				w.Replicas = fmt.Sprintf("%d/%d", item.Status.ReadyReplicas, total)
+			}
+			workloads = append(workloads, w)
+			key := w.Namespace + "/" + w.Kind + "/" + w.Name
+			byKey[key] = len(workloads) - 1
+		case "ReplicaSet":
+			for _, owner := range item.Metadata.OwnerReferences {
+				if owner.Kind == "Deployment" {
+					replicaSets[item.Metadata.Namespace+"/"+item.Metadata.Name] = owner.Name
+					break
+				}
+			}
+		case "Pod":
+			for _, owner := range item.Metadata.OwnerReferences {
+				switch owner.Kind {
+				case "ReplicaSet", "StatefulSet", "DaemonSet", "Deployment":
+					pods = append(pods, podRef{
+						namespace: item.Metadata.Namespace,
+						ownerKind: owner.Kind,
+						ownerName: owner.Name,
+						name:      item.Metadata.Name,
+					})
+					break
+				}
+			}
+		}
+	}
+	for _, p := range pods {
+		ownerKind := p.ownerKind
+		ownerName := p.ownerName
+		if ownerKind == "ReplicaSet" {
+			ownerKind = "Deployment"
+			ownerName = replicaSets[p.namespace+"/"+p.ownerName]
+			if ownerName == "" {
+				continue
+			}
+		}
+		if i, ok := byKey[p.namespace+"/"+ownerKind+"/"+ownerName]; ok {
+			workloads[i].Pods = append(workloads[i].Pods, p.name)
+		}
+	}
+	for i := range workloads {
+		sort.Strings(workloads[i].Pods)
+	}
+	return workloads
 }
 
 type ClusterNode struct {

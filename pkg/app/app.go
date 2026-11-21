@@ -519,6 +519,27 @@ func artOverlayWidth(content string, screenWidth int) int {
 	return width
 }
 
+func (a *app) centeredOverlay(item tview.Primitive, contentLines, width int) *tview.Flex {
+	screenWidth, screenHeight := 0, 0
+	if a.screen != nil {
+		screenWidth, screenHeight = a.screen.Size()
+	}
+	height := overlayHeight(contentLines, screenHeight)
+	if screenWidth > 0 && width > screenWidth-2 {
+		width = screenWidth - 2
+	}
+	if width < 10 {
+		width = 10
+	}
+	return tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(item, height, 1, true).
+			AddItem(nil, 0, 1, false), width, 1, true).
+		AddItem(nil, 0, 1, false)
+}
+
 func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
 	text := tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.detailTextColor()).SetText(content)
 	text.SetBorder(true).SetTitle(title)
