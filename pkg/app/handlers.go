@@ -170,6 +170,13 @@ func init() {
 			run:     (*app).showBucketIAM,
 		},
 		{
+			key:     'i',
+			desc:    "open k9s in a zellij floating window",
+			visible: func() bool { return appState.ViewKind == viewWorkloads },
+			enabled: func(a *app) bool { return appState.ViewKind == viewWorkloads },
+			run:     (*app).openWorkloadK9s,
+		},
+		{
 			key:     'd',
 			desc:    "show dns records for zone",
 			visible: inDNSZonesView,

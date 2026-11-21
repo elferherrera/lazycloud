@@ -59,3 +59,35 @@ func TestWorkloadShellCommandEnv(t *testing.T) {
 		t.Errorf("workloadShellCommand() env = %v, want LAZYCLOUD_CONTEXT=true", cmd.Env)
 	}
 }
+
+func TestZellijRunArgs(t *testing.T) {
+	got := strings.Join(zellijRunArgs("prod", "Deployment", "api-gateway"), " ")
+	if got != "run --floating -- k9s --namespace prod --command dp /api-gateway" {
+		t.Errorf("zellijRunArgs() = %q, want %q", got, "run --floating -- k9s --namespace prod --command dp /api-gateway")
+	}
+}
+
+func TestK9sCommand(t *testing.T) {
+	if got := k9sCommand("Deployment", "api-gateway"); got != "dp /api-gateway" {
+		t.Errorf("k9sCommand(Deployment, api-gateway) = %q, want %q", got, "dp /api-gateway")
+	}
+	if got := k9sCommand("Pod", ""); got != "po" {
+		t.Errorf("k9sCommand(Pod, empty) = %q, want %q", got, "po")
+	}
+}
+
+func TestK9sViewForKind(t *testing.T) {
+	cases := map[string]string{
+		"Deployment":  "dp",
+		"StatefulSet": "sts",
+		"DaemonSet":   "ds",
+		"ReplicaSet":  "rs",
+		"Pod":         "po",
+		"Job":         "po",
+	}
+	for kind, want := range cases {
+		if got := k9sViewForKind(kind); got != want {
+			t.Errorf("k9sViewForKind(%q) = %q, want %q", kind, got, want)
+		}
+	}
+}

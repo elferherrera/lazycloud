@@ -329,6 +329,67 @@ func (a *app) openWorkloadShell() {
 	a.statusText(fmt.Sprintf("[green]Shell session for %s/%s ended[-]", contextName, namespace))
 }
 
+func zellijInstalled() bool {
+	_, err := exec.LookPath("zellij")
+	return err == nil
+}
+
+func k9sViewForKind(kind string) string {
+	switch strings.ToLower(kind) {
+	case "deployment":
+		return "dp"
+	case "statefulset":
+		return "sts"
+	case "daemonset":
+		return "ds"
+	case "replicaset":
+		return "rs"
+	case "pod":
+		return "po"
+	}
+	return "po"
+}
+
+func k9sCommand(kind, name string) string {
+	view := k9sViewForKind(kind)
+	if name == "" {
+		return view
+	}
+	return view + " /" + name
+}
+
+func zellijRunArgs(namespace, kind, name string) []string {
+	return []string{"run", "--floating", "--", "k9s", "--namespace", namespace, "--command", k9sCommand(kind, name)}
+}
+
+func (a *app) openWorkloadK9s() {
+	row, _ := a.info.GetSelection()
+	if row <= 0 || row >= a.info.GetRowCount() {
+		return
+	}
+	namespace := a.info.GetCell(row, 0).Text
+	kind := a.info.GetCell(row, 1).Text
+	name := a.info.GetCell(row, 2).Text
+	if namespace == "" || kind == "" {
+		return
+	}
+	if !zellijInstalled() {
+		a.statusText("[red]zellij is not installed (install it to open k9s in a floating window)[-]")
+		return
+	}
+	out, err := exec.Command("zellij", zellijRunArgs(namespace, kind, name)...).CombinedOutput()
+	if err != nil {
+		a.logger.Error("workloads", appState.ClusterProject, "zellij k9s failed for namespace "+namespace+": "+err.Error())
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			a.statusText("[red]Failed to open k9s in zellij: [-]" + msg)
+			return
+		}
+		a.statusText("[red]Failed to open k9s in zellij: [-]" + err.Error())
+		return
+	}
+	a.statusText(fmt.Sprintf("[green]Opened k9s for namespace %s in zellij[-]", namespace))
+}
+
 func (a *app) showClusterWorkloads() {
 	row, _ := a.info.GetSelection()
 	if row <= 0 || row >= a.info.GetRowCount() {
