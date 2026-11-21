@@ -81,16 +81,17 @@ func GCPWorkloadLogsURL(projectID, location, clusterName, namespace, name string
 	sb.WriteString(fmt.Sprintf("resource.labels.location=\"%s\"\n", location))
 	sb.WriteString(fmt.Sprintf("resource.labels.cluster_name=\"%s\"\n", clusterName))
 	sb.WriteString(fmt.Sprintf("resource.labels.namespace_name=\"%s\"\n", namespace))
-	sb.WriteString("severity>=DEFAULT")
+	sb.WriteString("severity>=DEFAULT\n")
+	sb.WriteString(fmt.Sprintf("%q", name))
 	encoded := strings.ReplaceAll(url.QueryEscape(sb.String()), "+", "%20")
 	return "https://console.cloud.google.com/logs/query;query=" + encoded +
 		";storageScope=project;cursorTimestamp=;duration=PT30M?project=" + url.QueryEscape(projectID)
 }
 
-func GCPWorkloadOverviewURL(projectID, namespace string) string {
-	return "https://console.cloud.google.com/kubernetes/workload/overview?project=" +
-		url.QueryEscape(projectID) +
-		"&pageState=(%22savedViews%22:(%22n%22:%5B%22" + namespace + "%22%5D))"
+func GCPWorkloadDetailsURL(projectID, location, clusterName, namespace, kind, workloadName string) string {
+	return "https://console.cloud.google.com/kubernetes/" + strings.ToLower(kind) + "/" +
+		location + "/" + clusterName + "/" + namespace + "/" + workloadName +
+		"/details?project=" + url.QueryEscape(projectID)
 }
 
 func GCPWorkloadEventsURL(projectID, location, clusterName, workloadName string) string {

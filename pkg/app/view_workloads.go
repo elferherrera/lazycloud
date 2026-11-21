@@ -81,7 +81,12 @@ var workloadsView = viewDef{
 	},
 	samples: []any{providers.Workload{}},
 	consoleURL: func(a *app, row int) string {
-		return providers.GCPWorkloadOverviewURL(appState.ClusterProject, a.info.GetCell(row, 0).Text)
+		cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
+		if err != nil || cl == nil {
+			return ""
+		}
+		return providers.GCPWorkloadDetailsURL(appState.ClusterProject, cl.Location, appState.Cluster,
+			a.info.GetCell(row, 0).Text, a.info.GetCell(row, 1).Text, a.info.GetCell(row, 2).Text)
 	},
 }
 

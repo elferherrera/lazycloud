@@ -1091,6 +1091,10 @@ func (a *app) openConsole() {
 		return
 	}
 	url := views[appState.ViewKind].consoleURL(a, row)
+	if url == "" {
+		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+		return
+	}
 	if err := openBrowser(url); err != nil {
 		a.statusText("[red]Failed to open browser: [-]" + err.Error())
 		return
