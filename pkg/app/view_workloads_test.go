@@ -12,6 +12,13 @@ func TestKubectlSetContextArgs(t *testing.T) {
 	}
 }
 
+func TestKubectlUseContextArgs(t *testing.T) {
+	got := strings.Join(kubectlUseContextArgs("gke_my-prod_europe-west2-a_api"), " ")
+	if got != "config use-context gke_my-prod_europe-west2-a_api" {
+		t.Errorf("kubectlUseContextArgs() = %q, want %q", got, "config use-context gke_my-prod_europe-west2-a_api")
+	}
+}
+
 func TestFindClusterContextName(t *testing.T) {
 	names := []string{
 		"default",

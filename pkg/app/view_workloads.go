@@ -229,6 +229,10 @@ func kubectlSetContextArgs(contextName, namespace string) []string {
 	return []string{"config", "set-context", contextName, "--namespace", namespace}
 }
 
+func kubectlUseContextArgs(contextName string) []string {
+	return []string{"config", "use-context", contextName}
+}
+
 func findClusterContextName(names []string, projectID, location, cluster string) string {
 	exact := fmt.Sprintf("gke_%s_%s_%s", projectID, location, cluster)
 	var suffixProject, suffixAny, containsProject, containsAny []string
@@ -375,6 +379,30 @@ func (a *app) openWorkloadK9s() {
 	}
 	if !zellijInstalled() {
 		a.statusText("[red]zellij is not installed (install it to open k9s in a floating window)[-]")
+		return
+	}
+	cl, err := a.cache.GetCluster(appState.ClusterProject, appState.Cluster)
+	if err != nil {
+		a.statusText("[red]Failed to load cluster: [-]" + err.Error())
+		return
+	}
+	if cl == nil {
+		a.statusText("[red]Cluster not found in cache (press u to refresh)[-]")
+		return
+	}
+	contextName, err := kubectlClusterContext(appState.ClusterProject, cl.Location, appState.Cluster)
+	if err != nil {
+		a.logger.Error("workloads", appState.ClusterProject, "context lookup failed for "+appState.Cluster+" (namespace "+namespace+"): "+err.Error())
+		a.statusText("[red]Failed to find kubectl context: [-]" + err.Error())
+		return
+	}
+	if out, err := exec.Command("kubectl", kubectlUseContextArgs(contextName)...).CombinedOutput(); err != nil {
+		msg := err.Error()
+		if text := strings.TrimSpace(string(out)); text != "" {
+			msg = text
+		}
+		a.logger.Error("workloads", appState.ClusterProject, "use-context failed for "+contextName+": "+msg)
+		a.statusText("[red]kubectl use-context failed: [-]" + msg)
 		return
 	}
 	out, err := exec.Command("zellij", zellijRunArgs(namespace, kind, name)...).CombinedOutput()
