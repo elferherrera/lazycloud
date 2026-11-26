@@ -136,7 +136,7 @@ Same `~/.config/lazycloud/cache.db` (modernc.org/sqlite, no cgo). Concurrent TUI
 ## Phasing
 
 1. **Phase 1:** `list`/`get`/`projects`/`resources`, `--json` default, `--table`, `--project`, implicit all-projects, `--refresh`, `--yaml`, `--ndjson`, json tags, exit codes, tests. Registry seeded with 7-8 flagship resources (projects, vms, disks, clusters, networks, buckets, service accounts, IAM).
-2. **Phase 2:** all remaining resources (LBs, DNS zones/records, PSC, VPNs, cloud routers, images, instance templates, snapshots, reservations, instance groups, peerings, routes, firewalls, subnets), `--filter`, `resources --verbose` (per-resource flags), cache-status subcommand.
+2. **Phase 2:** all remaining resources (LBs, DNS zones/records, PSC, VPNs, cloud routers, images, instance templates, snapshots, reservations, instance groups, peerings, routes, firewalls, subnets), `--filter`, `resources --verbose` (per-resource flags), cache-status subcommand, and `skill install`, which writes an agent skill (compressed SKILL.md: grammar, selectors, exit codes, investigation recipes) to `~/.agents/skills/lazycloud/SKILL.md` or a `--path`/`LAZYCLOUD_SKILLS_DIR` override so agents self-serve the CLI contract without re-reading the README.
 3. **Phase 3:** viewDef refactor lifting `load`/`fetch` out of `*app` so TUI and CLI share one registry (kills the duplicated headers), opening the door to an MCP server wrapper over the same registry if agents with MCP support want it.
 
 ## Alternative surfaces considered
